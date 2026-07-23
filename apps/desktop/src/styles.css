@@ -82,6 +82,27 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
 .diff-line--addition code, .diff-line--addition .diff-line__prefix { color: #a9f5c8; }
 .diff-line--deletion { background: rgb(158 65 76 / 20%); }
 .diff-line--deletion code, .diff-line--deletion .diff-line__prefix { color: #ffc2c8; }
+.history-panel { display: grid; gap: 18px; margin-top: 18px; padding: 22px; border: 1px solid var(--border); border-radius: 18px; background: rgb(12 17 29 / 88%); }
+.history-panel h2 { margin: 0; font-size: 24px; }
+.commit-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.commit-list > li { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 12px; min-height: 78px; padding: 13px 0; border-top: 1px solid var(--border); }
+.commit-dot { width: 10px; height: 10px; margin-top: 5px; border: 2px solid #69758f; border-radius: 50%; background: #0c111d; }
+.commit-dot--head { border-color: var(--cyan); background: var(--cyan); box-shadow: 0 0 0 3px rgb(85 219 234 / 12%); }
+.commit-main { display: grid; min-width: 0; gap: 6px; }
+.commit-summary { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.commit-summary strong { overflow-wrap: anywhere; }
+.commit-summary code { flex: 0 0 auto; color: #b9b6ff; font-size: 11px; }
+.commit-main p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.commit-decorations { display: flex; flex-wrap: wrap; gap: 5px; }
+.decoration { padding: 3px 7px; border: 1px solid #45417d; border-radius: 999px; color: #dfe2ff; font-size: 9px; font-weight: 800; }
+.decoration--head { border-color: #428c96; color: #9aedf5; }
+.decoration--tag { border-color: #8d7542; color: #ffe0a3; }
+.decoration--remoteBranch { border-color: #4e8e82; color: #a9f5db; }
+.history-error { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.history-error p, .history-more-error { margin: 0; color: #ffc8c8; font-size: 12px; line-height: 1.5; }
+.history-error button, .history-more { min-height: 38px; padding: 0 14px; border: 1px solid #7771d7; border-radius: 10px; background: #7771d7; color: #090b17; cursor: pointer; font-weight: 800; }
+.history-more { justify-self: center; min-width: 150px; }
+.history-more:disabled { cursor: wait; opacity: .65; }
 
 .foundation-card { padding: 26px; border: 1px solid var(--border); border-radius: 22px; background: linear-gradient(145deg, rgb(23 30 48 / 95%), rgb(12 17 29 / 95%)); box-shadow: 0 28px 70px rgb(0 0 0 / 32%); }
 .foundation-card h2 { margin: 0; font-size: 28px; }
@@ -109,6 +130,7 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
   .change-list li { align-items: start; flex-direction: column; gap: 9px; }
   .change-badges { justify-content: start; }
   .diff-panel__header, .diff-error { align-items: stretch; flex-direction: column; }
+  .commit-summary, .history-error { align-items: start; flex-direction: column; gap: 7px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

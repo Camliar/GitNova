@@ -1,6 +1,6 @@
 # TASK-0020: Desktop Commit History
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/020-desktop-commit-history`
@@ -33,25 +33,25 @@
 
 ## Deliverables
 
-- [ ] typed repository/graph client boundary
-- [ ] commit metadata and decoration list
-- [ ] opaque cursor pagination with robust loading/error states
-- [ ] frontend tests and documentation
+- [x] typed repository/graph client boundary
+- [x] commit metadata and decoration list
+- [x] opaque cursor pagination with robust loading/error states
+- [x] frontend tests and documentation
 
 ## Review Checklist
 
-- [ ] history ordering、HEAD、parents 和 decorations 全部来自 Core projection。
-- [ ] cursor 保持 opaque，分页 append 无重复触发或 stale overwrite。
-- [ ] bare、empty、detached 状态不依赖 working-tree status。
-- [ ] 增量失败保留既有 commits；无 Git、filesystem 或权限扩张。
-- [ ] 未提前实现 commit diff/GitHub/Squash Trace UI。
-- [ ] Rust fmt/Clippy/tests、frontend checks 与 Tauri build 通过。
+- [x] history ordering、HEAD、parents 和 decorations 全部来自 Core projection。
+- [x] cursor 保持 opaque，分页 append 无重复触发或 stale overwrite。
+- [x] bare、empty、detached 状态不依赖 working-tree status。
+- [x] 增量失败保留既有 commits；无 Git、filesystem 或权限扩张。
+- [x] 未提前实现 commit diff/GitHub/Squash Trace UI。
+- [x] Rust fmt/Clippy/tests、frontend checks 与 Tauri build 通过。
 
 ## Done Definition
 
-- [ ] Deliverables 和 Review Checklist 完成。
-- [ ] 自主 Review 无阻塞项。
-- [ ] 状态更新 Done，提交、推送并快进合并至 `main`。
+- [x] Deliverables 和 Review Checklist 完成。
+- [x] 自主 Review 无阻塞项。
+- [x] 状态更新 Done，提交、推送并快进合并至 `main`。
 
 ## References
 

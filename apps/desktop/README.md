@@ -10,6 +10,8 @@ After a non-bare repository opens, Desktop requests one `repository/status` snap
 
 Tracked status entries expose separate staged and working-tree diff actions when that scope contains a change. Desktop sends the Core-provided repository-relative path and selected scope to `repository/diff`, then renders structured hunks, old/new line numbers, binary, and empty results. Repository-controlled line content is inserted only as text. Untracked content is not read or synthesized, and refreshing status closes any previously selected diff.
 
+Desktop also requests the Core-owned `repository/graph` projection after any repository opens, including bare repositories. The timeline renders commit order, parents, HEAD, and branch/tag decorations exactly as projected by Core. Pages contain 30 commits and advance only through the opaque `nextCursor`; the Host never parses or persists it. Incremental failures retain already loaded commits and can be retried independently from working-tree status.
+
 Run `pnpm --filter @gitnova/desktop check`, `test`, or `build` from the repository root. Debug and test builds may select an absolute Core executable with `GITNOVA_CORE_BINARY`; release builds resolve Core beside the Desktop executable.
 
 Native configuration lives in `src-tauri`. Its default capability grants only Tauri core window/event functionality; no shell, network, filesystem, or process plugin is enabled.

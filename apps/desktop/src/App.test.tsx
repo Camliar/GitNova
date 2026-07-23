@@ -6,6 +6,7 @@ const core = vi.hoisted(() => ({ getCoreStatus: vi.fn(), startCore: vi.fn() }));
 const repository = vi.hoisted(() => ({ selectRepositoryDirectory: vi.fn(), openRepository: vi.fn() }));
 const status = vi.hoisted(() => ({ getWorkingTreeStatus: vi.fn() }));
 const diff = vi.hoisted(() => ({ getFileDiff: vi.fn() }));
+const history = vi.hoisted(() => ({ getCommitGraph: vi.fn() }));
 
 vi.mock("./core", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./core")>()),
@@ -15,6 +16,7 @@ vi.mock("./core", async (importOriginal) => ({
 vi.mock("./repository", () => repository);
 vi.mock("./status", () => status);
 vi.mock("./diff", () => diff);
+vi.mock("./history", () => history);
 
 const descriptor = {
   worktreeRoot: "/work/project",
@@ -36,6 +38,7 @@ describe("Desktop repository open", () => {
       entries: [],
     });
     diff.getFileDiff.mockResolvedValue({ oldPath: "src/app.ts", newPath: "src/app.ts", isBinary: false, hunks: [] });
+    history.getCommitGraph.mockResolvedValue({ nodes: [], nextCursor: null });
   });
 
   it("opens only the explicitly selected directory and presents Core facts", async () => {
@@ -48,6 +51,84 @@ describe("Desktop repository open", () => {
     expect(screen.getByText("git version 2.50.0")).toBeInTheDocument();
     expect(await screen.findByText("Working tree clean")).toBeInTheDocument();
     expect(status.getWorkingTreeStatus).toHaveBeenCalledOnce();
+  });
+
+  it("renders Core-projected commit order, HEAD, refs, and merge parents", async () => {
+    history.getCommitGraph.mockResolvedValue({
+      nodes: [
+        {
+          commit: { oid: "1".repeat(40), parents: ["2".repeat(40), "3".repeat(40)], summary: "Merge topic", message: "Merge topic\n", author: { name: "Ada", email: "ada@example.com", timestamp: "2026-01-02T03:04:05+08:00" }, committer: { name: "Ada", email: "ada@example.com", timestamp: "2026-01-02T03:04:05+08:00" } },
+          isHead: true,
+          references: [
+            { name: "main", fullName: "refs/heads/main", kind: "localBranch", targetOid: "1".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: "origin/main" },
+            { name: "v1.0", fullName: "refs/tags/v1.0", kind: "tag", targetOid: "1".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: null },
+          ],
+        },
+        {
+          commit: { oid: "2".repeat(40), parents: [], summary: "Initial commit", message: "Initial commit\n", author: { name: "Lin", email: "lin@example.com", timestamp: "2025-12-01T00:00:00Z" }, committer: { name: "Lin", email: "lin@example.com", timestamp: "2025-12-01T00:00:00Z" } },
+          isHead: false,
+          references: [],
+        },
+      ],
+      nextCursor: null,
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+
+    await screen.findByText("Merge topic");
+    const historyList = screen.getByRole("list", { name: "Commit history" });
+    const commits = within(historyList).getAllByRole("listitem");
+    expect(commits[0]).toHaveTextContent("Merge topic");
+    expect(commits[1]).toHaveTextContent("Initial commit");
+    expect(within(historyList).getByText("HEAD")).toBeInTheDocument();
+    expect(within(historyList).getByText("main")).toBeInTheDocument();
+    expect(within(historyList).getByText("v1.0")).toBeInTheDocument();
+    expect(commits[0]).toHaveTextContent("Merge (2 parents)");
+  });
+
+  it("appends an opaque cursor page without changing existing commits", async () => {
+    const node = (oid: string, summary: string) => ({
+      commit: { oid: oid.repeat(40), parents: [], summary, message: `${summary}\n`, author: { name: "Ada", email: "ada@example.com", timestamp: "2026-01-01T00:00:00Z" }, committer: { name: "Ada", email: "ada@example.com", timestamp: "2026-01-01T00:00:00Z" } },
+      isHead: false, references: [],
+    });
+    history.getCommitGraph
+      .mockResolvedValueOnce({ nodes: [node("1", "Newest")], nextCursor: "opaque:cursor" })
+      .mockResolvedValueOnce({ nodes: [node("2", "Older")], nextCursor: null });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Load more" }));
+
+    expect(await screen.findByText("Older")).toBeInTheDocument();
+    expect(screen.getByText("Newest")).toBeInTheDocument();
+    expect(history.getCommitGraph).toHaveBeenNthCalledWith(1);
+    expect(history.getCommitGraph).toHaveBeenNthCalledWith(2, "opaque:cursor");
+  });
+
+  it("keeps loaded commits when load more fails and retries the same cursor", async () => {
+    const firstNode = { commit: { oid: "1".repeat(40), parents: [], summary: "Kept commit", message: "Kept commit\n", author: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" }, committer: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" } }, isHead: true, references: [] };
+    history.getCommitGraph
+      .mockResolvedValueOnce({ nodes: [firstNode], nextCursor: "next" })
+      .mockRejectedValueOnce({ code: "history.invalid_cursor", message: "History page failed", retryable: true })
+      .mockResolvedValueOnce({ nodes: [], nextCursor: null });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Load more" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("History page failed. Loaded commits were kept.");
+    expect(screen.getByText("Kept commit")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry load more" }));
+    expect(await screen.findByText("Kept commit")).toBeInTheDocument();
+    expect(history.getCommitGraph).toHaveBeenLastCalledWith("next");
+  });
+
+  it("loads history for bare repositories without requesting working tree status", async () => {
+    repository.openRepository.mockResolvedValue({ ...descriptor, kind: "bare", worktreeRoot: null });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+
+    expect(await screen.findByText("No commits yet")).toBeInTheDocument();
+    expect(history.getCommitGraph).toHaveBeenCalledOnce();
+    expect(status.getWorkingTreeStatus).not.toHaveBeenCalled();
   });
 
   it("keeps staged and working tree changes distinct and preserves rename paths", async () => {

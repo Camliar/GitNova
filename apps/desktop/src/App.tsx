@@ -7,6 +7,8 @@ import { getWorkingTreeStatus } from "./status";
 import { WorkingTreePanel, type WorkingTreeState } from "./WorkingTreePanel";
 import { getFileDiff } from "./diff";
 import { DiffPanel, type DiffSelection, type DiffState } from "./DiffPanel";
+import { getCommitGraph } from "./history";
+import { HistoryPanel, type HistoryState } from "./HistoryPanel";
 
 type Connection =
   | { kind: "checking" }
@@ -32,6 +34,8 @@ export function App() {
   const [workingTree, setWorkingTree] = useState<WorkingTreeState>({ kind: "idle" });
   const [fileDiff, setFileDiff] = useState<DiffState>({ kind: "idle" });
   const diffRequest = useRef(0);
+  const [history, setHistory] = useState<HistoryState>({ kind: "idle" });
+  const historyRequest = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -74,7 +78,8 @@ export function App() {
       setRepository({ kind: "open", repository: opened });
       diffRequest.current += 1;
       setFileDiff({ kind: "idle" });
-      if (opened.kind !== "bare") await refreshWorkingTree();
+      if (opened.kind === "bare") setWorkingTree({ kind: "idle" });
+      await Promise.all([opened.kind !== "bare" ? refreshWorkingTree() : Promise.resolve(), refreshHistory()]);
     } catch (error) {
       setRepository({ kind: "error", error: asDesktopError(error) });
     }
@@ -83,13 +88,16 @@ export function App() {
   async function reopenRepository() {
     if (repository.kind !== "open") return;
     const path = repository.repository.worktreeRoot ?? repository.repository.gitDirectory;
+    historyRequest.current += 1;
+    setHistory({ kind: "loading" });
     setRepository({ kind: "selecting" });
     try {
       const opened = await openRepository(path);
       setRepository({ kind: "open", repository: opened });
       diffRequest.current += 1;
       setFileDiff({ kind: "idle" });
-      if (opened.kind !== "bare") await refreshWorkingTree();
+      if (opened.kind === "bare") setWorkingTree({ kind: "idle" });
+      await Promise.all([opened.kind !== "bare" ? refreshWorkingTree() : Promise.resolve(), refreshHistory()]);
     } catch (error) {
       setRepository({ kind: "error", error: asDesktopError(error) });
     }
@@ -120,6 +128,37 @@ export function App() {
   function closeFileDiff() {
     diffRequest.current += 1;
     setFileDiff({ kind: "idle" });
+  }
+
+  async function refreshHistory() {
+    const request = ++historyRequest.current;
+    setHistory({ kind: "loading" });
+    try {
+      const page = await getCommitGraph();
+      if (request === historyRequest.current) {
+        setHistory({ kind: "ready", nodes: page.nodes, nextCursor: page.nextCursor, more: { kind: "idle" } });
+      }
+    } catch (error) {
+      if (request === historyRequest.current) setHistory({ kind: "error", error: asDesktopError(error) });
+    }
+  }
+
+  async function loadMoreHistory() {
+    if (history.kind !== "ready" || !history.nextCursor || history.more.kind === "loading") return;
+    const request = historyRequest.current;
+    const snapshot = history;
+    const cursor = history.nextCursor;
+    setHistory({ ...snapshot, more: { kind: "loading" } });
+    try {
+      const page = await getCommitGraph(cursor);
+      if (request === historyRequest.current) {
+        setHistory({ kind: "ready", nodes: [...snapshot.nodes, ...page.nodes], nextCursor: page.nextCursor, more: { kind: "idle" } });
+      }
+    } catch (error) {
+      if (request === historyRequest.current) {
+        setHistory({ ...snapshot, more: { kind: "error", error: asDesktopError(error) } });
+      }
+    }
   }
 
   const coreDetail =
@@ -204,6 +243,9 @@ export function App() {
               onRetry={() => void loadFileDiff(fileDiff.selection)}
               onClose={closeFileDiff}
             />
+          )}
+          {repository.kind === "open" && (
+            <HistoryPanel state={history} onRetry={() => void refreshHistory()} onLoadMore={() => void loadMoreHistory()} />
           )}
         </section>
 

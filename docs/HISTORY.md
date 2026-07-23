@@ -19,3 +19,9 @@ An invalid, malformed, or unavailable cursor returns `history.invalid_cursor`. A
 ## Deliberate limits
 
 The method follows ancestry reachable from the captured HEAD. It does not return file changes, patches, graph lanes, decorations, arbitrary ranges, reflog entries, or unreachable objects. Those capabilities require separate Tasks.
+
+## Desktop history
+
+Desktop 通过 [`repository/graph`](COMMIT_GRAPH.md) 消费相同的固定 HEAD 分页序列，以同时获得 Core-owned HEAD/ref decorations。每页固定请求 30 个 commits；`nextCursor` 只原样返回 Core，不解析、合成或持久化。
+
+第一页面向所有 repository kind，包括 bare、detached 和 empty/unborn。Load more 只在用户明确触发时执行，失败会保留已加载 commits 与 cursor 以便重试。working-tree status Refresh 不重建 history snapshot；同仓库 reopen 会建立新的第一页 snapshot。

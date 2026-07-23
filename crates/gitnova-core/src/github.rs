@@ -1,9 +1,11 @@
 use gitnova_protocol::{
-    GitHubCommitIdentity, GitHubPullRequest, GitHubPullRequestCommit, GitHubPullRequestParams,
-    GitHubPullRequestRef, GitHubPullRequestState, GitHubRepository, GitHubRepositoryParams,
-    RepositoryDescriptor,
+    DiffHunk, DiffLine, DiffLineKind, GitHubCommitFileDiff, GitHubCommitIdentity, GitHubFileStatus,
+    GitHubPatchState, GitHubPullRequest, GitHubPullRequestCommit, GitHubPullRequestCommitDiff,
+    GitHubPullRequestCommitDiffParams, GitHubPullRequestParams, GitHubPullRequestRef,
+    GitHubPullRequestState, GitHubRepository, GitHubRepositoryParams, RepositoryDescriptor,
 };
 use serde::Deserialize;
+use std::collections::HashSet;
 use std::ffi::OsString;
 use std::io;
 use std::process::Command;
@@ -11,6 +13,8 @@ use std::process::Command;
 const MAX_REMOTE_OUTPUT_BYTES: usize = 16 * 1024;
 const MAX_GITHUB_RESPONSE_BYTES: usize = 1024 * 1024;
 const MAX_GITHUB_COMMIT_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
+const MAX_GITHUB_COMMIT_DIFF_RESPONSE_BYTES: usize = 32 * 1024 * 1024;
+const MAX_GITHUB_COMMIT_FILES: usize = 3_000;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum GitHubError {
@@ -22,6 +26,8 @@ pub enum GitHubError {
     RequestFailed,
     ResponseParse,
     PullRequestCommitLimit,
+    CommitNotInPullRequest,
+    CommitFileLimit,
 }
 
 #[derive(Debug)]
@@ -72,6 +78,50 @@ pub fn pull_request(
     params: &GitHubPullRequestParams,
 ) -> Result<GitHubPullRequest, GitHubError> {
     pull_request_with(&SystemCommand, descriptor, params)
+}
+
+pub fn pull_request_commit_diff(
+    descriptor: &RepositoryDescriptor,
+    params: &GitHubPullRequestCommitDiffParams,
+) -> Result<GitHubPullRequestCommitDiff, GitHubError> {
+    pull_request_commit_diff_with(&SystemCommand, descriptor, params)
+}
+
+fn pull_request_commit_diff_with(
+    runner: &impl CommandRunner,
+    descriptor: &RepositoryDescriptor,
+    params: &GitHubPullRequestCommitDiffParams,
+) -> Result<GitHubPullRequestCommitDiff, GitHubError> {
+    let pr_params = GitHubPullRequestParams {
+        number: params.number,
+        remote: params.remote.clone(),
+        name_with_owner: params.name_with_owner.clone(),
+    };
+    let pull_request = pull_request_with(runner, descriptor, &pr_params)?;
+    let commit = pull_request
+        .commits
+        .into_iter()
+        .find(|commit| commit.oid.eq_ignore_ascii_case(&params.oid))
+        .ok_or(GitHubError::CommitNotInPullRequest)?;
+    let endpoint = format!(
+        "repos/{}/commits/{}?per_page=100",
+        pull_request.name_with_owner, commit.oid
+    );
+    let bytes = run_gh_api(
+        runner,
+        &[endpoint, "--paginate".into(), "--slurp".into()],
+        MAX_GITHUB_COMMIT_DIFF_RESPONSE_BYTES,
+    )?;
+    let pages: Vec<ApiCommitFilesPage> =
+        serde_json::from_slice(&bytes).map_err(|_| GitHubError::ResponseParse)?;
+    let files = normalize_commit_files(pages, &commit.oid)?;
+    Ok(GitHubPullRequestCommitDiff {
+        host: "github.com".into(),
+        name_with_owner: pull_request.name_with_owner,
+        pull_request_number: params.number,
+        commit,
+        files,
+    })
 }
 
 fn repository_with(
@@ -369,6 +419,191 @@ struct ApiGitIdentity {
 #[derive(Deserialize)]
 struct ApiParent {
     sha: String,
+}
+
+#[derive(Deserialize)]
+struct ApiCommitFilesPage {
+    sha: String,
+    files: Vec<ApiCommitFile>,
+}
+
+#[derive(Deserialize)]
+struct ApiCommitFile {
+    filename: String,
+    status: String,
+    additions: u64,
+    deletions: u64,
+    changes: u64,
+    previous_filename: Option<String>,
+    patch: Option<String>,
+}
+
+fn normalize_commit_files(
+    pages: Vec<ApiCommitFilesPage>,
+    requested_oid: &str,
+) -> Result<Vec<GitHubCommitFileDiff>, GitHubError> {
+    if pages.is_empty() {
+        return Err(GitHubError::ResponseParse);
+    }
+    let mut paths = HashSet::new();
+    let mut files = Vec::new();
+    for page in pages {
+        if !page.sha.eq_ignore_ascii_case(requested_oid) {
+            return Err(GitHubError::ResponseParse);
+        }
+        for file in page.files {
+            if !valid_path(&file.filename) || !paths.insert(file.filename.clone()) {
+                return Err(GitHubError::ResponseParse);
+            }
+            let status = match file.status.as_str() {
+                "added" => GitHubFileStatus::Added,
+                "removed" => GitHubFileStatus::Removed,
+                "modified" => GitHubFileStatus::Modified,
+                "renamed" => GitHubFileStatus::Renamed,
+                "copied" => GitHubFileStatus::Copied,
+                "changed" => GitHubFileStatus::Changed,
+                "unchanged" => GitHubFileStatus::Unchanged,
+                _ => return Err(GitHubError::ResponseParse),
+            };
+            let old_path = if matches!(status, GitHubFileStatus::Renamed | GitHubFileStatus::Copied)
+            {
+                file.previous_filename
+                    .filter(|path| valid_path(path))
+                    .ok_or(GitHubError::ResponseParse)?
+            } else {
+                file.filename.clone()
+            };
+            if file.additions.checked_add(file.deletions) != Some(file.changes) {
+                return Err(GitHubError::ResponseParse);
+            }
+            let (patch_state, hunks) = match file.patch {
+                Some(patch) => (GitHubPatchState::Available, parse_patch(&patch)?),
+                None => (GitHubPatchState::Unavailable, Vec::new()),
+            };
+            files.push(GitHubCommitFileDiff {
+                old_path,
+                new_path: file.filename,
+                status,
+                additions: file.additions,
+                deletions: file.deletions,
+                changes: file.changes,
+                patch_state,
+                hunks,
+            });
+        }
+    }
+    if files.len() >= MAX_GITHUB_COMMIT_FILES {
+        return Err(GitHubError::CommitFileLimit);
+    }
+    Ok(files)
+}
+
+fn valid_path(path: &str) -> bool {
+    !path.is_empty() && !path.contains(['\0', '\r', '\n'])
+}
+
+fn parse_patch(patch: &str) -> Result<Vec<DiffHunk>, GitHubError> {
+    let mut hunks = Vec::new();
+    let mut current: Option<DiffHunk> = None;
+    let mut old_line = 0;
+    let mut new_line = 0;
+    for line in patch.split_terminator('\n') {
+        if line.starts_with("@@ ") {
+            if let Some(hunk) = current.take() {
+                hunks.push(hunk);
+            }
+            let end = line.find(" @@").ok_or(GitHubError::ResponseParse)?;
+            let mut ranges = line[3..end].split_whitespace();
+            let (old_start, old_lines) = parse_patch_range(ranges.next(), '-')?;
+            let (new_start, new_lines) = parse_patch_range(ranges.next(), '+')?;
+            if ranges.next().is_some() {
+                return Err(GitHubError::ResponseParse);
+            }
+            old_line = old_start;
+            new_line = new_start;
+            current = Some(DiffHunk {
+                old_start,
+                old_lines,
+                new_start,
+                new_lines,
+                header: line[end + 3..].to_owned(),
+                lines: Vec::new(),
+            });
+            continue;
+        }
+        if line == "\\ No newline at end of file" {
+            continue;
+        }
+        let hunk = current.as_mut().ok_or(GitHubError::ResponseParse)?;
+        let (kind, old, new) = match line.as_bytes().first() {
+            Some(b' ') => {
+                let values = (Some(old_line), Some(new_line));
+                old_line += 1;
+                new_line += 1;
+                (DiffLineKind::Context, values.0, values.1)
+            }
+            Some(b'-') => {
+                let value = old_line;
+                old_line += 1;
+                (DiffLineKind::Deletion, Some(value), None)
+            }
+            Some(b'+') => {
+                let value = new_line;
+                new_line += 1;
+                (DiffLineKind::Addition, None, Some(value))
+            }
+            _ => return Err(GitHubError::ResponseParse),
+        };
+        hunk.lines.push(DiffLine {
+            kind,
+            content: line[1..].to_owned(),
+            old_line: old,
+            new_line: new,
+        });
+    }
+    if let Some(hunk) = current {
+        hunks.push(hunk);
+    }
+    if hunks.is_empty() {
+        return Err(GitHubError::ResponseParse);
+    }
+    for hunk in &hunks {
+        let old_count = hunk
+            .lines
+            .iter()
+            .filter(|line| line.old_line.is_some())
+            .count() as u64;
+        let new_count = hunk
+            .lines
+            .iter()
+            .filter(|line| line.new_line.is_some())
+            .count() as u64;
+        if old_count != hunk.old_lines || new_count != hunk.new_lines {
+            return Err(GitHubError::ResponseParse);
+        }
+    }
+    Ok(hunks)
+}
+
+fn parse_patch_range(value: Option<&str>, prefix: char) -> Result<(u64, u64), GitHubError> {
+    let value = value
+        .and_then(|value| value.strip_prefix(prefix))
+        .ok_or(GitHubError::ResponseParse)?;
+    let mut parts = value.split(',');
+    let start = parts
+        .next()
+        .and_then(|value| value.parse().ok())
+        .ok_or(GitHubError::ResponseParse)?;
+    let lines = parts
+        .next()
+        .map(str::parse)
+        .transpose()
+        .map_err(|_| GitHubError::ResponseParse)?
+        .unwrap_or(1);
+    if parts.next().is_some() {
+        return Err(GitHubError::ResponseParse);
+    }
+    Ok((start, lines))
 }
 
 fn normalize_pull_request(
@@ -742,6 +977,129 @@ mod tests {
         assert_eq!(
             pull_request_with(&incomplete, &descriptor(), &pull_request_params()),
             Err(GitHubError::ResponseParse)
+        );
+    }
+
+    #[test]
+    fn returns_paginated_pr_commit_files_and_structured_patch() {
+        let runner = FakeRunner::new([
+            success_value(pull_request_detail(1)),
+            success_value(json!([[api_commit(OID_A, OID_C, "change files", None)]])),
+            success_value(json!([
+                {"sha": OID_A, "files": [{
+                    "filename": "src/new.rs", "previous_filename": "src/old.rs", "status": "renamed",
+                    "additions": 1, "deletions": 1, "changes": 2,
+                    "patch": "@@ -10,2 +10,2 @@ fn example()\n context\n-old\n+new"
+                }]},
+                {"sha": OID_A, "files": [{
+                    "filename": "image.png", "status": "modified",
+                    "additions": 0, "deletions": 0, "changes": 0
+                }]}
+            ])),
+        ]);
+        let params = GitHubPullRequestCommitDiffParams {
+            number: 42,
+            oid: OID_A.into(),
+            remote: None,
+            name_with_owner: Some("owner/repo".into()),
+        };
+        let result = pull_request_commit_diff_with(&runner, &descriptor(), &params).unwrap();
+        assert_eq!(result.commit.oid, OID_A);
+        assert_eq!(result.files.len(), 2);
+        assert_eq!(result.files[0].old_path, "src/old.rs");
+        assert_eq!(result.files[0].new_path, "src/new.rs");
+        assert_eq!(result.files[0].patch_state, GitHubPatchState::Available);
+        assert_eq!(result.files[0].hunks[0].lines[1].old_line, Some(11));
+        assert_eq!(result.files[0].hunks[0].lines[2].new_line, Some(11));
+        assert_eq!(result.files[1].patch_state, GitHubPatchState::Unavailable);
+        assert!(result.files[1].hunks.is_empty());
+        let calls = runner.calls.lock().unwrap();
+        assert_eq!(
+            calls[2].1[1],
+            OsString::from(format!("repos/owner/repo/commits/{OID_A}?per_page=100"))
+        );
+        assert!(calls[2].1.contains(&OsString::from("--paginate")));
+        assert!(calls[2].1.contains(&OsString::from("--slurp")));
+    }
+
+    #[test]
+    fn rejects_commit_outside_pull_request_before_commit_api_call() {
+        let runner = FakeRunner::new([
+            success_value(pull_request_detail(1)),
+            success_value(json!([[api_commit(OID_A, OID_C, "only", None)]])),
+        ]);
+        let params = GitHubPullRequestCommitDiffParams {
+            number: 42,
+            oid: OID_B.into(),
+            remote: None,
+            name_with_owner: Some("owner/repo".into()),
+        };
+        assert_eq!(
+            pull_request_commit_diff_with(&runner, &descriptor(), &params),
+            Err(GitHubError::CommitNotInPullRequest)
+        );
+        assert_eq!(runner.calls.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn rejects_inconsistent_or_duplicate_commit_file_pages() {
+        let duplicate = || ApiCommitFile {
+            filename: "same.txt".into(),
+            status: "modified".into(),
+            additions: 1,
+            deletions: 0,
+            changes: 1,
+            previous_filename: None,
+            patch: Some("@@ -1 +1,2 @@\n same\n+new".into()),
+        };
+        let pages = vec![
+            ApiCommitFilesPage {
+                sha: OID_A.into(),
+                files: vec![duplicate()],
+            },
+            ApiCommitFilesPage {
+                sha: OID_A.into(),
+                files: vec![duplicate()],
+            },
+        ];
+        assert_eq!(
+            normalize_commit_files(pages, OID_A),
+            Err(GitHubError::ResponseParse)
+        );
+        assert_eq!(
+            normalize_commit_files(
+                vec![ApiCommitFilesPage {
+                    sha: OID_B.into(),
+                    files: vec![]
+                }],
+                OID_A
+            ),
+            Err(GitHubError::ResponseParse)
+        );
+    }
+
+    #[test]
+    fn rejects_commit_file_limit_without_presenting_a_partial_list() {
+        let files = (0..MAX_GITHUB_COMMIT_FILES)
+            .map(|index| ApiCommitFile {
+                filename: format!("files/{index}.txt"),
+                status: "modified".into(),
+                additions: 0,
+                deletions: 0,
+                changes: 0,
+                previous_filename: None,
+                patch: None,
+            })
+            .collect();
+        assert_eq!(
+            normalize_commit_files(
+                vec![ApiCommitFilesPage {
+                    sha: OID_A.into(),
+                    files,
+                }],
+                OID_A,
+            ),
+            Err(GitHubError::CommitFileLimit)
         );
     }
 }

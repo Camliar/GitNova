@@ -4,7 +4,7 @@ import process from "node:process";
 const schemaUrl = new URL("../sdk/protocol/gitnova-protocol.schema.json", import.meta.url);
 const outputUrl = new URL("../packages/protocol/src/generated.ts", import.meta.url);
 const schema = JSON.parse(await readFile(schemaUrl, "utf8"));
-const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage", "CommitDiffParams", "CommitDiff", "ReferenceKind", "RepositoryHead", "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage", "GitHubRepositoryParams", "GitHubRepository", "GitHubPullRequestParams", "GitHubPullRequestState", "GitHubPullRequestRef", "GitHubCommitIdentity", "GitHubPullRequestCommit", "GitHubPullRequest"];
+const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage", "CommitDiffParams", "CommitDiff", "ReferenceKind", "RepositoryHead", "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage", "GitHubRepositoryParams", "GitHubRepository", "GitHubPullRequestParams", "GitHubPullRequestState", "GitHubPullRequestRef", "GitHubCommitIdentity", "GitHubPullRequestCommit", "GitHubPullRequest", "GitHubPullRequestCommitDiffParams", "GitHubFileStatus", "GitHubPatchState", "GitHubCommitFileDiff", "GitHubPullRequestCommitDiff"];
 for (const name of requiredDefinitions) {
   if (!schema.$defs?.[name]) throw new Error(`Protocol schema is missing $defs.${name}`);
 }
@@ -37,6 +37,7 @@ export interface ServerCapabilities {
   commitGraphProjection: boolean;
   githubRepository: boolean;
   githubPullRequest: boolean;
+  githubPullRequestCommitDiff: boolean;
 }
 
 export interface InitializeParams {
@@ -267,6 +268,35 @@ export interface GitHubPullRequest {
   head: GitHubPullRequestRef;
   mergeCommitOid: string | null;
   commits: GitHubPullRequestCommit[];
+}
+
+export interface GitHubPullRequestCommitDiffParams {
+  number: number;
+  oid: string;
+  remote?: string;
+  nameWithOwner?: string;
+}
+
+export type GitHubFileStatus = "added" | "removed" | "modified" | "renamed" | "copied" | "changed" | "unchanged";
+export type GitHubPatchState = "available" | "unavailable";
+
+export interface GitHubCommitFileDiff {
+  oldPath: string;
+  newPath: string;
+  status: GitHubFileStatus;
+  additions: number;
+  deletions: number;
+  changes: number;
+  patchState: GitHubPatchState;
+  hunks: DiffHunk[];
+}
+
+export interface GitHubPullRequestCommitDiff {
+  host: "github.com";
+  nameWithOwner: string;
+  pullRequestNumber: number;
+  commit: GitHubPullRequestCommit;
+  files: GitHubCommitFileDiff[];
 }
 `;
 

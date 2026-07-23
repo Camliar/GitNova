@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: &str = "1.9";
+pub const PROTOCOL_VERSION: &str = "1.10";
 
 pub const ERROR_PARSE: i64 = -32700;
 pub const ERROR_INVALID_REQUEST: i64 = -32600;
@@ -44,6 +44,8 @@ pub const ERROR_GITHUB_AUTH_REQUIRED: i64 = -32124;
 pub const ERROR_GITHUB_REQUEST_FAILED: i64 = -32125;
 pub const ERROR_GITHUB_RESPONSE_PARSE: i64 = -32126;
 pub const ERROR_GITHUB_PR_COMMIT_LIMIT: i64 = -32127;
+pub const ERROR_GITHUB_COMMIT_NOT_IN_PR: i64 = -32128;
+pub const ERROR_GITHUB_COMMIT_FILE_LIMIT: i64 = -32129;
 pub const ERROR_REQUEST_CANCELLED: i64 = -32800;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -173,6 +175,7 @@ pub struct ServerCapabilities {
     pub commit_graph_projection: bool,
     pub github_repository: bool,
     pub github_pull_request: bool,
+    pub github_pull_request_commit_diff: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -499,6 +502,59 @@ pub struct GitHubPullRequest {
     pub head: GitHubPullRequestRef,
     pub merge_commit_oid: Option<String>,
     pub commits: Vec<GitHubPullRequestCommit>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubPullRequestCommitDiffParams {
+    pub number: u64,
+    pub oid: String,
+    #[serde(default)]
+    pub remote: Option<String>,
+    #[serde(default)]
+    pub name_with_owner: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GitHubFileStatus {
+    Added,
+    Removed,
+    Modified,
+    Renamed,
+    Copied,
+    Changed,
+    Unchanged,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GitHubPatchState {
+    Available,
+    Unavailable,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubCommitFileDiff {
+    pub old_path: String,
+    pub new_path: String,
+    pub status: GitHubFileStatus,
+    pub additions: u64,
+    pub deletions: u64,
+    pub changes: u64,
+    pub patch_state: GitHubPatchState,
+    pub hunks: Vec<DiffHunk>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubPullRequestCommitDiff {
+    pub host: String,
+    pub name_with_owner: String,
+    pub pull_request_number: u64,
+    pub commit: GitHubPullRequestCommit,
+    pub files: Vec<GitHubCommitFileDiff>,
 }
 
 #[derive(Clone, Default)]

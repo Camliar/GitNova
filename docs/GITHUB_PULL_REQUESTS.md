@@ -1,6 +1,6 @@
 # GitHub Pull Requests and Original Commits
 
-`github/pullRequest` is an explicit Core-owned network request that returns one normalized pull request and its ordered original commit list. This list remains available from GitHub after a squash merge and is the source sequence for later per-commit diff and Squash Trace Tasks.
+`github/pullRequest` is an explicit Core-owned network request that returns one normalized pull request and its ordered original commit list. This list remains available from GitHub after a squash merge and is the membership source for per-commit diff and later Squash Trace Tasks.
 
 ## Request
 
@@ -14,6 +14,14 @@ Each original commit includes its OID, ordered parent OIDs, Git author/committer
 
 GitHub documents a maximum of 250 commits for the PR commits endpoint. Core compares the PR detail count with the flattened list. A count above the supported limit or a capped 250-item response that cannot prove completeness returns `github.pr_commit_limit_exceeded`; any other mismatch is an invalid Provider response. GitNova never silently presents a partial original commit sequence.
 
-Detail responses are limited to 1 MiB and commit pages to 16 MiB. Core does not return raw GitHub JSON, response headers, or command stderr. This Task does not return changed files or patches, infer a squash relationship, cache data, or update a PR.
+Detail responses are limited to 1 MiB and commit pages to 16 MiB. Core does not return raw GitHub JSON, response headers, or command stderr.
 
-Official references: [Get a pull request and list PR commits](https://docs.github.com/en/rest/pulls/pulls) and [GitHub CLI pagination/slurp](https://cli.github.com/manual/gh_api).
+## Original commit file and line diff
+
+`github/pullRequestCommitDiff` requires a positive PR `number` and a full 40- or 64-character hexadecimal `oid`, plus the same optional repository selectors. Core first obtains the PR's complete original commit list and rejects an OID outside that list with `github.commit_not_in_pull_request`. This prevents the PR method from becoming an unrestricted remote commit reader.
+
+For a member commit, Core requests `repos/{owner}/{repo}/commits/{oid}?per_page=100` with `--paginate --slurp`. It verifies every page belongs to the requested commit and returns the matching normalized commit plus ordered file records. Each file has old/new paths, normalized status, additions/deletions/changes, patch availability, and structured hunks with old/new line numbers. Renames preserve `previous_filename` as `oldPath`.
+
+GitHub does not include `patch` for every file. GitNova reports those records as `patchState: unavailable` with no hunks; it does not claim that every missing patch is binary. Duplicate paths, inconsistent page OIDs, invalid statistics or malformed patches produce `github.response_parse_failed`. A response reaching GitHub's documented 3000-file limit returns `github.commit_file_limit_exceeded`, because completeness can no longer be proven. Commit-file responses are limited to 32 MiB.
+
+Official references: [Get a pull request and list PR commits](https://docs.github.com/en/rest/pulls/pulls), [Get a commit](https://docs.github.com/en/rest/commits/commits#get-a-commit), and [GitHub CLI pagination/slurp](https://cli.github.com/manual/gh_api).

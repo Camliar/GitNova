@@ -1,6 +1,6 @@
 # TASK-0013: GitHub PR Original Commit Diff
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/013-github-pr-commit-diff`
@@ -33,27 +33,27 @@
 
 ## Deliverables
 
-- [ ] `github/pullRequestCommitDiff` method 与 PR membership guard
-- [ ] paginated commit-file response parser 与 3000 文件上限保护
-- [ ] normalized file status、patch availability 与 structured hunks
-- [ ] Rust、Schema、TypeScript、capability 与错误同步
-- [ ] fake runner、contract、安全/边界测试
-- [ ] PR commit diff 语义、限制与显式联网文档
+- [x] `github/pullRequestCommitDiff` method 与 PR membership guard
+- [x] paginated commit-file response parser 与 3000 文件上限保护
+- [x] normalized file status、patch availability 与 structured hunks
+- [x] Rust、Schema、TypeScript、capability 与错误同步
+- [x] fake runner、contract、安全/边界测试
+- [x] PR commit diff 语义、限制与显式联网文档
 
 ## Review Checklist
 
-- [ ] GitHub Provider 逻辑只在 Core，复用 ADR-0005 凭据边界。
-- [ ] 只能查询指定 PR original commit，文件顺序与路径/统计保真。
-- [ ] pagination、3000 文件上限与 missing patch 不静默降级。
-- [ ] 不泄漏 raw JSON、stderr、token 或非必要 Provider 字段。
-- [ ] 未实现 Squash Trace 判定、任意 commit 查询、PR 写操作或 Host UI。
-- [ ] fmt、Clippy、Rust tests、`npm run check` 与文档检查通过。
+- [x] GitHub Provider 逻辑只在 Core，复用 ADR-0005 凭据边界。
+- [x] 只能查询指定 PR original commit，文件顺序与路径/统计保真。
+- [x] pagination、3000 文件上限与 missing patch 不静默降级。
+- [x] 不泄漏 raw JSON、stderr、token 或非必要 Provider 字段。
+- [x] 未实现 Squash Trace 判定、任意 commit 查询、PR 写操作或 Host UI。
+- [x] fmt、Clippy、Rust tests、`npm run check` 与文档检查通过。
 
 ## Done Definition
 
-- [ ] Deliverables 和 Review Checklist 完成。
-- [ ] 自主 Review 无阻塞项。
-- [ ] 状态更新 Done，提交、推送并快进合并至 `main`。
+- [x] Deliverables 和 Review Checklist 完成。
+- [x] 自主 Review 无阻塞项。
+- [x] 状态更新 Done，提交、推送并快进合并至 `main`。
 
 ## References
 

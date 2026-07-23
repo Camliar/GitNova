@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitnova.dev/schema/protocol/1.9/gitnova-protocol.schema.json",
-  "title": "GitNova Core Protocol 1.9",
+  "$id": "https://gitnova.dev/schema/protocol/1.10/gitnova-protocol.schema.json",
+  "title": "GitNova Core Protocol 1.10",
   "type": "object",
-  "properties": { "protocolVersion": { "const": "1.9" } },
+  "properties": { "protocolVersion": { "const": "1.10" } },
   "required": ["protocolVersion"],
   "$defs": {
     "RequestId": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
@@ -31,9 +31,10 @@
         "repositoryReferences": { "type": "boolean" },
         "commitGraphProjection": { "type": "boolean" },
         "githubRepository": { "type": "boolean" },
-        "githubPullRequest": { "type": "boolean" }
+        "githubPullRequest": { "type": "boolean" },
+        "githubPullRequestCommitDiff": { "type": "boolean" }
       },
-      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff", "repositoryReferences", "commitGraphProjection", "githubRepository", "githubPullRequest"]
+      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff", "repositoryReferences", "commitGraphProjection", "githubRepository", "githubPullRequest", "githubPullRequestCommitDiff"]
     },
     "InitializeParams": {
       "type": "object",
@@ -383,6 +384,35 @@
         "commits": { "type": "array", "items": { "$ref": "#/$defs/GitHubPullRequestCommit" } }
       },
       "required": ["host", "nameWithOwner", "number", "title", "body", "state", "isDraft", "authorLogin", "url", "createdAt", "updatedAt", "closedAt", "mergedAt", "base", "head", "mergeCommitOid", "commits"]
+    },
+    "GitHubPullRequestCommitDiffParams": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "number": { "type": "integer", "minimum": 1 },
+        "oid": { "type": "string", "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$" },
+        "remote": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "nameWithOwner": { "type": "string", "minLength": 3, "maxLength": 140 }
+      }, "required": ["number", "oid"]
+    },
+    "GitHubFileStatus": { "enum": ["added", "removed", "modified", "renamed", "copied", "changed", "unchanged"] },
+    "GitHubPatchState": { "enum": ["available", "unavailable"] },
+    "GitHubCommitFileDiff": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "oldPath": { "type": "string" }, "newPath": { "type": "string" },
+        "status": { "$ref": "#/$defs/GitHubFileStatus" },
+        "additions": { "type": "integer", "minimum": 0 }, "deletions": { "type": "integer", "minimum": 0 }, "changes": { "type": "integer", "minimum": 0 },
+        "patchState": { "$ref": "#/$defs/GitHubPatchState" },
+        "hunks": { "type": "array", "items": { "$ref": "#/$defs/DiffHunk" } }
+      }, "required": ["oldPath", "newPath", "status", "additions", "deletions", "changes", "patchState", "hunks"]
+    },
+    "GitHubPullRequestCommitDiff": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "host": { "const": "github.com" }, "nameWithOwner": { "type": "string" }, "pullRequestNumber": { "type": "integer", "minimum": 1 },
+        "commit": { "$ref": "#/$defs/GitHubPullRequestCommit" },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/GitHubCommitFileDiff" } }
+      }, "required": ["host", "nameWithOwner", "pullRequestNumber", "commit", "files"]
     }
   }
 }

@@ -24,7 +24,7 @@
 - GitHub Provider repository identity/metadata（Core-owned `gh api` adapter，已实现）
 - GitHub PR detail 与 ordered original commits（已实现）
 - PR 查看与原始 commit 列表
-- 指定 PR 原始 commit 的文件列表与行级 diff
+- 指定 PR 原始 commit 的文件列表与可用行级 diff（已实现；缺失 patch 显式标记）
 - PR、原始 commits 与最终 squash commit 的关联展示（Squash Trace）
 - Desktop Host 的端到端关键工作流
 

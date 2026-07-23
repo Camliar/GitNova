@@ -20,6 +20,6 @@ The normalized result contains `host`, `owner`, `name`, `nameWithOwner`, `url`, 
 
 This method is an explicit network action. Core does not invoke it during repository open, refresh it in the background, retry it automatically, or cache it. Stable errors distinguish invalid/missing/unsupported remote identity, unavailable `gh`, required authentication, request failure, and invalid response. Error payloads never include remote input, stderr, response bodies, or credentials.
 
-The adapter also provides normalized PR detail and original commits through [`github/pullRequest`](GITHUB_PULL_REQUESTS.md). It deliberately excludes GitHub Enterprise, direct REST/GraphQL transport, login flows, remote commit patches, PR writes, and Squash Trace inference. Those are separate Tasks behind the same Core-owned Provider boundary.
+The adapter also provides normalized PR detail, original commits, and member commit file/line diffs through [`github/pullRequest` and `github/pullRequestCommitDiff`](GITHUB_PULL_REQUESTS.md). It deliberately excludes GitHub Enterprise, direct REST/GraphQL transport, login flows, arbitrary remote commit reads, PR writes, and Squash Trace inference. Those are separate Tasks behind the same Core-owned Provider boundary.
 
 Official adapter references: [GitHub CLI `gh api`](https://cli.github.com/manual/gh_api), [GitHub CLI exit codes](https://cli.github.com/manual/gh_help_exit-codes), and [Get a repository REST response](https://docs.github.com/en/rest/repos/repos#get-a-repository).

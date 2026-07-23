@@ -10,11 +10,11 @@
 
 定义 `gitnova-core` 进程生命周期、JSON-RPC 基础协议、能力协商、错误模型与 SDK 生成方式。协议决策需遵循 [ADR-0004](../adr/ADR-0004-Core-Process.md)。
 
-## Phase 2 — Local Git Foundation（当前）
+## Phase 2 — Local Git Foundation
 
 按经批准的 Task 增量实现本地 Git 能力；使用 System Git，保持离线和可撤销。具体候选范围见[功能清单](FEATURE_LIST.md)。
 
-## Phase 3 — Desktop Squash Trace MVP
+## Phase 3 — Desktop Squash Trace MVP（当前）
 
 交付 Tauri 2 Desktop Host 的端到端核心工作流：在 Core 中接入 GitHub Provider（`gh`、REST 或 GraphQL），获取 PR 原始 commits，展示指定 commit 的文件与行级 diff，并关联 PR、原始 commits 与最终 squash commit。该 Squash Trace 主路径是 MVP 验证门槛。Host 不得承载或复制任何 Git/GitHub 业务逻辑。
 

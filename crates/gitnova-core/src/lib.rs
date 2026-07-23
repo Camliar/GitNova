@@ -2,9 +2,10 @@ mod framing;
 mod repository;
 
 use gitnova_protocol::{
-    CancelParams, CancellationRegistry, ERROR_ALREADY_INITIALIZED, ERROR_DIFFERENT_REPOSITORY_OPEN,
-    ERROR_GIT_COMMAND_FAILED, ERROR_GIT_UNAVAILABLE, ERROR_INCOMPATIBLE_PROTOCOL,
-    ERROR_INVALID_PARAMS, ERROR_INVALID_PATH, ERROR_INVALID_REQUEST, ERROR_METHOD_NOT_FOUND,
+    CancelParams, CancellationRegistry, DiffParams, ERROR_ALREADY_INITIALIZED, ERROR_DIFF_PARSE,
+    ERROR_DIFFERENT_REPOSITORY_OPEN, ERROR_GIT_COMMAND_FAILED, ERROR_GIT_UNAVAILABLE,
+    ERROR_INCOMPATIBLE_PROTOCOL, ERROR_INVALID_PARAMS, ERROR_INVALID_PATH,
+    ERROR_INVALID_REPOSITORY_PATH, ERROR_INVALID_REQUEST, ERROR_METHOD_NOT_FOUND,
     ERROR_NOT_INITIALIZED, ERROR_PARSE, ERROR_REPOSITORY_NOT_FOUND, ERROR_REPOSITORY_NOT_OPEN,
     ERROR_REQUEST_CANCELLED, ERROR_STATUS_PARSE, ERROR_UNSAFE_REPOSITORY, ERROR_WORKTREE_REQUIRED,
     ImplementationInfo, InitializeParams, InitializeResult, JSON_RPC_VERSION, Notification,
@@ -139,6 +140,7 @@ fn dispatch_request(
         "repository/discover" => repository_request(request, state, false),
         "repository/open" => repository_request(request, state, true),
         "repository/status" => status_request(request, state),
+        "repository/diff" => diff_request(request, state),
         _ => Response::error(
             Some(request.id),
             ResponseError::new(
@@ -202,6 +204,7 @@ fn initialize(request: Request, state: &mut CoreState) -> Response {
             cancellation: true,
             repository_discovery: true,
             working_tree_status: true,
+            structured_file_diff: true,
         },
     };
     Response::success(
@@ -331,6 +334,18 @@ fn repository_error(error: repository::RepositoryError) -> ResponseError {
             "System Git returned an invalid status payload",
             false,
         ),
+        repository::RepositoryError::DiffParse => ResponseError::new(
+            ERROR_DIFF_PARSE,
+            "git.diff_parse_failed",
+            "System Git returned an invalid patch payload",
+            false,
+        ),
+        repository::RepositoryError::InvalidRepositoryPath => ResponseError::new(
+            ERROR_INVALID_REPOSITORY_PATH,
+            "path.invalid_repository_relative",
+            "Diff path must be a safe repository-relative file path",
+            false,
+        ),
     }
 }
 
@@ -366,6 +381,53 @@ fn status_request(request: Request, state: &CoreState) -> Response {
         Ok(status) => Response::success(
             request.id,
             serde_json::to_value(status).expect("serializable working tree status"),
+        ),
+        Err(error) => Response::error(Some(request.id), repository_error(error)),
+    }
+}
+
+fn diff_request(request: Request, state: &CoreState) -> Response {
+    let params: DiffParams = match serde_json::from_value(request.params) {
+        Ok(params) => params,
+        Err(_) => {
+            return Response::error(
+                Some(request.id),
+                ResponseError::new(
+                    ERROR_INVALID_PARAMS,
+                    "protocol.invalid_params",
+                    "Invalid repository diff parameters",
+                    false,
+                ),
+            );
+        }
+    };
+    let context_lines = params.context_lines.unwrap_or(3);
+    if context_lines > 20 {
+        return Response::error(
+            Some(request.id),
+            ResponseError::new(
+                ERROR_INVALID_PARAMS,
+                "protocol.invalid_params",
+                "contextLines must be between 0 and 20",
+                false,
+            ),
+        );
+    }
+    let Some(descriptor) = &state.active_repository else {
+        return Response::error(
+            Some(request.id),
+            ResponseError::new(
+                ERROR_REPOSITORY_NOT_OPEN,
+                "repository.not_open",
+                "Open a repository before requesting a diff",
+                true,
+            ),
+        );
+    };
+    match repository::diff(descriptor, &params.path, params.scope, context_lines) {
+        Ok(diff) => Response::success(
+            request.id,
+            serde_json::to_value(diff).expect("serializable file diff"),
         ),
         Err(error) => Response::error(Some(request.id), repository_error(error)),
     }

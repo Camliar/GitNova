@@ -44,4 +44,4 @@ Raw Git stderr and repository content are never included in the response.
 
 ## Deliberate limits
 
-Status is a snapshot requested by the Host. This Task does not add file watching, automatic refresh, ignored files, submodule detail, diff content, staging, discard, commit, branch operations, history, or GitHub data.
+Status is a snapshot requested by the Host. This Task does not add file watching, automatic refresh, ignored files, submodule detail, staging, discard, commit, branch operations, history, or GitHub data. Single-file content changes are available through the separate [structured diff contract](DIFF.md).

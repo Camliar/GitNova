@@ -124,10 +124,14 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let responses = responses(&output.stdout);
     assert_eq!(responses.len(), 2);
     assert_eq!(responses[0]["id"], "init-1");
-    assert_eq!(responses[0]["result"]["protocolVersion"], "1.2");
+    assert_eq!(responses[0]["result"]["protocolVersion"], "1.3");
     assert_eq!(responses[0]["result"]["capabilities"]["cancellation"], true);
     assert_eq!(
         responses[0]["result"]["capabilities"]["workingTreeStatus"],
+        true
+    );
+    assert_eq!(
+        responses[0]["result"]["capabilities"]["structuredFileDiff"],
         true
     );
     assert_eq!(responses[1]["result"], Value::Null);
@@ -448,6 +452,130 @@ fn status_requires_open_non_bare_repository() {
     let bare_responses = responses(&bare.stdout);
     assert_eq!(
         bare_responses[2]["error"]["data"]["stableCode"],
+        "repository.worktree_required"
+    );
+}
+
+#[test]
+fn returns_distinct_staged_and_working_tree_hunks() {
+    let directory = TestDirectory::new("diff-scopes");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    fs::write(repository.join("file.txt"), "one\nold\nthree\n").unwrap();
+    git(&["add", "."], &repository);
+    git(
+        &[
+            "-c",
+            "user.name=GitNova Test",
+            "-c",
+            "user.email=test@gitnova.invalid",
+            "commit",
+            "-m",
+            "initial",
+        ],
+        &repository,
+    );
+    fs::write(repository.join("file.txt"), "one\nstaged\nthree\n").unwrap();
+    git(&["add", "file.txt"], &repository);
+    fs::write(repository.join("file.txt"), "one\nworking\nthree").unwrap();
+
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &repository),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/diff","params":{"path":"file.txt","scope":"staged","contextLines":0}}),
+        json!({"jsonrpc":"2.0","id":4,"method":"repository/diff","params":{"path":"file.txt","scope":"workingTree","contextLines":0}}),
+    ]);
+    let responses = responses(&output.stdout);
+    let staged_lines = responses[2]["result"]["hunks"][0]["lines"]
+        .as_array()
+        .unwrap();
+    assert!(
+        staged_lines
+            .iter()
+            .any(|line| line["content"] == "old" && line["kind"] == "deletion")
+    );
+    assert!(
+        staged_lines
+            .iter()
+            .any(|line| line["content"] == "staged" && line["kind"] == "addition")
+    );
+    let working_lines = responses[3]["result"]["hunks"][0]["lines"]
+        .as_array()
+        .unwrap();
+    assert!(
+        working_lines
+            .iter()
+            .any(|line| line["content"] == "staged" && line["kind"] == "deletion")
+    );
+    assert!(
+        working_lines
+            .iter()
+            .any(|line| line["content"] == "working" && line["kind"] == "addition")
+    );
+}
+
+#[test]
+fn reports_binary_empty_and_invalid_diff_requests() {
+    let directory = TestDirectory::new("diff-boundaries");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    fs::write(repository.join("image.bin"), [0_u8, 1, 2, 3]).unwrap();
+    fs::write(repository.join("clean.txt"), "clean\n").unwrap();
+    git(&["add", "."], &repository);
+    git(
+        &[
+            "-c",
+            "user.name=GitNova Test",
+            "-c",
+            "user.email=test@gitnova.invalid",
+            "commit",
+            "-m",
+            "initial",
+        ],
+        &repository,
+    );
+    fs::write(repository.join("image.bin"), [0_u8, 9, 8, 7]).unwrap();
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &repository),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/diff","params":{"path":"image.bin","scope":"workingTree"}}),
+        json!({"jsonrpc":"2.0","id":4,"method":"repository/diff","params":{"path":"clean.txt","scope":"workingTree"}}),
+        json!({"jsonrpc":"2.0","id":5,"method":"repository/diff","params":{"path":"../outside","scope":"workingTree"}}),
+        json!({"jsonrpc":"2.0","id":6,"method":"repository/diff","params":{"path":"clean.txt","scope":"workingTree","contextLines":21}}),
+    ]);
+    let responses = responses(&output.stdout);
+    assert_eq!(responses[2]["result"]["isBinary"], true);
+    assert_eq!(responses[2]["result"]["hunks"], json!([]));
+    assert_eq!(responses[3]["result"]["hunks"], json!([]));
+    assert_eq!(
+        responses[4]["error"]["data"]["stableCode"],
+        "path.invalid_repository_relative"
+    );
+    assert_eq!(
+        responses[5]["error"]["data"]["stableCode"],
+        "protocol.invalid_params"
+    );
+}
+
+#[test]
+fn diff_requires_open_non_bare_repository() {
+    let directory = TestDirectory::new("diff-errors");
+    git(&["init", "--bare", "bare.git"], &directory.0);
+    let no_open = run(&[
+        initialize(json!(1)),
+        json!({"jsonrpc":"2.0","id":2,"method":"repository/diff","params":{"path":"file.txt","scope":"workingTree"}}),
+    ]);
+    assert_eq!(
+        responses(&no_open.stdout)[1]["error"]["data"]["stableCode"],
+        "repository.not_open"
+    );
+    let bare = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &directory.0.join("bare.git")),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/diff","params":{"path":"file.txt","scope":"workingTree"}}),
+    ]);
+    assert_eq!(
+        responses(&bare.stdout)[2]["error"]["data"]["stableCode"],
         "repository.worktree_required"
     );
 }

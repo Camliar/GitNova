@@ -16,6 +16,7 @@ GitNova 文档以本页为入口。术语以[词汇表](GLOSSARY.md)为准，已
 | [PROTOCOL](PROTOCOL.md) | Core JSON-RPC/stdio 契约与生命周期 |
 | [REPOSITORIES](REPOSITORIES.md) | System Git 仓库发现、路径与会话语义 |
 | [STATUS](STATUS.md) | 工作区与分支状态契约 |
+| [DIFF](DIFF.md) | 单文件结构化行级 diff 契约 |
 | [FEATURE LIST](FEATURE_LIST.md) | 功能分期与本 Task 禁区 |
 | [NON-FUNCTIONAL](NON_FUNCTIONAL.md) | 性能、安全、可靠性等要求 |
 | [GLOSSARY](GLOSSARY.md) | 统一术语 |

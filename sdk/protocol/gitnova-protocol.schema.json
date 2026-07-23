@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitnova.dev/schema/protocol/1.2/gitnova-protocol.schema.json",
-  "title": "GitNova Core Protocol 1.2",
+  "$id": "https://gitnova.dev/schema/protocol/1.3/gitnova-protocol.schema.json",
+  "title": "GitNova Core Protocol 1.3",
   "type": "object",
-  "properties": { "protocolVersion": { "const": "1.2" } },
+  "properties": { "protocolVersion": { "const": "1.3" } },
   "required": ["protocolVersion"],
   "$defs": {
     "RequestId": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
@@ -24,9 +24,10 @@
       "properties": {
         "cancellation": { "type": "boolean" },
         "repositoryDiscovery": { "type": "boolean" },
-        "workingTreeStatus": { "type": "boolean" }
+        "workingTreeStatus": { "type": "boolean" },
+        "structuredFileDiff": { "type": "boolean" }
       },
-      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus"]
+      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff"]
     },
     "InitializeParams": {
       "type": "object",
@@ -123,6 +124,53 @@
         "entries": { "type": "array", "items": { "$ref": "#/$defs/StatusEntry" } }
       },
       "required": ["branch", "entries"]
+    },
+    "DiffScope": { "enum": ["workingTree", "staged"] },
+    "DiffParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "scope": { "$ref": "#/$defs/DiffScope" },
+        "contextLines": { "type": "integer", "minimum": 0, "maximum": 20 }
+      },
+      "required": ["path", "scope"]
+    },
+    "DiffLineKind": { "enum": ["context", "addition", "deletion"] },
+    "DiffLine": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "$ref": "#/$defs/DiffLineKind" },
+        "content": { "type": "string" },
+        "oldLine": { "type": ["integer", "null"], "minimum": 0 },
+        "newLine": { "type": ["integer", "null"], "minimum": 0 }
+      },
+      "required": ["kind", "content", "oldLine", "newLine"]
+    },
+    "DiffHunk": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "oldStart": { "type": "integer", "minimum": 0 },
+        "oldLines": { "type": "integer", "minimum": 0 },
+        "newStart": { "type": "integer", "minimum": 0 },
+        "newLines": { "type": "integer", "minimum": 0 },
+        "header": { "type": "string" },
+        "lines": { "type": "array", "items": { "$ref": "#/$defs/DiffLine" } }
+      },
+      "required": ["oldStart", "oldLines", "newStart", "newLines", "header", "lines"]
+    },
+    "FileDiff": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "oldPath": { "type": "string" },
+        "newPath": { "type": "string" },
+        "isBinary": { "type": "boolean" },
+        "hunks": { "type": "array", "items": { "$ref": "#/$defs/DiffHunk" } }
+      },
+      "required": ["oldPath", "newPath", "isBinary", "hunks"]
     }
   }
 }

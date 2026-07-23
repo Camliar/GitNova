@@ -34,7 +34,7 @@ cargo test --workspace
 npm run check
 ```
 
-阅读[项目总览](docs/PROJECT.md)、[产品需求](docs/PRODUCT_REQUIREMENTS.md)、[Core 协议](docs/PROTOCOL.md)、[仓库发现](docs/REPOSITORIES.md)、[工作区状态](docs/STATUS.md)和[贡献指南](CONTRIBUTING.md)，再从 `tasks/` 选择已批准的 Task。
+阅读[项目总览](docs/PROJECT.md)、[产品需求](docs/PRODUCT_REQUIREMENTS.md)、[Core 协议](docs/PROTOCOL.md)、[仓库发现](docs/REPOSITORIES.md)、[工作区状态](docs/STATUS.md)、[结构化 Diff](docs/DIFF.md)和[贡献指南](CONTRIBUTING.md)，再从 `tasks/` 选择已批准的 Task。
 
 ## Monorepo
 

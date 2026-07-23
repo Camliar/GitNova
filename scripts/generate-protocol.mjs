@@ -4,7 +4,7 @@ import process from "node:process";
 const schemaUrl = new URL("../sdk/protocol/gitnova-protocol.schema.json", import.meta.url);
 const outputUrl = new URL("../packages/protocol/src/generated.ts", import.meta.url);
 const schema = JSON.parse(await readFile(schemaUrl, "utf8"));
-const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus"];
+const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff"];
 for (const name of requiredDefinitions) {
   if (!schema.$defs?.[name]) throw new Error(`Protocol schema is missing $defs.${name}`);
 }
@@ -30,6 +30,7 @@ export interface ServerCapabilities {
   cancellation: boolean;
   repositoryDiscovery: boolean;
   workingTreeStatus: boolean;
+  structuredFileDiff: boolean;
 }
 
 export interface InitializeParams {
@@ -91,6 +92,39 @@ export interface BranchStatus {
 export interface WorkingTreeStatus {
   branch: BranchStatus;
   entries: StatusEntry[];
+}
+
+export type DiffScope = "workingTree" | "staged";
+
+export interface DiffParams {
+  path: string;
+  scope: DiffScope;
+  contextLines?: number;
+}
+
+export type DiffLineKind = "context" | "addition" | "deletion";
+
+export interface DiffLine {
+  kind: DiffLineKind;
+  content: string;
+  oldLine: number | null;
+  newLine: number | null;
+}
+
+export interface DiffHunk {
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  header: string;
+  lines: DiffLine[];
+}
+
+export interface FileDiff {
+  oldPath: string;
+  newPath: string;
+  isBinary: boolean;
+  hunks: DiffHunk[];
 }
 `;
 

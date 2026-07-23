@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: &str = "1.2";
+pub const PROTOCOL_VERSION: &str = "1.3";
 
 pub const ERROR_PARSE: i64 = -32700;
 pub const ERROR_INVALID_REQUEST: i64 = -32600;
@@ -25,6 +25,8 @@ pub const ERROR_DIFFERENT_REPOSITORY_OPEN: i64 = -32105;
 pub const ERROR_REPOSITORY_NOT_OPEN: i64 = -32106;
 pub const ERROR_WORKTREE_REQUIRED: i64 = -32107;
 pub const ERROR_STATUS_PARSE: i64 = -32108;
+pub const ERROR_DIFF_PARSE: i64 = -32109;
+pub const ERROR_INVALID_REPOSITORY_PATH: i64 = -32110;
 pub const ERROR_REQUEST_CANCELLED: i64 = -32800;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -147,6 +149,7 @@ pub struct ServerCapabilities {
     pub cancellation: bool,
     pub repository_discovery: bool,
     pub working_tree_status: bool,
+    pub structured_file_diff: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -235,6 +238,59 @@ pub struct WorkingTreeStatus {
     pub entries: Vec<StatusEntry>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DiffScope {
+    WorkingTree,
+    Staged,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffParams {
+    pub path: String,
+    pub scope: DiffScope,
+    #[serde(default)]
+    pub context_lines: Option<u8>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DiffLineKind {
+    Context,
+    Addition,
+    Deletion,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffLine {
+    pub kind: DiffLineKind,
+    pub content: String,
+    pub old_line: Option<u64>,
+    pub new_line: Option<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffHunk {
+    pub old_start: u64,
+    pub old_lines: u64,
+    pub new_start: u64,
+    pub new_lines: u64,
+    pub header: String,
+    pub lines: Vec<DiffLine>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileDiff {
+    pub old_path: String,
+    pub new_path: String,
+    pub is_binary: bool,
+    pub hunks: Vec<DiffHunk>,
+}
+
 #[derive(Clone, Default)]
 pub struct CancellationRegistry {
     cancelled: Arc<Mutex<HashSet<RequestId>>>,
@@ -305,6 +361,12 @@ mod tests {
             "StatusEntry",
             "BranchStatus",
             "WorkingTreeStatus",
+            "DiffScope",
+            "DiffParams",
+            "DiffLineKind",
+            "DiffLine",
+            "DiffHunk",
+            "FileDiff",
         ] {
             assert!(schema["$defs"].get(definition).is_some());
         }

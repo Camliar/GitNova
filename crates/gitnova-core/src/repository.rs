@@ -1,6 +1,6 @@
 use gitnova_protocol::{
-    BranchStatus, FileStatus, RepositoryDescriptor, RepositoryKind, StatusEntry, StatusEntryKind,
-    WorkingTreeStatus,
+    BranchStatus, DiffHunk, DiffLine, DiffLineKind, DiffScope, FileDiff, FileStatus,
+    RepositoryDescriptor, RepositoryKind, StatusEntry, StatusEntryKind, WorkingTreeStatus,
 };
 use std::ffi::{OsStr, OsString};
 use std::fs;
@@ -18,6 +18,8 @@ pub enum RepositoryError {
     UnsafeRepository,
     WorktreeRequired,
     StatusParse,
+    DiffParse,
+    InvalidRepositoryPath,
 }
 
 #[derive(Debug)]
@@ -72,6 +74,66 @@ pub fn status(descriptor: &RepositoryDescriptor) -> Result<WorkingTreeStatus, Re
         return Err(map_failed_output(&output.stderr));
     }
     parse_status(&output.stdout)
+}
+
+pub fn diff(
+    descriptor: &RepositoryDescriptor,
+    path: &str,
+    scope: DiffScope,
+    context_lines: u8,
+) -> Result<FileDiff, RepositoryError> {
+    let worktree = descriptor
+        .worktree_root
+        .as_ref()
+        .ok_or(RepositoryError::WorktreeRequired)?;
+    validate_repository_path(path)?;
+    let mut arguments = vec![
+        OsString::from("--literal-pathspecs"),
+        OsString::from("-C"),
+        OsString::from(worktree),
+        OsString::from("-c"),
+        OsString::from("core.quotePath=false"),
+        OsString::from("diff"),
+        OsString::from("--patch"),
+        OsString::from("--no-color"),
+        OsString::from("--no-ext-diff"),
+        OsString::from("--no-textconv"),
+        OsString::from("--find-renames"),
+        OsString::from(format!("--unified={context_lines}")),
+    ];
+    if scope == DiffScope::Staged {
+        arguments.push(OsString::from("--cached"));
+    }
+    arguments.push(OsString::from("--"));
+    arguments.push(OsString::from(path));
+    let output = SystemGit.run(&arguments).map_err(map_io_error)?;
+    if !output.success {
+        return Err(map_failed_output(&output.stderr));
+    }
+    parse_diff(&output.stdout, path)
+}
+
+fn validate_repository_path(path: &str) -> Result<(), RepositoryError> {
+    if path.is_empty()
+        || path.starts_with(':')
+        || path
+            .split('/')
+            .any(|segment| segment.is_empty() || segment == "." || segment == "..")
+    {
+        return Err(RepositoryError::InvalidRepositoryPath);
+    }
+    let mut has_normal = false;
+    for component in Path::new(path).components() {
+        match component {
+            std::path::Component::Normal(_) => has_normal = true,
+            _ => return Err(RepositoryError::InvalidRepositoryPath),
+        }
+    }
+    if has_normal {
+        Ok(())
+    } else {
+        Err(RepositoryError::InvalidRepositoryPath)
+    }
 }
 
 fn discover_with(
@@ -300,6 +362,134 @@ fn map_status(status: char) -> FileStatus {
     }
 }
 
+fn parse_diff(output: &[u8], path: &str) -> Result<FileDiff, RepositoryError> {
+    let patch =
+        std::str::from_utf8(output).map_err(|_| RepositoryError::UnsupportedPathEncoding)?;
+    let mut old_path = path.to_owned();
+    let mut new_path = path.to_owned();
+    let mut is_binary = false;
+    for line in patch.split_terminator('\n') {
+        if let Some(value) = line.strip_prefix("rename from ") {
+            old_path = value.to_owned();
+        } else if let Some(value) = line.strip_prefix("rename to ") {
+            new_path = value.to_owned();
+        } else if let Some(value) = line.strip_prefix("--- a/") {
+            old_path = value.to_owned();
+        } else if let Some(value) = line.strip_prefix("+++ b/") {
+            new_path = value.to_owned();
+        } else if line.starts_with("Binary files ") || line == "GIT binary patch" {
+            is_binary = true;
+        }
+    }
+    if is_binary {
+        return Ok(FileDiff {
+            old_path,
+            new_path,
+            is_binary: true,
+            hunks: Vec::new(),
+        });
+    }
+
+    let mut hunks: Vec<DiffHunk> = Vec::new();
+    let mut old_line = 0;
+    let mut new_line = 0;
+    for line in patch.split_terminator('\n') {
+        if line.starts_with("@@ ") {
+            let (old_start, old_lines, new_start, new_lines, header) = parse_hunk_header(line)?;
+            old_line = old_start;
+            new_line = new_start;
+            hunks.push(DiffHunk {
+                old_start,
+                old_lines,
+                new_start,
+                new_lines,
+                header,
+                lines: Vec::new(),
+            });
+            continue;
+        }
+        let Some(hunk) = hunks.last_mut() else {
+            continue;
+        };
+        if line == "\\ No newline at end of file" {
+            continue;
+        }
+        let (kind, content, old_number, new_number) = match line.as_bytes().first() {
+            Some(b' ') => {
+                let numbers = (Some(old_line), Some(new_line));
+                old_line += 1;
+                new_line += 1;
+                (DiffLineKind::Context, &line[1..], numbers.0, numbers.1)
+            }
+            Some(b'+') => {
+                let number = new_line;
+                new_line += 1;
+                (DiffLineKind::Addition, &line[1..], None, Some(number))
+            }
+            Some(b'-') => {
+                let number = old_line;
+                old_line += 1;
+                (DiffLineKind::Deletion, &line[1..], Some(number), None)
+            }
+            _ => return Err(RepositoryError::DiffParse),
+        };
+        hunk.lines.push(DiffLine {
+            kind,
+            content: content.to_owned(),
+            old_line: old_number,
+            new_line: new_number,
+        });
+    }
+
+    for hunk in &hunks {
+        let old_count = hunk
+            .lines
+            .iter()
+            .filter(|line| line.old_line.is_some())
+            .count() as u64;
+        let new_count = hunk
+            .lines
+            .iter()
+            .filter(|line| line.new_line.is_some())
+            .count() as u64;
+        if old_count != hunk.old_lines || new_count != hunk.new_lines {
+            return Err(RepositoryError::DiffParse);
+        }
+    }
+
+    Ok(FileDiff {
+        old_path,
+        new_path,
+        is_binary: false,
+        hunks,
+    })
+}
+
+fn parse_hunk_header(line: &str) -> Result<(u64, u64, u64, u64, String), RepositoryError> {
+    let rest = line
+        .strip_prefix("@@ -")
+        .ok_or(RepositoryError::DiffParse)?;
+    let (ranges, header) = rest.split_once(" @@").ok_or(RepositoryError::DiffParse)?;
+    let (old_range, new_range) = ranges.split_once(" +").ok_or(RepositoryError::DiffParse)?;
+    let (old_start, old_lines) = parse_hunk_range(old_range)?;
+    let (new_start, new_lines) = parse_hunk_range(new_range)?;
+    Ok((
+        old_start,
+        old_lines,
+        new_start,
+        new_lines,
+        header.strip_prefix(' ').unwrap_or(header).to_owned(),
+    ))
+}
+
+fn parse_hunk_range(range: &str) -> Result<(u64, u64), RepositoryError> {
+    let (start, lines) = range.split_once(',').unwrap_or((range, "1"));
+    Ok((
+        start.parse().map_err(|_| RepositoryError::DiffParse)?,
+        lines.parse().map_err(|_| RepositoryError::DiffParse)?,
+    ))
+}
+
 fn resolve_git_path(base: &Path, value: &str) -> Result<PathBuf, RepositoryError> {
     let path = Path::new(value);
     let absolute = if path.is_absolute() {
@@ -422,5 +612,76 @@ mod tests {
         assert_eq!(status.branch.head, None);
         assert_eq!(status.branch.upstream, None);
         assert_eq!((status.branch.ahead, status.branch.behind), (0, 0));
+    }
+
+    #[test]
+    fn parses_diff_hunks_and_line_numbers() {
+        let patch = b"diff --git a/file.txt b/file.txt\n--- a/file.txt\n+++ b/file.txt\n@@ -1,2 +1,2 @@ section\n context\n-old\n+new\n\\ No newline at end of file\n";
+        let diff = parse_diff(patch, "file.txt").unwrap();
+        assert!(!diff.is_binary);
+        assert_eq!(diff.hunks.len(), 1);
+        let hunk = &diff.hunks[0];
+        assert_eq!((hunk.old_start, hunk.old_lines), (1, 2));
+        assert_eq!((hunk.new_start, hunk.new_lines), (1, 2));
+        assert_eq!(hunk.header, "section");
+        assert_eq!(hunk.lines.len(), 3);
+        assert_eq!(
+            (hunk.lines[0].old_line, hunk.lines[0].new_line),
+            (Some(1), Some(1))
+        );
+        assert_eq!(
+            (hunk.lines[1].old_line, hunk.lines[1].new_line),
+            (Some(2), None)
+        );
+        assert_eq!(
+            (hunk.lines[2].old_line, hunk.lines[2].new_line),
+            (None, Some(2))
+        );
+    }
+
+    #[test]
+    fn detects_binary_diff_without_returning_content() {
+        let diff = parse_diff(
+            b"diff --git a/image.bin b/image.bin\nBinary files a/image.bin and b/image.bin differ\n",
+            "image.bin",
+        )
+        .unwrap();
+        assert!(diff.is_binary);
+        assert!(diff.hunks.is_empty());
+    }
+
+    #[test]
+    fn parses_rename_only_paths_without_hunks() {
+        let patch = b"diff --git a/old name.txt b/new name.txt\nsimilarity index 100%\nrename from old name.txt\nrename to new name.txt\n";
+        let diff = parse_diff(patch, "new name.txt").unwrap();
+        assert_eq!(diff.old_path, "old name.txt");
+        assert_eq!(diff.new_path, "new name.txt");
+        assert!(diff.hunks.is_empty());
+    }
+
+    #[test]
+    fn preserves_carriage_returns_that_belong_to_file_content() {
+        let patch = b"@@ -1 +1 @@\n-old\r\n+new\r\n";
+        let diff = parse_diff(patch, "crlf.txt").unwrap();
+        assert_eq!(diff.hunks[0].lines[0].content, "old\r");
+        assert_eq!(diff.hunks[0].lines[1].content, "new\r");
+    }
+
+    #[test]
+    fn rejects_unsafe_repository_relative_paths() {
+        for path in [
+            "",
+            "/absolute",
+            "../outside",
+            "a/../outside",
+            ":(glob)*",
+            "a//b",
+        ] {
+            assert_eq!(
+                validate_repository_path(path),
+                Err(RepositoryError::InvalidRepositoryPath)
+            );
+        }
+        assert_eq!(validate_repository_path("src/lib.rs"), Ok(()));
     }
 }

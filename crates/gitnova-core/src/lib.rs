@@ -156,6 +156,7 @@ fn dispatch_request(
         "github/repository" => github_repository_request(request, state),
         "github/pullRequest" => github_pull_request_request(request, state),
         "github/pullRequestCommitDiff" => github_pull_request_commit_diff_request(request, state),
+        "github/squashTrace" => github_squash_trace_request(request, state),
         _ => Response::error(
             Some(request.id),
             ResponseError::new(
@@ -227,6 +228,7 @@ fn initialize(request: Request, state: &mut CoreState) -> Response {
             github_repository: true,
             github_pull_request: true,
             github_pull_request_commit_diff: true,
+            github_squash_trace: true,
         },
     };
     Response::success(
@@ -487,6 +489,13 @@ fn github_error(error: github::GitHubError) -> ResponseError {
             "Commit reaches the supported GitHub file limit",
             false,
         ),
+    }
+}
+
+fn squash_trace_error(error: github::SquashTraceError) -> ResponseError {
+    match error {
+        github::SquashTraceError::GitHub(error) => github_error(error),
+        github::SquashTraceError::Repository(error) => repository_error(error),
     }
 }
 
@@ -887,6 +896,41 @@ fn github_pull_request_commit_diff_request(request: Request, state: &CoreState) 
             serde_json::to_value(diff).expect("serializable GitHub pull request commit diff"),
         ),
         Err(error) => Response::error(Some(request.id), github_error(error)),
+    }
+}
+
+fn github_squash_trace_request(request: Request, state: &CoreState) -> Response {
+    let params = match serde_json::from_value::<GitHubPullRequestParams>(request.params) {
+        Ok(params) if params.number > 0 => params,
+        _ => {
+            return Response::error(
+                Some(request.id),
+                ResponseError::new(
+                    ERROR_INVALID_PARAMS,
+                    "protocol.invalid_params",
+                    "Invalid GitHub Squash Trace parameters",
+                    false,
+                ),
+            );
+        }
+    };
+    let Some(descriptor) = &state.active_repository else {
+        return Response::error(
+            Some(request.id),
+            ResponseError::new(
+                ERROR_REPOSITORY_NOT_OPEN,
+                "repository.not_open",
+                "Open a repository before requesting a GitHub Squash Trace",
+                true,
+            ),
+        );
+    };
+    match github::squash_trace(descriptor, &params) {
+        Ok(trace) => Response::success(
+            request.id,
+            serde_json::to_value(trace).expect("serializable GitHub Squash Trace"),
+        ),
+        Err(error) => Response::error(Some(request.id), squash_trace_error(error)),
     }
 }
 

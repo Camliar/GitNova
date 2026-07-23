@@ -24,4 +24,6 @@ For a member commit, Core requests `repos/{owner}/{repo}/commits/{oid}?per_page=
 
 GitHub does not include `patch` for every file. GitNova reports those records as `patchState: unavailable` with no hunks; it does not claim that every missing patch is binary. Duplicate paths, inconsistent page OIDs, invalid statistics or malformed patches produce `github.response_parse_failed`. A response reaching GitHub's documented 3000-file limit returns `github.commit_file_limit_exceeded`, because completeness can no longer be proven. Commit-file responses are limited to 32 MiB.
 
+The PR and original commit model feeds the conservative [Squash Trace relationship](SQUASH_TRACE.md). Relationship inference is not duplicated in this Provider response or in Hosts.
+
 Official references: [Get a pull request and list PR commits](https://docs.github.com/en/rest/pulls/pulls), [Get a commit](https://docs.github.com/en/rest/commits/commits#get-a-commit), and [GitHub CLI pagination/slurp](https://cli.github.com/manual/gh_api).

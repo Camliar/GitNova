@@ -25,7 +25,8 @@
 - GitHub PR detail 与 ordered original commits（已实现）
 - PR 查看与原始 commit 列表
 - 指定 PR 原始 commit 的文件列表与可用行级 diff（已实现；缺失 patch 显式标记）
-- PR、原始 commits 与最终 squash commit 的关联展示（Squash Trace）
+- PR、原始 commits 与最终 merge commit 的保守关联模型（Squash Trace Core，已实现）
+- Squash Trace Desktop 关联展示
 - Desktop Host 的端到端关键工作流
 
 ## Post-MVP 候选

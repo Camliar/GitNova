@@ -28,9 +28,9 @@ spawn → gitnova/initialize → requests and notifications → gitnova/shutdown
 
 ## Initialize
 
-`gitnova/initialize` 参数包含 `clientInfo`、`protocolVersion` 和 Host capabilities。结果包含 `coreInfo`、协商后的协议版本和 Core capabilities。初始协议版本为 `1.0`，当前版本为 `1.10`；主版本不同即不兼容，次版本能力通过 capability 字段协商。
+`gitnova/initialize` 参数包含 `clientInfo`、`protocolVersion` 和 Host capabilities。结果包含 `coreInfo`、协商后的协议版本和 Core capabilities。初始协议版本为 `1.0`，当前版本为 `1.11`；主版本不同即不兼容，次版本能力通过 capability 字段协商。
 
-Core 当前声明 `cancellation`、`repositoryDiscovery`、`workingTreeStatus`、`structuredFileDiff`、`paginatedCommitHistory`、`structuredCommitDiff`、`repositoryReferences`、`commitGraphProjection`、`githubRepository`、`githubPullRequest` 和 `githubPullRequestCommitDiff` capability。仓库方法及路径语义见[仓库发现](REPOSITORIES.md)，状态契约见[工作区状态](STATUS.md)，工作区 diff 契约见[结构化文件 Diff](DIFF.md)，历史契约见[分页 Commit 历史](HISTORY.md)，commit-parent diff 契约见[结构化 Commit Diff](COMMIT_DIFF.md)，refs 契约见[Repository References](REFERENCES.md)，graph 读模型见[Commit Graph Projection](COMMIT_GRAPH.md)，GitHub adapter 见[GitHub Provider](GITHUB_PROVIDER.md)，PR 契约见[GitHub Pull Requests](GITHUB_PULL_REQUESTS.md)。
+Core 当前声明 `cancellation`、`repositoryDiscovery`、`workingTreeStatus`、`structuredFileDiff`、`paginatedCommitHistory`、`structuredCommitDiff`、`repositoryReferences`、`commitGraphProjection`、`githubRepository`、`githubPullRequest`、`githubPullRequestCommitDiff` 和 `githubSquashTrace` capability。仓库方法及路径语义见[仓库发现](REPOSITORIES.md)，状态契约见[工作区状态](STATUS.md)，工作区 diff 契约见[结构化文件 Diff](DIFF.md)，历史契约见[分页 Commit 历史](HISTORY.md)，commit-parent diff 契约见[结构化 Commit Diff](COMMIT_DIFF.md)，refs 契约见[Repository References](REFERENCES.md)，graph 读模型见[Commit Graph Projection](COMMIT_GRAPH.md)，GitHub adapter 见[GitHub Provider](GITHUB_PROVIDER.md)，PR 契约见[GitHub Pull Requests](GITHUB_PULL_REQUESTS.md)，关系模型见[Squash Trace](SQUASH_TRACE.md)。
 
 请求 id 可以是 JSON string 或 integer，Core 必须在响应中保持其类型和值。
 

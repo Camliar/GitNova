@@ -4,7 +4,7 @@ import process from "node:process";
 const schemaUrl = new URL("../sdk/protocol/gitnova-protocol.schema.json", import.meta.url);
 const outputUrl = new URL("../packages/protocol/src/generated.ts", import.meta.url);
 const schema = JSON.parse(await readFile(schemaUrl, "utf8"));
-const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage", "CommitDiffParams", "CommitDiff", "ReferenceKind", "RepositoryHead", "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage", "GitHubRepositoryParams", "GitHubRepository", "GitHubPullRequestParams", "GitHubPullRequestState", "GitHubPullRequestRef", "GitHubCommitIdentity", "GitHubPullRequestCommit", "GitHubPullRequest", "GitHubPullRequestCommitDiffParams", "GitHubFileStatus", "GitHubPatchState", "GitHubCommitFileDiff", "GitHubPullRequestCommitDiff"];
+const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage", "CommitDiffParams", "CommitDiff", "ReferenceKind", "RepositoryHead", "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage", "GitHubRepositoryParams", "GitHubRepository", "GitHubPullRequestParams", "GitHubPullRequestState", "GitHubPullRequestRef", "GitHubCommitIdentity", "GitHubPullRequestCommit", "GitHubPullRequest", "GitHubPullRequestCommitDiffParams", "GitHubFileStatus", "GitHubPatchState", "GitHubCommitFileDiff", "GitHubPullRequestCommitDiff", "SquashTraceClassification", "SquashTraceConfidence", "SquashTraceLocalAvailability", "SquashTraceEvidence", "SquashTraceRelationship", "GitHubSquashTrace"];
 for (const name of requiredDefinitions) {
   if (!schema.$defs?.[name]) throw new Error(`Protocol schema is missing $defs.${name}`);
 }
@@ -38,6 +38,7 @@ export interface ServerCapabilities {
   githubRepository: boolean;
   githubPullRequest: boolean;
   githubPullRequestCommitDiff: boolean;
+  githubSquashTrace: boolean;
 }
 
 export interface InitializeParams {
@@ -297,6 +298,25 @@ export interface GitHubPullRequestCommitDiff {
   pullRequestNumber: number;
   commit: GitHubPullRequestCommit;
   files: GitHubCommitFileDiff[];
+}
+
+export type SquashTraceClassification = "notMerged" | "originalCommit" | "mergeCommit" | "squashCandidate" | "unresolved";
+export type SquashTraceConfidence = "none" | "medium" | "high";
+export type SquashTraceLocalAvailability = "notInspected" | "available" | "missing";
+export type SquashTraceEvidence = "providerNotMerged" | "providerMergeOidMissing" | "mergeOidMatchesOriginalCommit" | "mergeOidDistinctFromOriginalCommits" | "localCommitAvailable" | "localCommitMissing" | "localCommitHasAtMostOneParent" | "localCommitHasMultipleParents" | "providerMergeStrategyUnavailable";
+
+export interface SquashTraceRelationship {
+  classification: SquashTraceClassification;
+  confidence: SquashTraceConfidence;
+  mergeCommitOid: string | null;
+  localAvailability: SquashTraceLocalAvailability;
+  localParentOids: string[];
+  evidence: SquashTraceEvidence[];
+}
+
+export interface GitHubSquashTrace {
+  pullRequest: GitHubPullRequest;
+  relationship: SquashTraceRelationship;
 }
 `;
 

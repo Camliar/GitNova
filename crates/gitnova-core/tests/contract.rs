@@ -124,7 +124,7 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let responses = responses(&output.stdout);
     assert_eq!(responses.len(), 2);
     assert_eq!(responses[0]["id"], "init-1");
-    assert_eq!(responses[0]["result"]["protocolVersion"], "1.10");
+    assert_eq!(responses[0]["result"]["protocolVersion"], "1.11");
     assert_eq!(responses[0]["result"]["capabilities"]["cancellation"], true);
     assert_eq!(
         responses[0]["result"]["capabilities"]["workingTreeStatus"],
@@ -160,6 +160,10 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     );
     assert_eq!(
         responses[0]["result"]["capabilities"]["githubPullRequestCommitDiff"],
+        true
+    );
+    assert_eq!(
+        responses[0]["result"]["capabilities"]["githubSquashTrace"],
         true
     );
     assert_eq!(responses[1]["result"], Value::Null);
@@ -873,6 +877,32 @@ fn github_pull_request_commit_diff_requires_repository_and_full_oid() {
     assert_eq!(values[2]["error"]["code"], -32602);
     assert_eq!(values[3]["error"]["code"], -32602);
     assert_eq!(values[4]["error"]["code"], -32602);
+}
+
+#[test]
+fn github_squash_trace_requires_repository_and_positive_number() {
+    let without_repository = run(&[
+        initialize(json!(1)),
+        json!({"jsonrpc":"2.0","id":2,"method":"github/squashTrace","params":{"number":1,"nameWithOwner":"owner/repo"}}),
+    ]);
+    let values = responses(&without_repository.stdout);
+    assert_eq!(
+        values[1]["error"]["data"]["stableCode"],
+        "repository.not_open"
+    );
+
+    let directory = TestDirectory::new("github-squash-trace-params");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &repository),
+        json!({"jsonrpc":"2.0","id":3,"method":"github/squashTrace","params":{"number":0}}),
+        json!({"jsonrpc":"2.0","id":4,"method":"github/squashTrace","params":{"number":1,"unexpected":true}}),
+    ]);
+    let values = responses(&output.stdout);
+    assert_eq!(values[2]["error"]["code"], -32602);
+    assert_eq!(values[3]["error"]["code"], -32602);
 }
 
 #[test]

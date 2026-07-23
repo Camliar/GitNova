@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: &str = "1.10";
+pub const PROTOCOL_VERSION: &str = "1.11";
 
 pub const ERROR_PARSE: i64 = -32700;
 pub const ERROR_INVALID_REQUEST: i64 = -32600;
@@ -176,6 +176,7 @@ pub struct ServerCapabilities {
     pub github_repository: bool,
     pub github_pull_request: bool,
     pub github_pull_request_commit_diff: bool,
+    pub github_squash_trace: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -555,6 +556,64 @@ pub struct GitHubPullRequestCommitDiff {
     pub pull_request_number: u64,
     pub commit: GitHubPullRequestCommit,
     pub files: Vec<GitHubCommitFileDiff>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SquashTraceClassification {
+    NotMerged,
+    OriginalCommit,
+    MergeCommit,
+    SquashCandidate,
+    Unresolved,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SquashTraceConfidence {
+    None,
+    Medium,
+    High,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SquashTraceLocalAvailability {
+    NotInspected,
+    Available,
+    Missing,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SquashTraceEvidence {
+    ProviderNotMerged,
+    ProviderMergeOidMissing,
+    MergeOidMatchesOriginalCommit,
+    MergeOidDistinctFromOriginalCommits,
+    LocalCommitAvailable,
+    LocalCommitMissing,
+    LocalCommitHasAtMostOneParent,
+    LocalCommitHasMultipleParents,
+    ProviderMergeStrategyUnavailable,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SquashTraceRelationship {
+    pub classification: SquashTraceClassification,
+    pub confidence: SquashTraceConfidence,
+    pub merge_commit_oid: Option<String>,
+    pub local_availability: SquashTraceLocalAvailability,
+    pub local_parent_oids: Vec<String>,
+    pub evidence: Vec<SquashTraceEvidence>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubSquashTrace {
+    pub pull_request: GitHubPullRequest,
+    pub relationship: SquashTraceRelationship,
 }
 
 #[derive(Clone, Default)]

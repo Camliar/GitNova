@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitnova.dev/schema/protocol/1.10/gitnova-protocol.schema.json",
-  "title": "GitNova Core Protocol 1.10",
+  "$id": "https://gitnova.dev/schema/protocol/1.11/gitnova-protocol.schema.json",
+  "title": "GitNova Core Protocol 1.11",
   "type": "object",
-  "properties": { "protocolVersion": { "const": "1.10" } },
+  "properties": { "protocolVersion": { "const": "1.11" } },
   "required": ["protocolVersion"],
   "$defs": {
     "RequestId": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
@@ -32,9 +32,10 @@
         "commitGraphProjection": { "type": "boolean" },
         "githubRepository": { "type": "boolean" },
         "githubPullRequest": { "type": "boolean" },
-        "githubPullRequestCommitDiff": { "type": "boolean" }
+        "githubPullRequestCommitDiff": { "type": "boolean" },
+        "githubSquashTrace": { "type": "boolean" }
       },
-      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff", "repositoryReferences", "commitGraphProjection", "githubRepository", "githubPullRequest", "githubPullRequestCommitDiff"]
+      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff", "repositoryReferences", "commitGraphProjection", "githubRepository", "githubPullRequest", "githubPullRequestCommitDiff", "githubSquashTrace"]
     },
     "InitializeParams": {
       "type": "object",
@@ -413,6 +414,28 @@
         "commit": { "$ref": "#/$defs/GitHubPullRequestCommit" },
         "files": { "type": "array", "items": { "$ref": "#/$defs/GitHubCommitFileDiff" } }
       }, "required": ["host", "nameWithOwner", "pullRequestNumber", "commit", "files"]
+    },
+    "SquashTraceClassification": { "enum": ["notMerged", "originalCommit", "mergeCommit", "squashCandidate", "unresolved"] },
+    "SquashTraceConfidence": { "enum": ["none", "medium", "high"] },
+    "SquashTraceLocalAvailability": { "enum": ["notInspected", "available", "missing"] },
+    "SquashTraceEvidence": { "enum": ["providerNotMerged", "providerMergeOidMissing", "mergeOidMatchesOriginalCommit", "mergeOidDistinctFromOriginalCommits", "localCommitAvailable", "localCommitMissing", "localCommitHasAtMostOneParent", "localCommitHasMultipleParents", "providerMergeStrategyUnavailable"] },
+    "SquashTraceRelationship": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "classification": { "$ref": "#/$defs/SquashTraceClassification" },
+        "confidence": { "$ref": "#/$defs/SquashTraceConfidence" },
+        "mergeCommitOid": { "type": ["string", "null"] },
+        "localAvailability": { "$ref": "#/$defs/SquashTraceLocalAvailability" },
+        "localParentOids": { "type": "array", "items": { "type": "string" } },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/SquashTraceEvidence" } }
+      }, "required": ["classification", "confidence", "mergeCommitOid", "localAvailability", "localParentOids", "evidence"]
+    },
+    "GitHubSquashTrace": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "pullRequest": { "$ref": "#/$defs/GitHubPullRequest" },
+        "relationship": { "$ref": "#/$defs/SquashTraceRelationship" }
+      }, "required": ["pullRequest", "relationship"]
     }
   }
 }

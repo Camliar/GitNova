@@ -1,6 +1,6 @@
 # TASK-0014: Squash Trace Relationship
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/014-squash-trace-relationship`
@@ -32,25 +32,25 @@
 
 ## Deliverables
 
-- [ ] `github/squashTrace` Core method
-- [ ] conservative classification、confidence 与 evidence model
-- [ ] local merge commit topology inspection
-- [ ] Rust、Schema、TypeScript、capability 与文档同步
-- [ ] unit、fake runner 与 contract 测试
+- [x] `github/squashTrace` Core method
+- [x] conservative classification、confidence 与 evidence model
+- [x] local merge commit topology inspection
+- [x] Rust、Schema、TypeScript、capability 与文档同步
+- [x] unit、fake runner 与 contract 测试
 
 ## Review Checklist
 
-- [ ] Provider 事实与 Core inference 明确分离。
-- [ ] 缺少本地对象不误报、不自动 fetch、不泄漏内容。
-- [ ] merge、rebase/original 与 squash candidate 不被错误合并为一个确定状态。
-- [ ] Host 不承担 GitHub、Git 或 relationship 业务逻辑。
-- [ ] fmt、Clippy、Rust tests、`npm run check` 与文档检查通过。
+- [x] Provider 事实与 Core inference 明确分离。
+- [x] 缺少本地对象不误报、不自动 fetch、不泄漏内容。
+- [x] merge、rebase/original 与 squash candidate 不被错误合并为一个确定状态。
+- [x] Host 不承担 GitHub、Git 或 relationship 业务逻辑。
+- [x] fmt、Clippy、Rust tests、`npm run check` 与文档检查通过。
 
 ## Done Definition
 
-- [ ] Deliverables 和 Review Checklist 完成。
-- [ ] 自主 Review 无阻塞项。
-- [ ] 状态更新 Done，提交、推送并快进合并至 `main`。
+- [x] Deliverables 和 Review Checklist 完成。
+- [x] 自主 Review 无阻塞项。
+- [x] 状态更新 Done，提交、推送并快进合并至 `main`。
 
 ## References
 

@@ -269,6 +269,72 @@ pub fn commit_diff(
     })
 }
 
+pub fn commit_parents_if_available(
+    descriptor: &RepositoryDescriptor,
+    oid: &str,
+) -> Result<Option<Vec<String>>, RepositoryError> {
+    commit_parents_if_available_with(&SystemGit, descriptor, oid)
+}
+
+fn commit_parents_if_available_with(
+    git: &impl GitRunner,
+    descriptor: &RepositoryDescriptor,
+    oid: &str,
+) -> Result<Option<Vec<String>>, RepositoryError> {
+    let base = descriptor
+        .worktree_root
+        .as_ref()
+        .unwrap_or(&descriptor.git_directory);
+    let arguments = [
+        OsString::from("-C"),
+        OsString::from(base),
+        OsString::from("cat-file"),
+        OsString::from("-e"),
+        OsString::from(format!("{oid}^{{commit}}")),
+    ];
+    let output = git.run(&arguments).map_err(map_io_error)?;
+    if !output.success {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains("Not a valid object")
+            || stderr.contains("bad object")
+            || stderr.contains("could not get object info")
+        {
+            return Ok(None);
+        }
+        return Err(map_failed_output(&output.stderr));
+    }
+    let arguments = [
+        OsString::from("-C"),
+        OsString::from(base),
+        OsString::from("rev-list"),
+        OsString::from("--parents"),
+        OsString::from("--max-count=1"),
+        OsString::from(oid),
+    ];
+    let output = git.run(&arguments).map_err(map_io_error)?;
+    if !output.success {
+        return Err(map_failed_output(&output.stderr));
+    }
+    let line = std::str::from_utf8(&output.stdout)
+        .map_err(|_| RepositoryError::CommitParse)?
+        .trim_end_matches(['\r', '\n']);
+    let mut oids = line.split_whitespace();
+    let commit_oid = oids.next().ok_or(RepositoryError::CommitParse)?;
+    if !commit_oid.eq_ignore_ascii_case(oid) {
+        return Err(RepositoryError::CommitParse);
+    }
+    let parents = oids
+        .map(|parent| {
+            if valid_oid(parent) {
+                Ok(parent.to_owned())
+            } else {
+                Err(RepositoryError::CommitParse)
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Some(parents))
+}
+
 pub fn references(
     descriptor: &RepositoryDescriptor,
 ) -> Result<RepositoryReferences, RepositoryError> {
@@ -1120,6 +1186,61 @@ mod tests {
         assert_eq!(
             discover_with(&git, "."),
             Err(RepositoryError::GitUnavailable)
+        );
+    }
+
+    #[test]
+    fn inspects_commit_parents_and_treats_only_missing_objects_as_unavailable() {
+        let descriptor = RepositoryDescriptor {
+            worktree_root: Some("/repo".into()),
+            git_directory: "/repo/.git".into(),
+            common_git_directory: "/repo/.git".into(),
+            kind: RepositoryKind::Worktree,
+            git_version: "test".into(),
+        };
+        let oid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let parent = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let present = FakeGit {
+            outputs: Mutex::new(VecDeque::from([
+                Ok(CommandOutput {
+                    success: true,
+                    stdout: Vec::new(),
+                    stderr: Vec::new(),
+                }),
+                Ok(CommandOutput {
+                    success: true,
+                    stdout: format!("{oid} {parent}\n").into_bytes(),
+                    stderr: Vec::new(),
+                }),
+            ])),
+        };
+        assert_eq!(
+            commit_parents_if_available_with(&present, &descriptor, oid).unwrap(),
+            Some(vec![parent.into()])
+        );
+
+        let missing = FakeGit {
+            outputs: Mutex::new(VecDeque::from([Ok(CommandOutput {
+                success: false,
+                stdout: Vec::new(),
+                stderr: b"fatal: Not a valid object name".to_vec(),
+            })])),
+        };
+        assert_eq!(
+            commit_parents_if_available_with(&missing, &descriptor, oid).unwrap(),
+            None
+        );
+
+        let unsafe_repository = FakeGit {
+            outputs: Mutex::new(VecDeque::from([Ok(CommandOutput {
+                success: false,
+                stdout: Vec::new(),
+                stderr: b"fatal: detected dubious ownership in repository".to_vec(),
+            })])),
+        };
+        assert_eq!(
+            commit_parents_if_available_with(&unsafe_repository, &descriptor, oid),
+            Err(RepositoryError::UnsafeRepository)
         );
     }
 

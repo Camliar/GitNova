@@ -2,7 +2,9 @@ use gitnova_protocol::{
     DiffHunk, DiffLine, DiffLineKind, GitHubCommitFileDiff, GitHubCommitIdentity, GitHubFileStatus,
     GitHubPatchState, GitHubPullRequest, GitHubPullRequestCommit, GitHubPullRequestCommitDiff,
     GitHubPullRequestCommitDiffParams, GitHubPullRequestParams, GitHubPullRequestRef,
-    GitHubPullRequestState, GitHubRepository, GitHubRepositoryParams, RepositoryDescriptor,
+    GitHubPullRequestState, GitHubRepository, GitHubRepositoryParams, GitHubSquashTrace,
+    RepositoryDescriptor, SquashTraceClassification, SquashTraceConfidence, SquashTraceEvidence,
+    SquashTraceLocalAvailability, SquashTraceRelationship,
 };
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -28,6 +30,12 @@ pub enum GitHubError {
     PullRequestCommitLimit,
     CommitNotInPullRequest,
     CommitFileLimit,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum SquashTraceError {
+    GitHub(GitHubError),
+    Repository(crate::repository::RepositoryError),
 }
 
 #[derive(Debug)]
@@ -85,6 +93,127 @@ pub fn pull_request_commit_diff(
     params: &GitHubPullRequestCommitDiffParams,
 ) -> Result<GitHubPullRequestCommitDiff, GitHubError> {
     pull_request_commit_diff_with(&SystemCommand, descriptor, params)
+}
+
+pub fn squash_trace(
+    descriptor: &RepositoryDescriptor,
+    params: &GitHubPullRequestParams,
+) -> Result<GitHubSquashTrace, SquashTraceError> {
+    squash_trace_with(&SystemCommand, descriptor, params, |oid| {
+        crate::repository::commit_parents_if_available(descriptor, oid)
+    })
+}
+
+fn squash_trace_with(
+    runner: &impl CommandRunner,
+    descriptor: &RepositoryDescriptor,
+    params: &GitHubPullRequestParams,
+    inspect: impl FnOnce(&str) -> Result<Option<Vec<String>>, crate::repository::RepositoryError>,
+) -> Result<GitHubSquashTrace, SquashTraceError> {
+    let pull_request =
+        pull_request_with(runner, descriptor, params).map_err(SquashTraceError::GitHub)?;
+    let local_parents = if pull_request.state == GitHubPullRequestState::Merged
+        && pull_request.merge_commit_oid.as_ref().is_some_and(|oid| {
+            !pull_request
+                .commits
+                .iter()
+                .any(|commit| commit.oid.eq_ignore_ascii_case(oid))
+        }) {
+        inspect(
+            pull_request
+                .merge_commit_oid
+                .as_deref()
+                .expect("checked merge OID"),
+        )
+        .map_err(SquashTraceError::Repository)?
+    } else {
+        None
+    };
+    let relationship = classify_squash_relationship(&pull_request, local_parents);
+    Ok(GitHubSquashTrace {
+        pull_request,
+        relationship,
+    })
+}
+
+fn classify_squash_relationship(
+    pull_request: &GitHubPullRequest,
+    local_parents: Option<Vec<String>>,
+) -> SquashTraceRelationship {
+    if pull_request.state != GitHubPullRequestState::Merged {
+        return SquashTraceRelationship {
+            classification: SquashTraceClassification::NotMerged,
+            confidence: SquashTraceConfidence::High,
+            merge_commit_oid: None,
+            local_availability: SquashTraceLocalAvailability::NotInspected,
+            local_parent_oids: Vec::new(),
+            evidence: vec![SquashTraceEvidence::ProviderNotMerged],
+        };
+    }
+    let Some(merge_oid) = pull_request.merge_commit_oid.clone() else {
+        return SquashTraceRelationship {
+            classification: SquashTraceClassification::Unresolved,
+            confidence: SquashTraceConfidence::None,
+            merge_commit_oid: None,
+            local_availability: SquashTraceLocalAvailability::NotInspected,
+            local_parent_oids: Vec::new(),
+            evidence: vec![SquashTraceEvidence::ProviderMergeOidMissing],
+        };
+    };
+    if pull_request
+        .commits
+        .iter()
+        .any(|commit| commit.oid.eq_ignore_ascii_case(&merge_oid))
+    {
+        return SquashTraceRelationship {
+            classification: SquashTraceClassification::OriginalCommit,
+            confidence: SquashTraceConfidence::High,
+            merge_commit_oid: Some(merge_oid),
+            local_availability: SquashTraceLocalAvailability::NotInspected,
+            local_parent_oids: Vec::new(),
+            evidence: vec![SquashTraceEvidence::MergeOidMatchesOriginalCommit],
+        };
+    }
+    let Some(parents) = local_parents else {
+        return SquashTraceRelationship {
+            classification: SquashTraceClassification::Unresolved,
+            confidence: SquashTraceConfidence::None,
+            merge_commit_oid: Some(merge_oid),
+            local_availability: SquashTraceLocalAvailability::Missing,
+            local_parent_oids: Vec::new(),
+            evidence: vec![
+                SquashTraceEvidence::MergeOidDistinctFromOriginalCommits,
+                SquashTraceEvidence::LocalCommitMissing,
+                SquashTraceEvidence::ProviderMergeStrategyUnavailable,
+            ],
+        };
+    };
+    let has_multiple_parents = parents.len() >= 2;
+    SquashTraceRelationship {
+        classification: if has_multiple_parents {
+            SquashTraceClassification::MergeCommit
+        } else {
+            SquashTraceClassification::SquashCandidate
+        },
+        confidence: if has_multiple_parents {
+            SquashTraceConfidence::High
+        } else {
+            SquashTraceConfidence::Medium
+        },
+        merge_commit_oid: Some(merge_oid),
+        local_availability: SquashTraceLocalAvailability::Available,
+        local_parent_oids: parents,
+        evidence: vec![
+            SquashTraceEvidence::MergeOidDistinctFromOriginalCommits,
+            SquashTraceEvidence::LocalCommitAvailable,
+            if has_multiple_parents {
+                SquashTraceEvidence::LocalCommitHasMultipleParents
+            } else {
+                SquashTraceEvidence::LocalCommitHasAtMostOneParent
+            },
+            SquashTraceEvidence::ProviderMergeStrategyUnavailable,
+        ],
+    }
 }
 
 fn pull_request_commit_diff_with(
@@ -1100,6 +1229,139 @@ mod tests {
                 OID_A,
             ),
             Err(GitHubError::CommitFileLimit)
+        );
+    }
+
+    #[test]
+    fn classifies_squash_candidate_without_claiming_provider_certainty() {
+        let runner = FakeRunner::new([
+            success_value(pull_request_detail(1)),
+            success_value(json!([[api_commit(OID_A, OID_B, "original", None)]])),
+        ]);
+        let result = squash_trace_with(&runner, &descriptor(), &pull_request_params(), |_| {
+            Ok(Some(vec![OID_B.into()]))
+        })
+        .unwrap();
+        assert_eq!(
+            result.relationship.classification,
+            SquashTraceClassification::SquashCandidate
+        );
+        assert_eq!(
+            result.relationship.confidence,
+            SquashTraceConfidence::Medium
+        );
+        assert!(
+            result
+                .relationship
+                .evidence
+                .contains(&SquashTraceEvidence::ProviderMergeStrategyUnavailable)
+        );
+    }
+
+    #[test]
+    fn distinguishes_merge_original_and_missing_local_commit_relationships() {
+        let merged = FakeRunner::new([
+            success_value(pull_request_detail(1)),
+            success_value(json!([[api_commit(OID_A, OID_B, "original", None)]])),
+        ]);
+        let merge_result =
+            squash_trace_with(&merged, &descriptor(), &pull_request_params(), |_| {
+                Ok(Some(vec![OID_A.into(), OID_B.into()]))
+            })
+            .unwrap();
+        assert_eq!(
+            merge_result.relationship.classification,
+            SquashTraceClassification::MergeCommit
+        );
+
+        let missing = FakeRunner::new([
+            success_value(pull_request_detail(1)),
+            success_value(json!([[api_commit(OID_A, OID_B, "original", None)]])),
+        ]);
+        let missing_result =
+            squash_trace_with(&missing, &descriptor(), &pull_request_params(), |_| {
+                Ok(None)
+            })
+            .unwrap();
+        assert_eq!(
+            missing_result.relationship.classification,
+            SquashTraceClassification::Unresolved
+        );
+        assert_eq!(
+            missing_result.relationship.local_availability,
+            SquashTraceLocalAvailability::Missing
+        );
+
+        let mut detail = pull_request_detail(1);
+        detail["merge_commit_sha"] = json!(OID_A);
+        let original = FakeRunner::new([
+            success_value(detail),
+            success_value(json!([[api_commit(OID_A, OID_B, "original", None)]])),
+        ]);
+        let original_result =
+            squash_trace_with(&original, &descriptor(), &pull_request_params(), |_| {
+                panic!("original commit match must not inspect local topology")
+            })
+            .unwrap();
+        assert_eq!(
+            original_result.relationship.classification,
+            SquashTraceClassification::OriginalCommit
+        );
+    }
+
+    #[test]
+    fn reports_unmerged_pull_request_without_using_test_merge_oid() {
+        let mut detail = pull_request_detail(1);
+        detail["state"] = json!("open");
+        detail["merged"] = json!(false);
+        detail["merged_at"] = Value::Null;
+        let runner = FakeRunner::new([
+            success_value(detail),
+            success_value(json!([[api_commit(OID_A, OID_B, "original", None)]])),
+        ]);
+        let result = squash_trace_with(&runner, &descriptor(), &pull_request_params(), |_| {
+            panic!("unmerged PR must not inspect local topology")
+        })
+        .unwrap();
+        assert_eq!(
+            result.relationship.classification,
+            SquashTraceClassification::NotMerged
+        );
+        assert_eq!(result.relationship.merge_commit_oid, None);
+    }
+
+    #[test]
+    fn preserves_repository_errors_and_missing_provider_merge_oid() {
+        let failing = FakeRunner::new([
+            success_value(pull_request_detail(1)),
+            success_value(json!([[api_commit(OID_A, OID_B, "original", None)]])),
+        ]);
+        assert_eq!(
+            squash_trace_with(&failing, &descriptor(), &pull_request_params(), |_| Err(
+                crate::repository::RepositoryError::UnsafeRepository
+            ),),
+            Err(SquashTraceError::Repository(
+                crate::repository::RepositoryError::UnsafeRepository
+            ))
+        );
+
+        let mut detail = pull_request_detail(1);
+        detail["merge_commit_sha"] = Value::Null;
+        let missing_oid = FakeRunner::new([
+            success_value(detail),
+            success_value(json!([[api_commit(OID_A, OID_B, "original", None)]])),
+        ]);
+        let result = squash_trace_with(&missing_oid, &descriptor(), &pull_request_params(), |_| {
+            panic!("missing merge OID must not inspect local topology")
+        })
+        .unwrap();
+        assert_eq!(
+            result.relationship.classification,
+            SquashTraceClassification::Unresolved
+        );
+        assert_eq!(
+            result.relationship.local_availability,
+            SquashTraceLocalAvailability::NotInspected
         );
     }
 }

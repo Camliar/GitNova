@@ -124,7 +124,7 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let responses = responses(&output.stdout);
     assert_eq!(responses.len(), 2);
     assert_eq!(responses[0]["id"], "init-1");
-    assert_eq!(responses[0]["result"]["protocolVersion"], "1.3");
+    assert_eq!(responses[0]["result"]["protocolVersion"], "1.4");
     assert_eq!(responses[0]["result"]["capabilities"]["cancellation"], true);
     assert_eq!(
         responses[0]["result"]["capabilities"]["workingTreeStatus"],
@@ -134,7 +134,153 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
         responses[0]["result"]["capabilities"]["structuredFileDiff"],
         true
     );
+    assert_eq!(
+        responses[0]["result"]["capabilities"]["paginatedCommitHistory"],
+        true
+    );
     assert_eq!(responses[1]["result"], Value::Null);
+}
+
+fn commit_file(repository: &Path, number: usize, message: &str) {
+    fs::write(repository.join("history.txt"), format!("{number}\n")).unwrap();
+    git(&["add", "history.txt"], repository);
+    git(
+        &[
+            "-c",
+            "user.name=GitNova Author",
+            "-c",
+            "user.email=author@gitnova.invalid",
+            "commit",
+            "-m",
+            message,
+        ],
+        repository,
+    );
+}
+
+fn history_response(repository: &Path, params: Value) -> Value {
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", repository),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/history","params":params}),
+    ]);
+    assert!(output.status.success());
+    responses(&output.stdout).remove(2)
+}
+
+#[test]
+fn paginates_a_fixed_head_snapshot_without_duplicates() {
+    let directory = TestDirectory::new("history-pages");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    for number in 1..=5 {
+        commit_file(&repository, number, &format!("commit {number}"));
+    }
+
+    let first = history_response(&repository, json!({"limit": 2}));
+    assert_eq!(first["result"]["commits"].as_array().unwrap().len(), 2);
+    let cursor = first["result"]["nextCursor"].as_str().unwrap().to_owned();
+    commit_file(&repository, 6, "commit added after snapshot");
+    let second = history_response(&repository, json!({"limit": 2, "cursor": cursor}));
+    let second_summaries: Vec<_> = second["result"]["commits"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|commit| commit["summary"].as_str().unwrap())
+        .collect();
+    assert_eq!(second_summaries, ["commit 3", "commit 2"]);
+    let cursor = second["result"]["nextCursor"].as_str().unwrap();
+    let third = history_response(&repository, json!({"limit": 2, "cursor": cursor}));
+    assert_eq!(third["result"]["commits"][0]["summary"], "commit 1");
+    assert!(third["result"]["nextCursor"].is_null());
+}
+
+#[test]
+fn returns_merge_parents_identities_and_multiline_message() {
+    let directory = TestDirectory::new("history-merge");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    commit_file(&repository, 1, "initial");
+    git(&["switch", "-c", "topic"], &repository);
+    fs::write(repository.join("topic.txt"), "topic").unwrap();
+    git(&["add", "topic.txt"], &repository);
+    git(
+        &[
+            "-c",
+            "user.name=Topic Author",
+            "-c",
+            "user.email=topic@gitnova.invalid",
+            "commit",
+            "-m",
+            "topic",
+        ],
+        &repository,
+    );
+    git(&["checkout", "-"], &repository);
+    commit_file(&repository, 2, "main");
+    git(
+        &[
+            "-c",
+            "user.name=Merge Author",
+            "-c",
+            "user.email=merge@gitnova.invalid",
+            "merge",
+            "--no-ff",
+            "topic",
+            "-m",
+            "merge summary\n\nmerge body",
+        ],
+        &repository,
+    );
+
+    let response = history_response(&repository, json!({"limit": 1}));
+    let commit = &response["result"]["commits"][0];
+    assert_eq!(commit["parents"].as_array().unwrap().len(), 2);
+    assert_eq!(commit["author"]["name"], "Merge Author");
+    assert_eq!(commit["committer"]["email"], "merge@gitnova.invalid");
+    assert_eq!(commit["summary"], "merge summary");
+    assert_eq!(commit["message"], "merge summary\n\nmerge body\n");
+    assert!(
+        commit["author"]["timestamp"]
+            .as_str()
+            .unwrap()
+            .contains('T')
+    );
+}
+
+#[test]
+fn supports_empty_detached_and_bare_repositories() {
+    let directory = TestDirectory::new("history-kinds");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    let empty = history_response(&repository, json!({}));
+    assert!(empty["result"]["commits"].as_array().unwrap().is_empty());
+    commit_file(&repository, 1, "initial");
+    git(&["checkout", "--detach", "HEAD"], &repository);
+    let detached = history_response(&repository, Value::Null);
+    assert_eq!(detached["result"]["commits"][0]["summary"], "initial");
+    git(
+        &["clone", "--bare", repository.to_str().unwrap(), "bare.git"],
+        &directory.0,
+    );
+    let bare = history_response(&directory.0.join("bare.git"), json!({}));
+    assert_eq!(bare["result"]["commits"][0]["summary"], "initial");
+}
+
+#[test]
+fn rejects_invalid_history_parameters_and_cursor_stably() {
+    let directory = TestDirectory::new("history-errors");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    commit_file(&repository, 1, "initial");
+    let invalid_limit = history_response(&repository, json!({"limit": 0}));
+    assert_eq!(invalid_limit["error"]["code"], -32602);
+    let invalid_cursor = history_response(&repository, json!({"cursor": "not-a-cursor"}));
+    assert_eq!(invalid_cursor["error"]["code"], -32111);
+    assert_eq!(
+        invalid_cursor["error"]["data"]["stableCode"],
+        "history.invalid_cursor"
+    );
 }
 
 #[test]

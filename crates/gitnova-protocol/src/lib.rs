@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: &str = "1.3";
+pub const PROTOCOL_VERSION: &str = "1.4";
 
 pub const ERROR_PARSE: i64 = -32700;
 pub const ERROR_INVALID_REQUEST: i64 = -32600;
@@ -27,6 +27,9 @@ pub const ERROR_WORKTREE_REQUIRED: i64 = -32107;
 pub const ERROR_STATUS_PARSE: i64 = -32108;
 pub const ERROR_DIFF_PARSE: i64 = -32109;
 pub const ERROR_INVALID_REPOSITORY_PATH: i64 = -32110;
+pub const ERROR_INVALID_HISTORY_CURSOR: i64 = -32111;
+pub const ERROR_COMMIT_PARSE: i64 = -32112;
+pub const ERROR_HISTORY_ENCODING: i64 = -32113;
 pub const ERROR_REQUEST_CANCELLED: i64 = -32800;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -150,6 +153,7 @@ pub struct ServerCapabilities {
     pub repository_discovery: bool,
     pub working_tree_status: bool,
     pub structured_file_diff: bool,
+    pub paginated_commit_history: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -291,6 +295,39 @@ pub struct FileDiff {
     pub hunks: Vec<DiffHunk>,
 }
 
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct HistoryParams {
+    #[serde(default)]
+    pub limit: Option<u16>,
+    #[serde(default)]
+    pub cursor: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CommitIdentity {
+    pub name: String,
+    pub email: String,
+    pub timestamp: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CommitSummary {
+    pub oid: String,
+    pub parents: Vec<String>,
+    pub author: CommitIdentity,
+    pub committer: CommitIdentity,
+    pub summary: String,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryPage {
+    pub commits: Vec<CommitSummary>,
+    pub next_cursor: Option<String>,
+}
+
 #[derive(Clone, Default)]
 pub struct CancellationRegistry {
     cancelled: Arc<Mutex<HashSet<RequestId>>>,
@@ -367,6 +404,10 @@ mod tests {
             "DiffLine",
             "DiffHunk",
             "FileDiff",
+            "HistoryParams",
+            "CommitIdentity",
+            "CommitSummary",
+            "HistoryPage",
         ] {
             assert!(schema["$defs"].get(definition).is_some());
         }

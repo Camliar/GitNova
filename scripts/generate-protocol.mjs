@@ -4,7 +4,7 @@ import process from "node:process";
 const schemaUrl = new URL("../sdk/protocol/gitnova-protocol.schema.json", import.meta.url);
 const outputUrl = new URL("../packages/protocol/src/generated.ts", import.meta.url);
 const schema = JSON.parse(await readFile(schemaUrl, "utf8"));
-const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff"];
+const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage"];
 for (const name of requiredDefinitions) {
   if (!schema.$defs?.[name]) throw new Error(`Protocol schema is missing $defs.${name}`);
 }
@@ -31,6 +31,7 @@ export interface ServerCapabilities {
   repositoryDiscovery: boolean;
   workingTreeStatus: boolean;
   structuredFileDiff: boolean;
+  paginatedCommitHistory: boolean;
 }
 
 export interface InitializeParams {
@@ -125,6 +126,31 @@ export interface FileDiff {
   newPath: string;
   isBinary: boolean;
   hunks: DiffHunk[];
+}
+
+export interface HistoryParams {
+  limit?: number;
+  cursor?: string;
+}
+
+export interface CommitIdentity {
+  name: string;
+  email: string;
+  timestamp: string;
+}
+
+export interface CommitSummary {
+  oid: string;
+  parents: string[];
+  author: CommitIdentity;
+  committer: CommitIdentity;
+  summary: string;
+  message: string;
+}
+
+export interface HistoryPage {
+  commits: CommitSummary[];
+  nextCursor: string | null;
 }
 `;
 

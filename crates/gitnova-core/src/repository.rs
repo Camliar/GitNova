@@ -1,6 +1,7 @@
 use gitnova_protocol::{
-    BranchStatus, DiffHunk, DiffLine, DiffLineKind, DiffScope, FileDiff, FileStatus,
-    RepositoryDescriptor, RepositoryKind, StatusEntry, StatusEntryKind, WorkingTreeStatus,
+    BranchStatus, CommitIdentity, CommitSummary, DiffHunk, DiffLine, DiffLineKind, DiffScope,
+    FileDiff, FileStatus, HistoryPage, RepositoryDescriptor, RepositoryKind, StatusEntry,
+    StatusEntryKind, WorkingTreeStatus,
 };
 use std::ffi::{OsStr, OsString};
 use std::fs;
@@ -20,6 +21,9 @@ pub enum RepositoryError {
     StatusParse,
     DiffParse,
     InvalidRepositoryPath,
+    InvalidHistoryCursor,
+    CommitParse,
+    HistoryEncoding,
 }
 
 #[derive(Debug)]
@@ -111,6 +115,235 @@ pub fn diff(
         return Err(map_failed_output(&output.stderr));
     }
     parse_diff(&output.stdout, path)
+}
+
+pub fn history(
+    descriptor: &RepositoryDescriptor,
+    limit: u16,
+    cursor: Option<&str>,
+) -> Result<HistoryPage, RepositoryError> {
+    let base = descriptor
+        .worktree_root
+        .as_ref()
+        .unwrap_or(&descriptor.git_directory);
+    let (snapshot, offset) = match cursor {
+        Some(cursor) => parse_history_cursor(cursor)?,
+        None => match resolve_head(base)? {
+            Some(head) => (head, 0),
+            None => {
+                return Ok(HistoryPage {
+                    commits: Vec::new(),
+                    next_cursor: None,
+                });
+            }
+        },
+    };
+    let requested = usize::from(limit) + 1;
+    let arguments = [
+        OsString::from("-C"),
+        OsString::from(base),
+        OsString::from("rev-list"),
+        OsString::from("--topo-order"),
+        OsString::from("--date-order"),
+        OsString::from(format!("--max-count={requested}")),
+        OsString::from(format!("--skip={offset}")),
+        OsString::from(&snapshot),
+    ];
+    let output = SystemGit.run(&arguments).map_err(map_io_error)?;
+    if !output.success {
+        return Err(RepositoryError::InvalidHistoryCursor);
+    }
+    let oid_list = std::str::from_utf8(&output.stdout).map_err(|_| RepositoryError::CommitParse)?;
+    let mut oids: Vec<&str> = oid_list.lines().filter(|line| !line.is_empty()).collect();
+    let has_more = oids.len() > usize::from(limit);
+    oids.truncate(usize::from(limit));
+    let mut commits = Vec::with_capacity(oids.len());
+    for oid in oids {
+        let arguments = [
+            OsString::from("-C"),
+            OsString::from(base),
+            OsString::from("cat-file"),
+            OsString::from("commit"),
+            OsString::from(oid),
+        ];
+        let output = SystemGit.run(&arguments).map_err(map_io_error)?;
+        if !output.success {
+            return Err(RepositoryError::CommitParse);
+        }
+        commits.push(parse_commit(oid, &output.stdout)?);
+    }
+    let next_offset = offset
+        .checked_add(usize::from(limit))
+        .ok_or(RepositoryError::InvalidHistoryCursor)?;
+    Ok(HistoryPage {
+        commits,
+        next_cursor: has_more.then(|| format_history_cursor(&snapshot, next_offset)),
+    })
+}
+
+fn resolve_head(base: &str) -> Result<Option<String>, RepositoryError> {
+    let arguments = [
+        OsString::from("-C"),
+        OsString::from(base),
+        OsString::from("rev-parse"),
+        OsString::from("--verify"),
+        OsString::from("HEAD"),
+    ];
+    let output = SystemGit.run(&arguments).map_err(map_io_error)?;
+    if !output.success {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains("Needed a single revision")
+            || stderr.contains("unknown revision")
+            || stderr.contains("ambiguous argument 'HEAD'")
+        {
+            return Ok(None);
+        }
+        return Err(map_failed_output(&output.stderr));
+    }
+    let head = std::str::from_utf8(&output.stdout)
+        .map_err(|_| RepositoryError::CommitParse)?
+        .trim_end_matches(['\r', '\n']);
+    if valid_oid(head) {
+        Ok(Some(head.to_owned()))
+    } else {
+        Err(RepositoryError::CommitParse)
+    }
+}
+
+fn format_history_cursor(snapshot: &str, offset: usize) -> String {
+    format!("v1:{snapshot}:{offset}")
+}
+
+fn parse_history_cursor(cursor: &str) -> Result<(String, usize), RepositoryError> {
+    let mut parts = cursor.split(':');
+    let version = parts.next();
+    let snapshot = parts.next();
+    let offset = parts.next();
+    if version != Some("v1") || parts.next().is_some() {
+        return Err(RepositoryError::InvalidHistoryCursor);
+    }
+    let snapshot = snapshot
+        .filter(|value| valid_oid(value))
+        .ok_or(RepositoryError::InvalidHistoryCursor)?;
+    let offset = offset
+        .ok_or(RepositoryError::InvalidHistoryCursor)?
+        .parse::<usize>()
+        .map_err(|_| RepositoryError::InvalidHistoryCursor)?;
+    Ok((snapshot.to_owned(), offset))
+}
+
+fn valid_oid(value: &str) -> bool {
+    matches!(value.len(), 40 | 64) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn parse_commit(oid: &str, raw: &[u8]) -> Result<CommitSummary, RepositoryError> {
+    let separator = raw
+        .windows(2)
+        .position(|window| window == b"\n\n")
+        .ok_or(RepositoryError::CommitParse)?;
+    let headers =
+        std::str::from_utf8(&raw[..separator]).map_err(|_| RepositoryError::HistoryEncoding)?;
+    let message = std::str::from_utf8(&raw[separator + 2..])
+        .map_err(|_| RepositoryError::HistoryEncoding)?
+        .to_owned();
+    let mut parents = Vec::new();
+    let mut author = None;
+    let mut committer = None;
+    for line in headers.lines() {
+        if line.starts_with(' ') {
+            continue;
+        }
+        if let Some(value) = line.strip_prefix("parent ") {
+            if !valid_oid(value) {
+                return Err(RepositoryError::CommitParse);
+            }
+            parents.push(value.to_owned());
+        } else if let Some(value) = line.strip_prefix("author ") {
+            author = Some(parse_identity(value)?);
+        } else if let Some(value) = line.strip_prefix("committer ") {
+            committer = Some(parse_identity(value)?);
+        } else if let Some(encoding) = line.strip_prefix("encoding ")
+            && !encoding.eq_ignore_ascii_case("utf-8")
+        {
+            return Err(RepositoryError::HistoryEncoding);
+        }
+    }
+    let summary = message.lines().next().unwrap_or_default().to_owned();
+    Ok(CommitSummary {
+        oid: oid.to_owned(),
+        parents,
+        author: author.ok_or(RepositoryError::CommitParse)?,
+        committer: committer.ok_or(RepositoryError::CommitParse)?,
+        summary,
+        message,
+    })
+}
+
+fn parse_identity(value: &str) -> Result<CommitIdentity, RepositoryError> {
+    let email_end = value.rfind('>').ok_or(RepositoryError::CommitParse)?;
+    let email_start = value[..email_end]
+        .rfind('<')
+        .ok_or(RepositoryError::CommitParse)?;
+    let name = value[..email_start].trim_end().to_owned();
+    let email = value[email_start + 1..email_end].to_owned();
+    let mut timestamp_parts = value[email_end + 1..].split_whitespace();
+    let seconds = timestamp_parts
+        .next()
+        .ok_or(RepositoryError::CommitParse)?
+        .parse::<i64>()
+        .map_err(|_| RepositoryError::CommitParse)?;
+    let offset = timestamp_parts.next().ok_or(RepositoryError::CommitParse)?;
+    if timestamp_parts.next().is_some() {
+        return Err(RepositoryError::CommitParse);
+    }
+    Ok(CommitIdentity {
+        name,
+        email,
+        timestamp: format_git_timestamp(seconds, offset)?,
+    })
+}
+
+fn format_git_timestamp(seconds: i64, offset: &str) -> Result<String, RepositoryError> {
+    if offset.len() != 5 || !matches!(offset.as_bytes()[0], b'+' | b'-') {
+        return Err(RepositoryError::CommitParse);
+    }
+    let hours = offset[1..3]
+        .parse::<i64>()
+        .map_err(|_| RepositoryError::CommitParse)?;
+    let minutes = offset[3..5]
+        .parse::<i64>()
+        .map_err(|_| RepositoryError::CommitParse)?;
+    if hours > 23 || minutes > 59 {
+        return Err(RepositoryError::CommitParse);
+    }
+    let sign = if &offset[..1] == "+" { 1 } else { -1 };
+    let local_seconds = seconds + sign * (hours * 3600 + minutes * 60);
+    let days = local_seconds.div_euclid(86_400);
+    let day_seconds = local_seconds.rem_euclid(86_400);
+    let (year, month, day) = civil_from_days(days);
+    let hour = day_seconds / 3600;
+    let minute = day_seconds % 3600 / 60;
+    let second = day_seconds % 60;
+    Ok(format!(
+        "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}{}:{}",
+        &offset[..3],
+        &offset[3..]
+    ))
+}
+
+fn civil_from_days(days_since_epoch: i64) -> (i64, i64, i64) {
+    let z = days_since_epoch + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let day_of_era = z - era * 146_097;
+    let year_of_era =
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let mut year = year_of_era + era * 400;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_prime = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
+    let month = month_prime + if month_prime < 10 { 3 } else { -9 };
+    year += if month <= 2 { 1 } else { 0 };
+    (year, month, day)
 }
 
 fn validate_repository_path(path: &str) -> Result<(), RepositoryError> {
@@ -570,6 +803,48 @@ mod tests {
         assert_eq!(
             run_git(&git, [OsStr::new("test")]).unwrap(),
             "path-ending-in-newline\n"
+        );
+    }
+
+    #[test]
+    fn parses_raw_merge_commit_without_message_delimiters() {
+        let oid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let raw = concat!(
+            "tree bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
+            "parent cccccccccccccccccccccccccccccccccccccccc\n",
+            "parent dddddddddddddddddddddddddddddddddddddddd\n",
+            "author Alice Example <alice@example.com> 0 +0000\n",
+            "committer Bob Example <bob@example.com> 3600 +0100\n",
+            "gpgsig -----BEGIN SIGNATURE-----\n",
+            " continuation\n",
+            "\n",
+            "summary\n\nbody with a delimiter-like value: ::gitnova::\n"
+        );
+        let commit = parse_commit(oid, raw.as_bytes()).unwrap();
+        assert_eq!(commit.parents.len(), 2);
+        assert_eq!(commit.author.name, "Alice Example");
+        assert_eq!(commit.author.timestamp, "1970-01-01T00:00:00+00:00");
+        assert_eq!(commit.committer.timestamp, "1970-01-01T02:00:00+01:00");
+        assert_eq!(commit.summary, "summary");
+        assert_eq!(
+            commit.message,
+            "summary\n\nbody with a delimiter-like value: ::gitnova::\n"
+        );
+    }
+
+    #[test]
+    fn validates_history_cursors_and_commit_encoding() {
+        let oid = "abcdefabcdefabcdefabcdefabcdefabcdefabcd";
+        let cursor = format_history_cursor(oid, 42);
+        assert_eq!(parse_history_cursor(&cursor).unwrap(), (oid.to_owned(), 42));
+        assert_eq!(
+            parse_history_cursor("v2:bad:0"),
+            Err(RepositoryError::InvalidHistoryCursor)
+        );
+        let raw = b"tree abcdefabcdefabcdefabcdefabcdefabcdefabcd\nauthor A <a@b> 0 +0000\ncommitter A <a@b> 0 +0000\nencoding ISO-8859-1\n\nmessage";
+        assert_eq!(
+            parse_commit(oid, raw),
+            Err(RepositoryError::HistoryEncoding)
         );
     }
 

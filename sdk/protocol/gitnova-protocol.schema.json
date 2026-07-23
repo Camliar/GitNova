@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitnova.dev/schema/protocol/1.3/gitnova-protocol.schema.json",
-  "title": "GitNova Core Protocol 1.3",
+  "$id": "https://gitnova.dev/schema/protocol/1.4/gitnova-protocol.schema.json",
+  "title": "GitNova Core Protocol 1.4",
   "type": "object",
-  "properties": { "protocolVersion": { "const": "1.3" } },
+  "properties": { "protocolVersion": { "const": "1.4" } },
   "required": ["protocolVersion"],
   "$defs": {
     "RequestId": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
@@ -25,9 +25,10 @@
         "cancellation": { "type": "boolean" },
         "repositoryDiscovery": { "type": "boolean" },
         "workingTreeStatus": { "type": "boolean" },
-        "structuredFileDiff": { "type": "boolean" }
+        "structuredFileDiff": { "type": "boolean" },
+        "paginatedCommitHistory": { "type": "boolean" }
       },
-      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff"]
+      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory"]
     },
     "InitializeParams": {
       "type": "object",
@@ -171,6 +172,46 @@
         "hunks": { "type": "array", "items": { "$ref": "#/$defs/DiffHunk" } }
       },
       "required": ["oldPath", "newPath", "isBinary", "hunks"]
+    },
+    "HistoryParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "limit": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "cursor": { "type": "string", "minLength": 1 }
+      }
+    },
+    "CommitIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "timestamp"]
+    },
+    "CommitSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "oid": { "type": "string" },
+        "parents": { "type": "array", "items": { "type": "string" } },
+        "author": { "$ref": "#/$defs/CommitIdentity" },
+        "committer": { "$ref": "#/$defs/CommitIdentity" },
+        "summary": { "type": "string" },
+        "message": { "type": "string" }
+      },
+      "required": ["oid", "parents", "author", "committer", "summary", "message"]
+    },
+    "HistoryPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "commits": { "type": "array", "items": { "$ref": "#/$defs/CommitSummary" } },
+        "nextCursor": { "type": ["string", "null"] }
+      },
+      "required": ["commits", "nextCursor"]
     }
   }
 }

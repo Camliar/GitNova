@@ -1,6 +1,6 @@
 # TASK-0006: Paginated Commit History
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/006-paginated-commit-history`
@@ -37,26 +37,26 @@
 
 ## Deliverables
 
-- [ ] `repository/history` 与快照 cursor
-- [ ] raw commit parser 与 commit identity/message 契约
-- [ ] Rust、Schema、TypeScript 与 capability 同步
-- [ ] pagination/merge/bare/detached/empty/error 契约测试
-- [ ] commit history 语义、cursor 和刻意限制文档
+- [x] `repository/history` 与快照 cursor
+- [x] raw commit parser 与 commit identity/message 契约
+- [x] Rust、Schema、TypeScript 与 capability 同步
+- [x] pagination/merge/bare/detached/empty/error 契约测试
+- [x] commit history 语义、cursor 和刻意限制文档
 
 ## Review Checklist
 
-- [ ] 只调用 System Git，不经 shell，无写操作。
-- [ ] cursor 稳定、opaque、可验证，分页无重复/遗漏。
-- [ ] raw commit parser 不受 multiline message 或 gpgsig header 影响。
-- [ ] merge parent 顺序、timestamp 和 author/committer 保真。
-- [ ] 未实现 commit diff、graph layout、GitHub 或写操作。
-- [ ] fmt、Clippy、Rust tests、`npm run check` 与文档检查通过。
+- [x] 只调用 System Git，不经 shell，无写操作。
+- [x] cursor 稳定、opaque、可验证，分页无重复/遗漏。
+- [x] raw commit parser 不受 multiline message 或 gpgsig header 影响。
+- [x] merge parent 顺序、timestamp 和 author/committer 保真。
+- [x] 未实现 commit diff、graph layout、GitHub 或写操作。
+- [x] fmt、Clippy、Rust tests、`npm run check` 与文档检查通过。
 
 ## Done Definition
 
-- [ ] Deliverables 和 Review Checklist 完成。
-- [ ] 自主 Review 无阻塞项。
-- [ ] 状态更新 Done，提交并推送。
+- [x] Deliverables 和 Review Checklist 完成。
+- [x] 自主 Review 无阻塞项。
+- [x] 状态更新 Done，提交并推送。
 
 ## References
 

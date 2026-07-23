@@ -24,11 +24,11 @@
 - Desktop 提交图谱可视化
 - GitHub Provider repository identity/metadata（Core-owned `gh api` adapter，已实现）
 - GitHub PR detail 与 ordered original commits（已实现）
-- PR 查看与原始 commit 列表
+- PR 查看与原始 commit 列表（Desktop 已实现）
 - 指定 PR 原始 commit 的文件列表与可用行级 diff（已实现；缺失 patch 显式标记）
 - PR、原始 commits 与最终 merge commit 的保守关联模型（Squash Trace Core，已实现）
-- Squash Trace Desktop 关联展示
-- Desktop Host 的端到端关键工作流
+- Squash Trace Desktop 关联展示（已实现）
+- Desktop Host 的 Squash Trace 端到端关键工作流（已实现）
 
 ## Post-MVP 候选
 

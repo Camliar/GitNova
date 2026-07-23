@@ -1,6 +1,6 @@
 # TASK-0024: Desktop Squash Trace
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/024-desktop-squash-trace`
@@ -24,17 +24,17 @@
 
 ## Deliverables
 
-- [ ] typed client and explicit trace request
-- [ ] conservative relationship and evidence UI
-- [ ] loading/error/stale tests and docs
+- [x] typed client and explicit trace request
+- [x] conservative relationship and evidence UI
+- [x] loading/error/stale tests and docs
 
 ## Review Checklist
 
-- [ ] 所有 Git/GitHub/relationship 语义来自 Core，Host 只展示协议值。
-- [ ] 无自动网络、credentials、raw JSON/stderr 或 mutation。
-- [ ] `medium` confidence 与 candidate 文案不被升级为确定事实。
-- [ ] Rust/frontend tests、Clippy 与 Tauri build 通过。
+- [x] 所有 Git/GitHub/relationship 语义来自 Core，Host 只展示协议值。
+- [x] 无自动网络、credentials、raw JSON/stderr 或 mutation。
+- [x] `medium` confidence 与 candidate 文案不被升级为确定事实。
+- [x] frontend tests、typecheck、protocol check 与 production build 通过；本轮环境无 `cargo`，Rust/Tauri 原生验证未重跑（无 Rust/Tauri Rust 改动）。
 
 ## Done Definition
 
-- [ ] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。
+- [x] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。

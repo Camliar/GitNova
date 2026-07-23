@@ -162,6 +162,21 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
 .remote-diff > section { display: grid; gap: 9px; }
 .remote-diff h5, .remote-diff p { margin: 0; overflow-wrap: anywhere; }
 .remote-diff p { color: var(--muted); font-size: 11px; }
+.squash-trace { display: grid; gap: 14px; padding: 16px; border: 1px solid #365c69; border-radius: 14px; background: rgb(12 29 39 / 70%); }
+.squash-trace > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.squash-trace button { min-height: 36px; padding: 0 13px; border: 1px solid #428c96; border-radius: 9px; background: transparent; color: #b9f4ef; cursor: pointer; font-weight: 800; }
+.squash-trace button:disabled { cursor: wait; opacity: .65; }
+.trace-result { display: grid; gap: 16px; }
+.trace-summary h5, .trace-summary p, .trace-result h5 { margin: 6px 0 0; }
+.trace-summary p { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.trace-confidence { display: inline-flex; padding: 3px 8px; border: 1px solid #7d8d99; border-radius: 999px; color: #c8d2d8; font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.trace-confidence--high { border-color: #4aa58f; color: #8be3cc; }
+.trace-confidence--medium { border-color: #b4863c; color: #ffd08a; }
+.trace-flow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; }
+.trace-flow div { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.trace-flow span { color: var(--muted); font-size: 10px; }
+.trace-flow strong { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.trace-evidence { display: grid; gap: 7px; margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 11px; }
 
 .foundation-card { padding: 26px; border: 1px solid var(--border); border-radius: 22px; background: linear-gradient(145deg, rgb(23 30 48 / 95%), rgb(12 17 29 / 95%)); box-shadow: 0 28px 70px rgb(0 0 0 / 32%); }
 .foundation-card h2 { margin: 0; font-size: 28px; }
@@ -193,6 +208,9 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
   .commit-detail__header { align-items: stretch; flex-direction: column; }
   .github-error { align-items: stretch; flex-direction: column; }
   .github-repository { grid-template-columns: 1fr; }
+  .squash-trace > header { align-items: stretch; flex-direction: column; }
+  .trace-flow { grid-template-columns: 1fr; }
+  .trace-flow > span { justify-self: center; transform: rotate(90deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {

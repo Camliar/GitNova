@@ -1,0 +1,27 @@
+# Dependencies and build output
+node_modules/
+target/
+dist/
+build/
+.turbo/
+
+# IDE and operating system
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.iml
+
+# Environment and local data
+.env
+.env.*
+!.env.example
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
+# Logs and coverage
+*.log
+coverage/
+

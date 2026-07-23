@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">GitNova placeholder mark</title>
+  <desc id="desc">A branching orbit and star symbol.</desc>
+  <defs>
+    <linearGradient id="nova" x1="40" y1="216" x2="216" y2="40" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#645CFF"/>
+      <stop offset="1" stop-color="#34D9E8"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="58" fill="#111426"/>
+  <path d="M76 184V76m0 49h51c31 0 57-25 57-57" fill="none" stroke="url(#nova)" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="76" cy="68" r="18" fill="#645CFF"/>
+  <circle cx="76" cy="188" r="18" fill="#34D9E8"/>
+  <circle cx="188" cy="60" r="18" fill="#34D9E8"/>
+  <path d="M168 112l9 22 22 9-22 9-9 22-9-22-22-9 22-9 9-22z" fill="#F7F8FC"/>
+</svg>
+

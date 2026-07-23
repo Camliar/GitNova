@@ -1,0 +1,14 @@
+{
+  "name": "gitnova",
+  "version": "0.0.0",
+  "private": true,
+  "description": "GitNova monorepo foundation",
+  "license": "MIT",
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "echo 'No implementation checks are configured in the foundation task.'"
+  }
+}

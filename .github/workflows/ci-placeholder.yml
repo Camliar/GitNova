@@ -1,0 +1,13 @@
+name: CI Placeholder
+
+on:
+  workflow_dispatch:
+
+jobs:
+  placeholder:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Foundation notice
+        run: echo "CI logic will be implemented in the delivery phase."
+

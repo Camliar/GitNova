@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import type { GitHubPullRequest, GitHubRepository } from "@gitnova/protocol";
+import type { GitHubPullRequest, GitHubPullRequestCommitDiff, GitHubRepository } from "@gitnova/protocol";
 import { asDesktopError, type DesktopError } from "./core";
-import { getGitHubPullRequest, getGitHubRepository } from "./github";
+import { getGitHubPullRequest, getGitHubPullRequestCommitDiff, getGitHubRepository } from "./github";
+import { FileDiffView } from "./FileDiffView";
 
 type RepositoryState = { kind: "idle" } | { kind: "loading" } | { kind: "ready"; repository: GitHubRepository } | { kind: "error"; error: DesktopError };
 type PullRequestState = { kind: "idle" } | { kind: "loading"; number: number } | { kind: "ready"; pullRequest: GitHubPullRequest } | { kind: "error"; number: number; error: DesktopError };
@@ -70,11 +71,17 @@ export function GitHubPanel() {
 }
 
 function PullRequestView({ pullRequest }: { pullRequest: GitHubPullRequest }) {
+  const [remoteDiff, setRemoteDiff] = useState<{ kind: "idle" } | { kind: "loading"; oid: string } | { kind: "ready"; value: GitHubPullRequestCommitDiff } | { kind: "error"; oid: string; error: DesktopError }>({ kind: "idle" });
+  const serial = useRef(0);
+  async function load(oid: string) { const current = ++serial.current; setRemoteDiff({ kind: "loading", oid }); try { const value = await getGitHubPullRequestCommitDiff(pullRequest.number, oid, pullRequest.nameWithOwner); if (current === serial.current) setRemoteDiff({ kind: "ready", value }); } catch (error) { if (current === serial.current) setRemoteDiff({ kind: "error", oid, error: asDesktopError(error) }); } }
   return <section className="pr-detail" aria-labelledby="pr-title">
     <header><span className={`pr-state pr-state--${pullRequest.state}`}>{pullRequest.state}{pullRequest.isDraft ? " · draft" : ""}</span><h3 id="pr-title">#{pullRequest.number} {pullRequest.title}</h3><p>{pullRequest.authorLogin ? `@${pullRequest.authorLogin}` : "Unknown GitHub author"} · {pullRequest.base.name} ← {pullRequest.head.name}</p></header>
     {pullRequest.body && <pre>{pullRequest.body}</pre>}
     <dl className="github-repository"><div><dt>Updated</dt><dd>{pullRequest.updatedAt}</dd></div><div><dt>Merged</dt><dd>{pullRequest.mergedAt ?? "Not merged"}</dd></div><div><dt>Merge commit</dt><dd>{pullRequest.mergeCommitOid ?? "Not available"}</dd></div><div><dt>URL</dt><dd>{pullRequest.url}</dd></div></dl>
     <h4>Original commits · {pullRequest.commits.length}</h4>
-    {pullRequest.commits.length === 0 ? <p className="empty-state">No original commits returned.</p> : <ol className="pr-commits">{pullRequest.commits.map((commit) => <li key={commit.oid}><strong>{commit.summary || "(no commit message)"}</strong><code>{commit.oid.slice(0, 8)}</code><p>{commit.author.name} &lt;{commit.author.email}&gt;{commit.author.login ? ` · @${commit.author.login}` : ""} · {commit.parents.length} parent{commit.parents.length === 1 ? "" : "s"}</p></li>)}</ol>}
+    {pullRequest.commits.length === 0 ? <p className="empty-state">No original commits returned.</p> : <ol className="pr-commits">{pullRequest.commits.map((commit) => <li key={commit.oid}><strong>{commit.summary || "(no commit message)"}</strong><code>{commit.oid.slice(0, 8)}</code><p>{commit.author.name} &lt;{commit.author.email}&gt;{commit.author.login ? ` · @${commit.author.login}` : ""} · {commit.parents.length} parent{commit.parents.length === 1 ? "" : "s"}</p><button type="button" disabled={remoteDiff.kind === "loading"} onClick={() => void load(commit.oid)}>View remote diff {commit.oid.slice(0, 8)}</button></li>)}</ol>}
+    {remoteDiff.kind === "loading" && <p className="empty-state" role="status">Loading original commit diff…</p>}
+    {remoteDiff.kind === "error" && <div className="github-error"><p role="alert">{remoteDiff.error.message}. PR details remain available.</p><button type="button" onClick={() => void load(remoteDiff.oid)}>Retry remote diff</button></div>}
+    {remoteDiff.kind === "ready" && <section className="remote-diff" aria-label="Original commit remote diff"><h4>{remoteDiff.value.commit.summary}</h4>{remoteDiff.value.files.length === 0 ? <p className="empty-state">No changed files.</p> : remoteDiff.value.files.map((file, index) => <section key={`${file.newPath}:${index}`}><h5>{file.oldPath === file.newPath ? file.newPath : `${file.oldPath} → ${file.newPath}`}</h5><p>Provider status: {file.status} · +{file.additions} −{file.deletions} · {file.changes} changes</p>{file.patchState === "unavailable" ? <p className="empty-state">GitHub did not provide a patch for this file. Binary content is not assumed.</p> : <FileDiffView diff={{ oldPath: file.oldPath, newPath: file.newPath, isBinary: false, hunks: file.hunks }} />}</section>)}</section>}
   </section>;
 }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getGitHubPullRequest, getGitHubRepository } from "./github";
+import { getGitHubPullRequest, getGitHubPullRequestCommitDiff, getGitHubRepository } from "./github";
 
 const mocks = vi.hoisted(() => ({ requestCore: vi.fn() }));
 vi.mock("./core", async (importOriginal) => ({ ...(await importOriginal<typeof import("./core")>()), requestCore: mocks.requestCore }));
@@ -13,6 +13,10 @@ describe("GitHub provider boundary", () => {
   it("binds a PR number to the normalized repository identity", async () => {
     await getGitHubPullRequest(42, "owner/repo");
     expect(mocks.requestCore).toHaveBeenCalledWith("github/pullRequest", { number: 42, nameWithOwner: "owner/repo" });
+  });
+  it("binds a member commit diff to PR and repository", async () => {
+    await getGitHubPullRequestCommitDiff(42, "a".repeat(40), "owner/repo");
+    expect(mocks.requestCore).toHaveBeenCalledWith("github/pullRequestCommitDiff", { number: 42, oid: "a".repeat(40), nameWithOwner: "owner/repo" });
   });
   it("maps stable auth errors without credential details", async () => {
     mocks.requestCore.mockResolvedValue({ jsonrpc: "2.0", id: 7, error: { code: -32124, message: "GitHub authentication is required", data: { stableCode: "github.auth_required", retryable: true, details: { token: "secret" } } } });

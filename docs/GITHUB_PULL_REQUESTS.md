@@ -33,3 +33,5 @@ Official references: [Get a pull request and list PR commits](https://docs.githu
 Desktop 要求用户输入正整数 PR number，并在 submit 后调用 `github/pullRequest`。请求绑定已由 Core normalized 的 `nameWithOwner`，Host 不构造 endpoint。错误保留 repository identity 与 number，只在用户点击 Retry 时重复同一请求。
 
 UI 展示 state/draft、author、base/head、timestamps、merge commit、body 和 Core ordered original commits。commit identity、login、OID 与 parent count 均来自协议，Host 不重排、不补全也不声称 partial sequence。本阶段不调用 `github/pullRequestCommitDiff`，original commit 的文件与行级远程 diff 属于后续 Task。
+
+Desktop 现在允许用户从该 ordered list 明确选择 original commit，并将 PR number、完整 member OID 与 normalized `nameWithOwner` 传给 `github/pullRequestCommitDiff`。Host 展示 ordered files、Provider status/statistics 与 structured hunks。`patchState: unavailable` 明确显示为 GitHub 未提供 patch，不推断 binary，也不读取远程内容补全。

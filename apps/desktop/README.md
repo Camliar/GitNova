@@ -16,6 +16,8 @@ Each timeline row can open `repository/commitDiff`. Root and single-parent commi
 
 GitHub access remains off after repository open. The user must explicitly choose Connect GitHub before Desktop asks Core for normalized repository metadata. Once connected, a positive PR number triggers `github/pullRequest` for that exact `nameWithOwner`; Desktop renders normalized PR metadata and the complete ordered original commit list. It never invokes `gh`, requests a token, navigates provider URLs, retries automatically, or fetches per-commit remote diffs in this slice.
 
+An original commit row can explicitly request its Core-validated `github/pullRequestCommitDiff`. Desktop renders Provider file statistics and structured patches; unavailable patches remain unknown rather than being labeled binary. The request cannot be used for an OID outside the displayed PR membership.
+
 Run `pnpm --filter @gitnova/desktop check`, `test`, or `build` from the repository root. Debug and test builds may select an absolute Core executable with `GITNOVA_CORE_BINARY`; release builds resolve Core beside the Desktop executable.
 
 Native configuration lives in `src-tauri`. Its default capability grants only Tauri core window/event functionality; no shell, network, filesystem, or process plugin is enabled.

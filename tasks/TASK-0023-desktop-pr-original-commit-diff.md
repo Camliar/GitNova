@@ -1,6 +1,6 @@
 # TASK-0023: Desktop PR Original Commit Diff
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/023-desktop-pr-commit-diff`
@@ -24,17 +24,17 @@
 
 ## Deliverables
 
-- [ ] typed client and PR-member selection
-- [ ] remote file statistics and structured patch UI
-- [ ] loading/error/stale tests and docs
+- [x] typed client and PR-member selection
+- [x] remote file statistics and structured patch UI
+- [x] loading/error/stale tests and docs
 
 ## Review Checklist
 
-- [ ] membership、completeness 与 patch semantics 由 Core 保证，Host 不推断。
-- [ ] 无自动网络、credentials、raw JSON/stderr 或 mutation。
-- [ ] 未提前实现 Squash Trace UI。
-- [ ] Rust/frontend tests、Clippy 与 Tauri build 通过。
+- [x] membership、completeness 与 patch semantics 由 Core 保证，Host 不推断。
+- [x] 无自动网络、credentials、raw JSON/stderr 或 mutation。
+- [x] 未提前实现 Squash Trace UI。
+- [x] Rust/frontend tests、Clippy 与 Tauri build 通过。
 
 ## Done Definition
 
-- [ ] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。
+- [x] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。

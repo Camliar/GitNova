@@ -157,6 +157,11 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
 .pr-commits strong { overflow-wrap: anywhere; }
 .pr-commits code { color: #9aedf5; font-size: 11px; }
 .pr-commits p { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 10px; }
+.pr-commits button { grid-column: 1 / -1; justify-self: start; min-height: 30px; border: 1px solid #428c96; border-radius: 8px; background: transparent; color: #9aedf5; cursor: pointer; font-size: 10px; font-weight: 800; }
+.remote-diff { display: grid; gap: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.remote-diff > section { display: grid; gap: 9px; }
+.remote-diff h5, .remote-diff p { margin: 0; overflow-wrap: anywhere; }
+.remote-diff p { color: var(--muted); font-size: 11px; }
 
 .foundation-card { padding: 26px; border: 1px solid var(--border); border-radius: 22px; background: linear-gradient(145deg, rgb(23 30 48 / 95%), rgb(12 17 29 / 95%)); box-shadow: 0 28px 70px rgb(0 0 0 / 32%); }
 .foundation-card h2 { margin: 0; font-size: 28px; }

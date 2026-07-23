@@ -14,4 +14,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+gitnova-protocol = { path = "../../../crates/gitnova-protocol" }
+serde.workspace = true
+serde_json.workspace = true
 tauri = { version = "2", features = [] }

@@ -44,6 +44,11 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
 .status-mark { width: 9px; height: 9px; border: 2px solid var(--muted); border-radius: 50%; }
 .status-mark--ready { border-color: var(--success); background: var(--success); }
 .status-mark--pending { border-color: var(--accent); background: linear-gradient(90deg, var(--accent) 50%, transparent 50%); }
+.connection-action { display: grid; gap: 12px; margin: 0 0 18px; }
+.connection-action p { margin: 0; color: #ffc8c8; font-size: 12px; line-height: 1.5; }
+.connection-action button { min-height: 42px; padding: 0 16px; border: 1px solid #7771d7; border-radius: 11px; background: #7771d7; color: #090b17; cursor: pointer; font-weight: 800; }
+.connection-action button:hover { background: #9691ff; }
+.connection-action button:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 .privacy-note { margin: 0; padding-top: 18px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; line-height: 1.6; }
 
 @media (max-width: 760px) {

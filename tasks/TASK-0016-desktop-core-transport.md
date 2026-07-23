@@ -1,6 +1,6 @@
 # TASK-0016: Desktop Core Process Transport
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/016-desktop-core-transport`
@@ -33,27 +33,27 @@
 
 ## Deliverables
 
-- [ ] Core supervisor and child lifecycle
-- [ ] framed JSON-RPC request/response transport
-- [ ] initialize/version/capability validation
-- [ ] minimal Tauri command boundary and sanitized errors
-- [ ] React connection status/retry state
-- [ ] Rust/frontend tests and transport documentation
+- [x] Core supervisor and child lifecycle
+- [x] framed JSON-RPC request/response transport
+- [x] initialize/version/capability validation
+- [x] minimal Tauri command boundary and sanitized errors
+- [x] React connection status/retry state
+- [x] Rust/frontend tests and transport documentation
 
 ## Review Checklist
 
-- [ ] Core 仍是独立进程，Host 未承载 Git/GitHub/Squash Trace 业务逻辑。
-- [ ] 无 shell、端口、daemon 或 Tauri shell plugin。
-- [ ] stdout framing、id、size、EOF 和 lifecycle failures fail closed。
-- [ ] shutdown/drop 不遗留 child，stderr 不泄漏到 UI。
-- [ ] 未提前实现 repository 或 Squash Trace screen。
-- [ ] fmt、Clippy、Rust tests、frontend checks 与 Tauri build 通过。
+- [x] Core 仍是独立进程，Host 未承载 Git/GitHub/Squash Trace 业务逻辑。
+- [x] 无 shell、端口、daemon 或 Tauri shell plugin。
+- [x] stdout framing、id、size、EOF 和 lifecycle failures fail closed。
+- [x] shutdown/drop 不遗留 child，stderr 不泄漏到 UI。
+- [x] 未提前实现 repository 或 Squash Trace screen。
+- [x] fmt、Clippy、Rust tests、frontend checks 与 Tauri build 通过。
 
 ## Done Definition
 
-- [ ] Deliverables 和 Review Checklist 完成。
-- [ ] 自主 Review 无阻塞项。
-- [ ] 状态更新 Done，提交、推送并快进合并至 `main`。
+- [x] Deliverables 和 Review Checklist 完成。
+- [x] 自主 Review 无阻塞项。
+- [x] 状态更新 Done，提交、推送并快进合并至 `main`。
 
 ## References
 

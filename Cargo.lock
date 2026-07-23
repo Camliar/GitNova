@@ -1066,6 +1066,9 @@ dependencies = [
 name = "gitnova-desktop"
 version = "0.1.0"
 dependencies = [
+ "gitnova-protocol",
+ "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
 ]

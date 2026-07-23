@@ -162,7 +162,7 @@ pub struct InitializeParams {
     pub capabilities: ClientCapabilities,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerCapabilities {
     pub cancellation: bool,

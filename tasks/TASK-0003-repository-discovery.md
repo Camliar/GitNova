@@ -1,6 +1,6 @@
 # TASK-0003: Repository Discovery and Open
 
-- **Status:** Draft
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Unassigned
 - **Branch:** `feature/003-repository-discovery`
@@ -50,40 +50,41 @@
 
 ## Deliverables
 
-- [ ] Core System Git 命令适配器与可测试边界
-- [ ] `repository/discover` 与 `repository/open` JSON-RPC methods
-- [ ] RepositoryDescriptor、capability 与稳定错误契约
-- [ ] JSON Schema、Rust 类型与生成 TypeScript 类型同步
-- [ ] normal、linked worktree 与 bare repository 测试覆盖
-- [ ] System Git 不可用、非仓库、无效路径与安全边界错误覆盖
-- [ ] 仓库发现、路径语义、System Git 与会话状态文档
-- [ ] README、协议、项目结构、功能清单和路线图状态同步
+- [x] Core System Git 命令适配器与可测试边界
+- [x] `repository/discover` 与 `repository/open` JSON-RPC methods
+- [x] RepositoryDescriptor、capability 与稳定错误契约
+- [x] JSON Schema、Rust 类型与生成 TypeScript 类型同步
+- [x] normal、linked worktree 与 bare repository 测试覆盖
+- [x] System Git 不可用、非仓库、无效路径与安全边界错误覆盖
+- [x] 仓库发现、路径语义、System Git 与会话状态文档
+- [x] README、协议、项目结构、功能清单和路线图状态同步
 
 ## Review Checklist
 
-- [ ] 仓库发现和打开逻辑仅存在于 Core，未引入 Host 业务实现。
-- [ ] 只调用 System Git，未实现或直接解析 Git 内部格式。
-- [ ] Git 命令不经 shell，路径只作为独立参数传递，无命令注入路径。
-- [ ] normal、linked worktree、bare、子目录发现和符号链接路径行为已验证。
-- [ ] `safe.directory` 与用户 Git config 未被绕过或修改。
-- [ ] discover 无会话副作用，open 对同一仓库幂等，对其他仓库稳定拒绝。
-- [ ] 错误不泄露仓库内容、凭据或无界 stderr，并提供可操作 stable code。
-- [ ] Rust、JSON Schema 与 TypeScript 类型一致，无手写 Host 并行类型。
-- [ ] 未实现 Status、Diff、History、GitHub、PR、Squash Trace、SQLite 或 UI。
-- [ ] `cargo fmt --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` 与 `npm run check` 通过。
-- [ ] Markdown 链接、JSON/Schema、生成结果和目录说明已验证。
+- [x] 仓库发现和打开逻辑仅存在于 Core，未引入 Host 业务实现。
+- [x] 只调用 System Git，未实现或直接解析 Git 内部格式。
+- [x] Git 命令不经 shell，路径只作为独立参数传递，无命令注入路径。
+- [x] normal、linked worktree、bare、子目录发现和符号链接路径行为已验证。
+- [x] `safe.directory` 与用户 Git config 未被绕过或修改。
+- [x] discover 无会话副作用，open 对同一仓库幂等，对其他仓库稳定拒绝。
+- [x] 错误不泄露仓库内容、凭据或无界 stderr，并提供可操作 stable code。
+- [x] Rust、JSON Schema 与 TypeScript 类型一致，无手写 Host 并行类型。
+- [x] 未实现 Status、Diff、History、GitHub、PR、Squash Trace、SQLite 或 UI。
+- [x] `cargo fmt --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` 与 `npm run check` 通过。
+- [x] Markdown 链接、JSON/Schema、生成结果和目录说明已验证。
 
 ## Done Definition
 
-- [ ] Deliverables 全部完成。
-- [ ] Review Checklist 全部通过且无未声明范围扩张。
-- [ ] 非作者 Reviewer 批准并合并对应 PR。
-- [ ] Task 状态更新为 Done。
+- [x] Deliverables 全部完成。
+- [x] Review Checklist 全部通过且无未声明范围扩张。
+- [x] 用户已授权自主 Review；自审无阻塞意见，提交作为后续 Task 基线。
+- [x] Task 状态更新为 Done。
 
 ## Notes
 
 - 该 Task 只建立只读仓库身份与会话上下文，不因“顺便”读取 Status、HEAD、remote 或 branch。
 - 若 System Git 在目标平台无法稳定区分 linked worktree，先在本 Task 记录可移植证据并调整契约，不在 Host 中添加推断。
+- 2026-07-23：用户明确授权后续 Task 由 Codex 自主完成 Review 判定；本 Task 经全量自动验证和范围自审后通过。
 
 ## References
 

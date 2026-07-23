@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitnova.dev/schema/protocol/1.0/gitnova-protocol.schema.json",
-  "title": "GitNova Core Protocol 1.0",
+  "$id": "https://gitnova.dev/schema/protocol/1.1/gitnova-protocol.schema.json",
+  "title": "GitNova Core Protocol 1.1",
   "type": "object",
-  "properties": { "protocolVersion": { "const": "1.0" } },
+  "properties": { "protocolVersion": { "const": "1.1" } },
   "required": ["protocolVersion"],
   "$defs": {
     "RequestId": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
@@ -21,8 +21,11 @@
     "ServerCapabilities": {
       "type": "object",
       "additionalProperties": false,
-      "properties": { "cancellation": { "type": "boolean" } },
-      "required": ["cancellation"]
+      "properties": {
+        "cancellation": { "type": "boolean" },
+        "repositoryDiscovery": { "type": "boolean" }
+      },
+      "required": ["cancellation", "repositoryDiscovery"]
     },
     "InitializeParams": {
       "type": "object",
@@ -59,6 +62,27 @@
         "details": { "type": "object", "additionalProperties": true }
       },
       "required": ["stableCode", "retryable"]
+    },
+    "RepositoryPathParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "path": { "type": "string", "minLength": 1 } },
+      "required": ["path"]
+    },
+    "RepositoryKind": {
+      "enum": ["worktree", "linkedWorktree", "bare"]
+    },
+    "RepositoryDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "worktreeRoot": { "type": ["string", "null"] },
+        "gitDirectory": { "type": "string" },
+        "commonGitDirectory": { "type": "string" },
+        "kind": { "$ref": "#/$defs/RepositoryKind" },
+        "gitVersion": { "type": "string" }
+      },
+      "required": ["worktreeRoot", "gitDirectory", "commonGitDirectory", "kind", "gitVersion"]
     }
   }
 }

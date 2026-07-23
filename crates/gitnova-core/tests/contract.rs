@@ -1,6 +1,9 @@
 use serde_json::{Value, json};
+use std::fs;
 use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 fn frame(value: &Value) -> Vec<u8> {
     let body = serde_json::to_vec(value).unwrap();
@@ -61,6 +64,50 @@ fn initialize(id: Value) -> Value {
     })
 }
 
+struct TestDirectory(PathBuf);
+
+impl TestDirectory {
+    fn new(label: &str) -> Self {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path =
+            std::env::temp_dir().join(format!("gitnova-{label}-{}-{unique}", std::process::id()));
+        fs::create_dir_all(&path).unwrap();
+        Self(path)
+    }
+}
+
+impl Drop for TestDirectory {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+fn git(arguments: &[&str], directory: &Path) {
+    let output = Command::new("git")
+        .args(arguments)
+        .current_dir(directory)
+        .env("LC_ALL", "C")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git command failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn repository_request(id: i64, method: &str, path: &Path) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": method,
+        "params": {"path": path.to_str().unwrap()}
+    })
+}
+
 #[test]
 fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let output = run(&[
@@ -73,7 +120,7 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let responses = responses(&output.stdout);
     assert_eq!(responses.len(), 2);
     assert_eq!(responses[0]["id"], "init-1");
-    assert_eq!(responses[0]["result"]["protocolVersion"], "1.0");
+    assert_eq!(responses[0]["result"]["protocolVersion"], "1.1");
     assert_eq!(responses[0]["result"]["capabilities"]["cancellation"], true);
     assert_eq!(responses[1]["result"], Value::Null);
 }
@@ -112,4 +159,101 @@ fn exit_without_shutdown_is_unsuccessful() {
     let output = run(&[json!({"jsonrpc":"2.0","method":"exit"})]);
     assert!(!output.status.success());
     assert!(output.stdout.is_empty());
+}
+
+#[test]
+fn discovers_normal_repository_from_nested_file_and_opens_idempotently() {
+    let directory = TestDirectory::new("normal");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    let nested = repository.join("nested");
+    fs::create_dir(&nested).unwrap();
+    let file = nested.join("file.txt");
+    fs::write(&file, "content").unwrap();
+
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/discover", &file),
+        repository_request(3, "repository/open", &nested),
+        repository_request(4, "repository/open", &repository),
+    ]);
+    assert!(output.status.success());
+    let responses = responses(&output.stdout);
+    assert_eq!(responses[1]["result"]["kind"], "worktree");
+    assert_eq!(
+        responses[1]["result"]["worktreeRoot"],
+        repository.canonicalize().unwrap().to_str().unwrap()
+    );
+    assert_eq!(responses[2]["result"], responses[3]["result"]);
+}
+
+#[test]
+fn distinguishes_linked_worktree_and_bare_repository() {
+    let directory = TestDirectory::new("kinds");
+    git(&["init", "main"], &directory.0);
+    let main = directory.0.join("main");
+    fs::write(main.join("README.md"), "test").unwrap();
+    git(&["add", "README.md"], &main);
+    git(
+        &[
+            "-c",
+            "user.name=GitNova Test",
+            "-c",
+            "user.email=test@gitnova.invalid",
+            "commit",
+            "-m",
+            "initial",
+        ],
+        &main,
+    );
+    git(&["worktree", "add", "../linked", "-b", "linked"], &main);
+    git(&["init", "--bare", "bare.git"], &directory.0);
+
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/discover", &directory.0.join("linked")),
+        repository_request(3, "repository/discover", &directory.0.join("bare.git")),
+    ]);
+    let responses = responses(&output.stdout);
+    assert_eq!(responses[1]["result"]["kind"], "linkedWorktree");
+    assert_ne!(
+        responses[1]["result"]["gitDirectory"],
+        responses[1]["result"]["commonGitDirectory"]
+    );
+    assert_eq!(responses[2]["result"]["kind"], "bare");
+    assert_eq!(responses[2]["result"]["worktreeRoot"], Value::Null);
+}
+
+#[test]
+fn rejects_opening_a_different_repository_in_one_session() {
+    let directory = TestDirectory::new("different");
+    git(&["init", "first"], &directory.0);
+    git(&["init", "second"], &directory.0);
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &directory.0.join("first")),
+        repository_request(3, "repository/open", &directory.0.join("second")),
+    ]);
+    let responses = responses(&output.stdout);
+    assert_eq!(
+        responses[2]["error"]["data"]["stableCode"],
+        "repository.different_repository_open"
+    );
+}
+
+#[test]
+fn reports_invalid_path_and_non_repository_separately() {
+    let directory = TestDirectory::new("errors");
+    let missing = directory.0.join("missing");
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/discover", &missing),
+        repository_request(3, "repository/discover", &directory.0),
+    ]);
+    let responses = responses(&output.stdout);
+    assert_eq!(responses[1]["error"]["data"]["stableCode"], "path.invalid");
+    assert_eq!(
+        responses[2]["error"]["data"]["stableCode"],
+        "repository.not_found"
+    );
 }

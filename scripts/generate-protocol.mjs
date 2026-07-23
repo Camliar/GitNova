@@ -4,7 +4,7 @@ import process from "node:process";
 const schemaUrl = new URL("../sdk/protocol/gitnova-protocol.schema.json", import.meta.url);
 const outputUrl = new URL("../packages/protocol/src/generated.ts", import.meta.url);
 const schema = JSON.parse(await readFile(schemaUrl, "utf8"));
-const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData"];
+const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor"];
 for (const name of requiredDefinitions) {
   if (!schema.$defs?.[name]) throw new Error(`Protocol schema is missing $defs.${name}`);
 }
@@ -28,6 +28,7 @@ export interface ClientCapabilities {
 
 export interface ServerCapabilities {
   cancellation: boolean;
+  repositoryDiscovery: boolean;
 }
 
 export interface InitializeParams {
@@ -50,6 +51,20 @@ export interface ErrorData {
   stableCode: string;
   retryable: boolean;
   details?: Record<string, unknown>;
+}
+
+export interface RepositoryPathParams {
+  path: string;
+}
+
+export type RepositoryKind = "worktree" | "linkedWorktree" | "bare";
+
+export interface RepositoryDescriptor {
+  worktreeRoot: string | null;
+  gitDirectory: string;
+  commonGitDirectory: string;
+  kind: RepositoryKind;
+  gitVersion: string;
 }
 `;
 

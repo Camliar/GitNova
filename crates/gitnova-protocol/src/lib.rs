@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: &str = "1.0";
+pub const PROTOCOL_VERSION: &str = "1.1";
 
 pub const ERROR_PARSE: i64 = -32700;
 pub const ERROR_INVALID_REQUEST: i64 = -32600;
@@ -16,6 +16,12 @@ pub const ERROR_INTERNAL: i64 = -32603;
 pub const ERROR_INCOMPATIBLE_PROTOCOL: i64 = -32001;
 pub const ERROR_NOT_INITIALIZED: i64 = -32002;
 pub const ERROR_ALREADY_INITIALIZED: i64 = -32003;
+pub const ERROR_INVALID_PATH: i64 = -32100;
+pub const ERROR_REPOSITORY_NOT_FOUND: i64 = -32101;
+pub const ERROR_GIT_UNAVAILABLE: i64 = -32102;
+pub const ERROR_GIT_COMMAND_FAILED: i64 = -32103;
+pub const ERROR_UNSAFE_REPOSITORY: i64 = -32104;
+pub const ERROR_DIFFERENT_REPOSITORY_OPEN: i64 = -32105;
 pub const ERROR_REQUEST_CANCELLED: i64 = -32800;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -136,6 +142,7 @@ pub struct InitializeParams {
 #[serde(rename_all = "camelCase")]
 pub struct ServerCapabilities {
     pub cancellation: bool,
+    pub repository_discovery: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -149,6 +156,29 @@ pub struct InitializeResult {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CancelParams {
     pub id: RequestId,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct RepositoryPathParams {
+    pub path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RepositoryKind {
+    Worktree,
+    LinkedWorktree,
+    Bare,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepositoryDescriptor {
+    pub worktree_root: Option<String>,
+    pub git_directory: String,
+    pub common_git_directory: String,
+    pub kind: RepositoryKind,
+    pub git_version: String,
 }
 
 #[derive(Clone, Default)]
@@ -213,6 +243,9 @@ mod tests {
             "InitializeResult",
             "CancelParams",
             "ErrorData",
+            "RepositoryPathParams",
+            "RepositoryKind",
+            "RepositoryDescriptor",
         ] {
             assert!(schema["$defs"].get(definition).is_some());
         }

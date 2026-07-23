@@ -6,11 +6,11 @@
 
 建立 Monorepo、文档、ADR、协作规范、品牌和占位 CI；不实现业务功能。
 
-## Phase 1 — Core Contract（当前）
+## Phase 1 — Core Contract
 
 定义 `gitnova-core` 进程生命周期、JSON-RPC 基础协议、能力协商、错误模型与 SDK 生成方式。协议决策需遵循 [ADR-0004](../adr/ADR-0004-Core-Process.md)。
 
-## Phase 2 — Local Git Foundation
+## Phase 2 — Local Git Foundation（当前）
 
 按经批准的 Task 增量实现本地 Git 能力；使用 System Git，保持离线和可撤销。具体候选范围见[功能清单](FEATURE_LIST.md)。
 

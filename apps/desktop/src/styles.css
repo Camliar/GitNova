@@ -35,6 +35,12 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
 .hero__copy { max-width: 660px; margin: 28px 0 0; color: var(--muted); font-size: clamp(17px, 2vw, 21px); line-height: 1.65; }
 .next-step { display: flex; gap: 14px; align-items: center; max-width: 620px; margin-top: 38px; padding: 16px 18px; border: 1px solid #45417d; border-radius: 14px; background: rgb(23 30 48 / 72%); color: #d9dded; line-height: 1.5; }
 .next-step__icon { display: grid; flex: 0 0 36px; height: 36px; place-items: center; border-radius: 10px; background: var(--accent); color: #090b17; font-size: 12px; font-weight: 900; }
+.repository-card { display: grid; gap: 20px; margin-top: 38px; padding: 22px; border: 1px solid #45417d; border-radius: 18px; background: rgb(23 30 48 / 78%); }
+.repository-card h2 { margin: 0; font-size: 25px; }
+.repository-card dl { display: grid; gap: 14px; margin: 0; }
+.repository-card dl div { display: grid; gap: 5px; }
+.repository-card dt { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.repository-card dd { margin: 0; color: #e7eaff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 
 .foundation-card { padding: 26px; border: 1px solid var(--border); border-radius: 22px; background: linear-gradient(145deg, rgb(23 30 48 / 95%), rgb(12 17 29 / 95%)); box-shadow: 0 28px 70px rgb(0 0 0 / 32%); }
 .foundation-card h2 { margin: 0; font-size: 28px; }
@@ -48,6 +54,9 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
 .connection-action p { margin: 0; color: #ffc8c8; font-size: 12px; line-height: 1.5; }
 .connection-action button { min-height: 42px; padding: 0 16px; border: 1px solid #7771d7; border-radius: 11px; background: #7771d7; color: #090b17; cursor: pointer; font-weight: 800; }
 .connection-action button:hover { background: #9691ff; }
+.connection-action .button-secondary { border-color: var(--border); background: transparent; color: var(--text); }
+.connection-action .button-secondary:hover { background: var(--surface-raised); }
+.connection-action button:disabled { cursor: wait; opacity: .65; }
 .connection-action button:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 .privacy-note { margin: 0; padding-top: 18px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; line-height: 1.6; }
 

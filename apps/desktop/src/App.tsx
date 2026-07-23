@@ -1,19 +1,30 @@
 import { useEffect, useState } from "react";
+import type { RepositoryDescriptor } from "@gitnova/protocol";
 import markUrl from "../../../assets/icons/gitnova-mark.svg";
 import { asDesktopError, getCoreStatus, startCore, type DesktopError } from "./core";
+import { openRepository, selectRepositoryDirectory } from "./repository";
 
-const foundationItems = [
-  { label: "Desktop shell", detail: "Ready", state: "ready" },
-  { label: "Repository", detail: "Not opened", state: "idle" },
-] as const;
+type Connection =
+  | { kind: "checking" }
+  | { kind: "stopped" }
+  | { kind: "connected"; version: string }
+  | { kind: "error"; error: DesktopError };
+
+type RepositoryState =
+  | { kind: "idle" }
+  | { kind: "selecting" }
+  | { kind: "open"; repository: RepositoryDescriptor }
+  | { kind: "error"; error: DesktopError };
+
+const repositoryKindLabel: Record<RepositoryDescriptor["kind"], string> = {
+  worktree: "Worktree",
+  linkedWorktree: "Linked worktree",
+  bare: "Bare repository",
+};
 
 export function App() {
-  const [connection, setConnection] = useState<
-    | { kind: "checking" }
-    | { kind: "stopped" }
-    | { kind: "connected"; version: string }
-    | { kind: "error"; error: DesktopError }
-  >({ kind: "checking" });
+  const [connection, setConnection] = useState<Connection>({ kind: "checking" });
+  const [repository, setRepository] = useState<RepositoryState>({ kind: "idle" });
 
   useEffect(() => {
     let active = true;
@@ -44,6 +55,31 @@ export function App() {
     }
   }
 
+  async function chooseRepository() {
+    setRepository({ kind: "selecting" });
+    try {
+      const path = await selectRepositoryDirectory();
+      if (path === null) {
+        setRepository({ kind: "idle" });
+        return;
+      }
+      setRepository({ kind: "open", repository: await openRepository(path) });
+    } catch (error) {
+      setRepository({ kind: "error", error: asDesktopError(error) });
+    }
+  }
+
+  async function reopenRepository() {
+    if (repository.kind !== "open") return;
+    const path = repository.repository.worktreeRoot ?? repository.repository.gitDirectory;
+    setRepository({ kind: "selecting" });
+    try {
+      setRepository({ kind: "open", repository: await openRepository(path) });
+    } catch (error) {
+      setRepository({ kind: "error", error: asDesktopError(error) });
+    }
+  }
+
   const coreDetail =
     connection.kind === "connected"
       ? `Connected · v${connection.version}`
@@ -52,6 +88,14 @@ export function App() {
         : connection.kind === "error"
           ? "Unavailable"
           : "Not running";
+  const repositoryDetail =
+    repository.kind === "open"
+      ? repositoryKindLabel[repository.repository.kind]
+      : repository.kind === "selecting"
+        ? "Opening…"
+        : repository.kind === "error"
+          ? "Not opened"
+          : "Not opened";
 
   return (
     <div className="app-shell">
@@ -68,58 +112,73 @@ export function App() {
 
       <main id="main-content" className="workspace" tabIndex={-1}>
         <section className="hero" aria-labelledby="welcome-title">
-          <p className="eyebrow">Desktop foundation</p>
+          <p className="eyebrow">Open a local repository</p>
           <h1 id="welcome-title">Understand the history behind the merge.</h1>
           <p className="hero__copy">
-            GitNova will connect pull requests, their original commits, and the final merge without
-            moving repository data to a central service.
+            Choose a repository in this environment. GitNova Core will identify it without scanning
+            other folders or moving repository data to a central service.
           </p>
-          <div className="next-step" role="status" aria-live="polite">
-            <span className="next-step__icon" aria-hidden="true">01</span>
-            <span>
-              <strong>Core:</strong>{" "}
-              {connection.kind === "connected"
-                ? "the independent local process is ready."
-                : "start the independent local process to continue."}
-            </span>
-          </div>
+          {repository.kind === "open" ? (
+            <section className="repository-card" aria-labelledby="repository-title">
+              <div>
+                <p className="eyebrow">Active repository</p>
+                <h2 id="repository-title">{repositoryKindLabel[repository.repository.kind]}</h2>
+              </div>
+              <dl>
+                {repository.repository.worktreeRoot && (
+                  <div><dt>Worktree</dt><dd>{repository.repository.worktreeRoot}</dd></div>
+                )}
+                <div><dt>Git directory</dt><dd>{repository.repository.gitDirectory}</dd></div>
+                <div><dt>System Git</dt><dd>{repository.repository.gitVersion}</dd></div>
+              </dl>
+            </section>
+          ) : (
+            <div className="next-step" role="status" aria-live="polite">
+              <span className="next-step__icon" aria-hidden="true">01</span>
+              <span>
+                <strong>{connection.kind === "connected" ? "Choose a repository" : "Start Core"}</strong>{" "}
+                to establish the local data path.
+              </span>
+            </div>
+          )}
         </section>
 
         <aside className="foundation-card" aria-labelledby="foundation-title">
-          <div>
-            <p className="eyebrow">System status</p>
-            <h2 id="foundation-title">Foundation</h2>
-          </div>
+          <div><p className="eyebrow">System status</p><h2 id="foundation-title">Workspace</h2></div>
           <ul>
             <li>
-              <span
-                className={`status-mark status-mark--${connection.kind === "connected" ? "ready" : connection.kind === "checking" ? "pending" : "idle"}`}
-                aria-hidden="true"
-              />
-              <span>Core connection</span>
-              <strong>{coreDetail}</strong>
+              <span className={`status-mark status-mark--${connection.kind === "connected" ? "ready" : connection.kind === "checking" ? "pending" : "idle"}`} aria-hidden="true" />
+              <span>Core connection</span><strong>{coreDetail}</strong>
             </li>
-            {foundationItems.map((item) => (
-              <li key={item.label}>
-                <span className={`status-mark status-mark--${item.state}`} aria-hidden="true" />
-                <span>{item.label}</span>
-                <strong>{item.detail}</strong>
-              </li>
-            ))}
+            <li>
+              <span className={`status-mark status-mark--${repository.kind === "open" ? "ready" : repository.kind === "selecting" ? "pending" : "idle"}`} aria-hidden="true" />
+              <span>Repository</span><strong>{repositoryDetail}</strong>
+            </li>
           </ul>
           {(connection.kind === "stopped" || connection.kind === "error") && (
             <div className="connection-action">
-              {connection.kind === "error" && (
-                <p role="alert">{connection.error.message}. No repository data was changed.</p>
-              )}
+              {connection.kind === "error" && <p role="alert">{connection.error.message}. No repository data was changed.</p>}
               <button type="button" onClick={() => void connectCore()}>
                 {connection.kind === "error" ? "Retry Core" : "Start Core"}
               </button>
             </div>
           )}
-          <p className="privacy-note">
-            No repository content or credentials leave the repository environment.
-          </p>
+          {connection.kind === "connected" && repository.kind !== "open" && (
+            <div className="connection-action">
+              {repository.kind === "error" && <p role="alert">{repository.error.message}. No repository data was changed.</p>}
+              <button type="button" disabled={repository.kind === "selecting"} onClick={() => void chooseRepository()}>
+                {repository.kind === "selecting" ? "Opening…" : repository.kind === "error" ? "Choose another folder" : "Choose repository"}
+              </button>
+            </div>
+          )}
+          {connection.kind === "connected" && repository.kind === "open" && (
+            <div className="connection-action">
+              <button type="button" className="button-secondary" onClick={() => void reopenRepository()}>
+                Reopen repository
+              </button>
+            </div>
+          )}
+          <p className="privacy-note">The selected path is sent only to GitNova Core in the same repository environment.</p>
         </aside>
       </main>
     </div>

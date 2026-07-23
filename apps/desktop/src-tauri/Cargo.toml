@@ -18,3 +18,4 @@ gitnova-protocol = { path = "../../../crates/gitnova-protocol" }
 serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"

@@ -1,6 +1,6 @@
 # TASK-0017: Desktop Repository Selection and Open
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/017-desktop-repository-open`
@@ -32,25 +32,25 @@
 
 ## Deliverables
 
-- [ ] native directory selection with minimum Tauri permission
-- [ ] typed repository/open client boundary
-- [ ] repository loading, success, cancellation, and error UI
-- [ ] frontend tests and documentation
+- [x] native directory selection with minimum Tauri permission
+- [x] typed repository/open client boundary
+- [x] repository loading, success, cancellation, and error UI
+- [x] frontend tests and documentation
 
 ## Review Checklist
 
-- [ ] 路径来自明确用户选择，Host 不扫描、不运行 Git、不解析 `.git`。
-- [ ] Repository facts 全部来自独立 Core，Host 仅呈现协议字段。
-- [ ] 无 shell、filesystem 或 network plugin 权限扩张。
-- [ ] 取消不产生错误，请求期间不可重复触发。
-- [ ] 未提前实现 status/history/GitHub/Squash Trace UI。
-- [ ] Rust fmt/Clippy/tests、frontend checks 与 Tauri build 通过。
+- [x] 路径来自明确用户选择，Host 不扫描、不运行 Git、不解析 `.git`。
+- [x] Repository facts 全部来自独立 Core，Host 仅呈现协议字段。
+- [x] 无 shell、filesystem 或 network plugin 权限扩张。
+- [x] 取消不产生错误，请求期间不可重复触发。
+- [x] 未提前实现 status/history/GitHub/Squash Trace UI。
+- [x] Rust fmt/Clippy/tests、frontend checks 与 Tauri build 通过。
 
 ## Done Definition
 
-- [ ] Deliverables 和 Review Checklist 完成。
-- [ ] 自主 Review 无阻塞项。
-- [ ] 状态更新 Done，提交、推送并快进合并至 `main`。
+- [x] Deliverables 和 Review Checklist 完成。
+- [x] 自主 Review 无阻塞项。
+- [x] 状态更新 Done，提交、推送并快进合并至 `main`。
 
 ## References
 

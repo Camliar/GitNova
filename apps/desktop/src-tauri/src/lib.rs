@@ -48,6 +48,7 @@ pub fn run() {
         CoreSupervisor::discover().expect("failed to resolve GitNova Core executable location"),
     );
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(supervisor)
         .invoke_handler(tauri::generate_handler![
             core_status,

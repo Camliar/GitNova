@@ -1,6 +1,6 @@
 # TASK-0019: Desktop Structured File Diff
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/019-desktop-structured-file-diff`
@@ -33,25 +33,25 @@
 
 ## Deliverables
 
-- [ ] typed repository/diff client boundary
-- [ ] per-scope change selection and loading/error state
-- [ ] structured text, binary, and empty diff presentation
-- [ ] frontend tests and documentation
+- [x] typed repository/diff client boundary
+- [x] per-scope change selection and loading/error state
+- [x] structured text, binary, and empty diff presentation
+- [x] frontend tests and documentation
 
 ## Review Checklist
 
-- [ ] path 与 scope 仅来自 Core status entry 和用户明确操作。
-- [ ] Host 不执行 Git、不解析 patch、不读取文件；内容安全作为 text 渲染。
-- [ ] staged/workingTree scope 不混淆；untracked 不请求 synthetic diff。
-- [ ] status Refresh 清除旧 diff；错误不丢失 status snapshot。
-- [ ] 未提前实现 mutation/commit diff/history/GitHub/Squash Trace UI。
-- [ ] Rust fmt/Clippy/tests、frontend checks 与 Tauri build 通过。
+- [x] path 与 scope 仅来自 Core status entry 和用户明确操作。
+- [x] Host 不执行 Git、不解析 patch、不读取文件；内容安全作为 text 渲染。
+- [x] staged/workingTree scope 不混淆；untracked 不请求 synthetic diff。
+- [x] status Refresh 清除旧 diff；错误不丢失 status snapshot。
+- [x] 未提前实现 mutation/commit diff/history/GitHub/Squash Trace UI。
+- [x] Rust fmt/Clippy/tests、frontend checks 与 Tauri build 通过。
 
 ## Done Definition
 
-- [ ] Deliverables 和 Review Checklist 完成。
-- [ ] 自主 Review 无阻塞项。
-- [ ] 状态更新 Done，提交、推送并快进合并至 `main`。
+- [x] Deliverables 和 Review Checklist 完成。
+- [x] 自主 Review 无阻塞项。
+- [x] 状态更新 Done，提交、推送并快进合并至 `main`。
 
 ## References
 

@@ -1,4 +1,4 @@
-import type { FileStatus, StatusEntry, WorkingTreeStatus } from "@gitnova/protocol";
+import type { DiffScope, FileStatus, StatusEntry, WorkingTreeStatus } from "@gitnova/protocol";
 import type { DesktopError } from "./core";
 
 export type WorkingTreeState =
@@ -20,20 +20,28 @@ const statusLabel: Record<FileStatus, string> = {
   unknown: "Unknown",
 };
 
-function ChangeBadges({ entry }: { entry: StatusEntry }) {
+function ChangeBadges({ entry, disabled, onDiff }: { entry: StatusEntry; disabled: boolean; onDiff: (path: string, scope: DiffScope) => void }) {
+  const stagedDiff = entry.indexStatus !== "unmodified" && entry.indexStatus !== "untracked";
+  const workingDiff = entry.worktreeStatus !== "unmodified" && entry.worktreeStatus !== "untracked";
   return (
     <span className="change-badges">
       {entry.indexStatus !== "unmodified" && (
-        <span className={`change-badge change-badge--${entry.indexStatus}`}>Staged · {statusLabel[entry.indexStatus]}</span>
+        <span className="change-badge-group">
+          <span className={`change-badge change-badge--${entry.indexStatus}`}>Staged · {statusLabel[entry.indexStatus]}</span>
+          {stagedDiff && <button type="button" disabled={disabled} aria-label={`View staged diff for ${entry.path}`} onClick={() => onDiff(entry.path, "staged")}>View</button>}
+        </span>
       )}
       {entry.worktreeStatus !== "unmodified" && (
-        <span className={`change-badge change-badge--${entry.worktreeStatus}`}>Working · {statusLabel[entry.worktreeStatus]}</span>
+        <span className="change-badge-group">
+          <span className={`change-badge change-badge--${entry.worktreeStatus}`}>Working · {statusLabel[entry.worktreeStatus]}</span>
+          {workingDiff && <button type="button" disabled={disabled} aria-label={`View working diff for ${entry.path}`} onClick={() => onDiff(entry.path, "workingTree")}>View</button>}
+        </span>
       )}
     </span>
   );
 }
 
-export function WorkingTreePanel({ state, onRefresh }: { state: WorkingTreeState; onRefresh: () => void }) {
+export function WorkingTreePanel({ state, diffLoading, onRefresh, onDiff }: { state: WorkingTreeState; diffLoading: boolean; onRefresh: () => void; onDiff: (path: string, scope: DiffScope) => void }) {
   const status = state.kind === "ready" ? state.status : null;
   const branchTitle = status
     ? status.branch.oid === null
@@ -67,7 +75,7 @@ export function WorkingTreePanel({ state, onRefresh }: { state: WorkingTreeState
                 <strong>{entry.path}</strong>
                 {entry.originalPath && <span>from {entry.originalPath}</span>}
               </div>
-              <ChangeBadges entry={entry} />
+              <ChangeBadges entry={entry} disabled={diffLoading} onDiff={onDiff} />
             </li>
           ))}
         </ol>

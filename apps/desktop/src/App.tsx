@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
-import type { RepositoryDescriptor } from "@gitnova/protocol";
+import { useEffect, useRef, useState } from "react";
+import type { DiffScope, RepositoryDescriptor } from "@gitnova/protocol";
 import markUrl from "../../../assets/icons/gitnova-mark.svg";
 import { asDesktopError, getCoreStatus, startCore, type DesktopError } from "./core";
 import { openRepository, selectRepositoryDirectory } from "./repository";
 import { getWorkingTreeStatus } from "./status";
 import { WorkingTreePanel, type WorkingTreeState } from "./WorkingTreePanel";
+import { getFileDiff } from "./diff";
+import { DiffPanel, type DiffSelection, type DiffState } from "./DiffPanel";
 
 type Connection =
   | { kind: "checking" }
@@ -28,6 +30,8 @@ export function App() {
   const [connection, setConnection] = useState<Connection>({ kind: "checking" });
   const [repository, setRepository] = useState<RepositoryState>({ kind: "idle" });
   const [workingTree, setWorkingTree] = useState<WorkingTreeState>({ kind: "idle" });
+  const [fileDiff, setFileDiff] = useState<DiffState>({ kind: "idle" });
+  const diffRequest = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -68,6 +72,8 @@ export function App() {
       }
       const opened = await openRepository(path);
       setRepository({ kind: "open", repository: opened });
+      diffRequest.current += 1;
+      setFileDiff({ kind: "idle" });
       if (opened.kind !== "bare") await refreshWorkingTree();
     } catch (error) {
       setRepository({ kind: "error", error: asDesktopError(error) });
@@ -81,6 +87,8 @@ export function App() {
     try {
       const opened = await openRepository(path);
       setRepository({ kind: "open", repository: opened });
+      diffRequest.current += 1;
+      setFileDiff({ kind: "idle" });
       if (opened.kind !== "bare") await refreshWorkingTree();
     } catch (error) {
       setRepository({ kind: "error", error: asDesktopError(error) });
@@ -88,12 +96,30 @@ export function App() {
   }
 
   async function refreshWorkingTree() {
+    diffRequest.current += 1;
+    setFileDiff({ kind: "idle" });
     setWorkingTree({ kind: "loading" });
     try {
       setWorkingTree({ kind: "ready", status: await getWorkingTreeStatus() });
     } catch (error) {
       setWorkingTree({ kind: "error", error: asDesktopError(error) });
     }
+  }
+
+  async function loadFileDiff(selection: DiffSelection) {
+    const request = ++diffRequest.current;
+    setFileDiff({ kind: "loading", selection });
+    try {
+      const diff = await getFileDiff(selection.path, selection.scope);
+      if (request === diffRequest.current) setFileDiff({ kind: "ready", selection, diff });
+    } catch (error) {
+      if (request === diffRequest.current) setFileDiff({ kind: "error", selection, error: asDesktopError(error) });
+    }
+  }
+
+  function closeFileDiff() {
+    diffRequest.current += 1;
+    setFileDiff({ kind: "idle" });
   }
 
   const coreDetail =
@@ -165,7 +191,19 @@ export function App() {
             </section>
           )}
           {repository.kind === "open" && repository.repository.kind !== "bare" && (
-            <WorkingTreePanel state={workingTree} onRefresh={() => void refreshWorkingTree()} />
+            <WorkingTreePanel
+              state={workingTree}
+              diffLoading={fileDiff.kind === "loading"}
+              onRefresh={() => void refreshWorkingTree()}
+              onDiff={(path: string, scope: DiffScope) => void loadFileDiff({ path, scope })}
+            />
+          )}
+          {fileDiff.kind !== "idle" && (
+            <DiffPanel
+              state={fileDiff}
+              onRetry={() => void loadFileDiff(fileDiff.selection)}
+              onClose={closeFileDiff}
+            />
           )}
         </section>
 

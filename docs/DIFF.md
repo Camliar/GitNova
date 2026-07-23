@@ -38,3 +38,9 @@ Git stderr and binary content are never forwarded to Host applications.
 ## Deliberate limits
 
 This method does not provide directory-wide, repository-wide, untracked synthetic, commit/tree/blob, word, image, or submodule-detail diff. It does not stage, unstage, discard, commit, or otherwise modify the repository.
+
+## Desktop presentation
+
+Desktop 从 Core `repository/status` entry 提供的 path 出发，让用户分别选择 staged 或 working-tree scope，并以固定 3 行 context 请求 `repository/diff`。只有对应 scope 的状态不是 `unmodified` 时才提供操作；`untracked` 不触发 synthetic diff。
+
+Host 直接呈现 Core 返回的 old/new path、binary 标记、hunks、行类型和行号，不解析 unified patch，也不读取文件。行内容始终通过 React text node 渲染，不作为 HTML、ANSI 或其他可执行表示解释。status Refresh 会关闭旧 diff；请求失败保留 status snapshot 和选择上下文并允许 Retry。

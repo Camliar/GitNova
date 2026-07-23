@@ -8,6 +8,8 @@ The first end-to-end Desktop slice lets the user choose one directory with the n
 
 After a non-bare repository opens, Desktop requests one `repository/status` snapshot and renders the Core-provided branch, upstream divergence, and ordered changes. Staged and working-tree states remain separate, including untracked, rename/copy, and conflict entries. Refresh is explicit: there is no watcher or polling, and this read-only slice cannot stage, discard, or modify files. Bare repositories are identified before the request and show that no working tree is available.
 
+Tracked status entries expose separate staged and working-tree diff actions when that scope contains a change. Desktop sends the Core-provided repository-relative path and selected scope to `repository/diff`, then renders structured hunks, old/new line numbers, binary, and empty results. Repository-controlled line content is inserted only as text. Untracked content is not read or synthesized, and refreshing status closes any previously selected diff.
+
 Run `pnpm --filter @gitnova/desktop check`, `test`, or `build` from the repository root. Debug and test builds may select an absolute Core executable with `GITNOVA_CORE_BINARY`; release builds resolve Core beside the Desktop executable.
 
 Native configuration lives in `src-tauri`. Its default capability grants only Tauri core window/event functionality; no shell, network, filesystem, or process plugin is enabled.

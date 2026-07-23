@@ -26,4 +26,10 @@
 
 扩展 VS Code、JetBrains 与 Visual Studio Host，并按独立 Task 接入其他托管平台 Provider。无论 Core 运行在本机、WSL、Remote SSH 还是 Dev Container，都必须保持“仓库在哪里，Core 就运行在哪里”。
 
+## Phase 6 — AI Assist（最终阶段）
+
+在 Squash Trace MVP、Desktop 交付质量和 Post-MVP Host/Provider 全部完成后，再以独立 Task 引入 AI Assist。候选能力包括根据 staged diff 生成 commit message 草稿，以及根据仓库状态给出拆分 commit、测试、冲突处理等操作建议。
+
+AI 编排和 Git 语义属于 Core；Host 只展示输入范围、建议、可编辑草稿和确认步骤。功能必须显式触发，默认只生成建议，不自动 commit，也不自动执行 reset、rebase、push 等高风险操作。模型可为本地模型或用户自行配置的直连 Provider；不得引入 GitNova 账户或中心代理，发送前必须展示并最小化将离开仓库环境的数据。
+
 产品目标见[愿景](VISION.md)，技术选择见[技术栈](TECH_STACK.md)，质量门槛见[非功能需求](NON_FUNCTIONAL.md)。

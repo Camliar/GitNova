@@ -36,6 +36,16 @@
 - 基础主路径之外的搜索、筛选与历史洞察
 - 高级可视化、扩展协议与企业策略适配
 
+## 最终阶段：AI Assist
+
+- 根据 staged diff 生成可编辑 commit message 草稿
+- 根据仓库状态提供拆分 commit、测试与冲突处理建议
+- 本地模型或用户配置的直连 AI Provider
+- 输入预览、敏感路径排除、最小披露与用户确认
+- AI 不自动执行 commit 或 reset/rebase/push 等高风险操作
+
+AI Assist 必须排在 Squash Trace MVP、交付质量及 Post-MVP Host/Provider 之后，不得反向阻塞这些阶段。
+
 ## Foundation Task 明确禁止
 
 本 Task 不得包含以下任何业务实现：**Repository、Git Status、Commit、Diff、Branch、Graph、GitHub API、PR、Squash Trace**。这一禁止只限定 TASK-0001 的交付边界，不改变 GitHub Provider、PR original commits、per-commit diff 和 Squash Trace 属于产品 MVP 的事实。

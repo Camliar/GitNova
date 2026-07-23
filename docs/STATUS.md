@@ -45,3 +45,9 @@ Raw Git stderr and repository content are never included in the response.
 ## Deliberate limits
 
 Status is a snapshot requested by the Host. This Task does not add file watching, automatic refresh, ignored files, submodule detail, staging, discard, commit, branch operations, history, or GitHub data. Single-file content changes are available through the separate [structured diff contract](DIFF.md).
+
+## Desktop presentation
+
+Desktop 在 `repository/open` 成功后为非 bare 仓库请求一次 snapshot，并只在用户点击 Refresh 时再次请求。Host 按 Core 返回顺序展示 entries，分别呈现 `indexStatus` 与 `worktreeStatus`；rename/copy 的 `originalPath`、untracked 和 unmerged 状态不会被折叠或重新推断。
+
+bare repository 不发送 `repository/status`。请求失败时，已打开的 `RepositoryDescriptor` 保持有效，UI 仅显示稳定错误并允许重试。Desktop 不监听文件系统、不轮询、不解析 porcelain，也不在此视图提供任何修改仓库的操作。

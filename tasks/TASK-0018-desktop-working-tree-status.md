@@ -1,6 +1,6 @@
 # TASK-0018: Desktop Working Tree Status
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/018-desktop-working-tree-status`
@@ -31,25 +31,25 @@
 
 ## Deliverables
 
-- [ ] typed repository/status client boundary
-- [ ] branch/divergence and structured change list UI
-- [ ] clean, bare, loading, refresh, and error states
-- [ ] frontend tests and documentation
+- [x] typed repository/status client boundary
+- [x] branch/divergence and structured change list UI
+- [x] clean, bare, loading, refresh, and error states
+- [x] frontend tests and documentation
 
 ## Review Checklist
 
-- [ ] 所有 Git facts 来自 Core；Host 仅映射协议枚举到展示文案。
-- [ ] staged 与 working-tree 状态保持独立，rename/conflict/untracked 不丢失。
-- [ ] bare 不调用 status；失败不丢失已打开仓库 identity。
-- [ ] 无 watcher、shell、filesystem 或新增网络权限。
-- [ ] 未提前实现 diff/mutation/history/GitHub/Squash Trace UI。
-- [ ] Rust fmt/Clippy/tests、frontend checks 与 Tauri build 通过。
+- [x] 所有 Git facts 来自 Core；Host 仅映射协议枚举到展示文案。
+- [x] staged 与 working-tree 状态保持独立，rename/conflict/untracked 不丢失。
+- [x] bare 不调用 status；失败不丢失已打开仓库 identity。
+- [x] 无 watcher、shell、filesystem 或新增网络权限。
+- [x] 未提前实现 diff/mutation/history/GitHub/Squash Trace UI。
+- [x] Rust fmt/Clippy/tests、frontend checks 与 Tauri build 通过。
 
 ## Done Definition
 
-- [ ] Deliverables 和 Review Checklist 完成。
-- [ ] 自主 Review 无阻塞项。
-- [ ] 状态更新 Done，提交、推送并快进合并至 `main`。
+- [x] Deliverables 和 Review Checklist 完成。
+- [x] 自主 Review 无阻塞项。
+- [x] 状态更新 Done，提交、推送并快进合并至 `main`。
 
 ## References
 

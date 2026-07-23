@@ -4,6 +4,7 @@ import { App } from "./App";
 
 const core = vi.hoisted(() => ({ getCoreStatus: vi.fn(), startCore: vi.fn() }));
 const repository = vi.hoisted(() => ({ selectRepositoryDirectory: vi.fn(), openRepository: vi.fn() }));
+const status = vi.hoisted(() => ({ getWorkingTreeStatus: vi.fn() }));
 
 vi.mock("./core", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./core")>()),
@@ -11,6 +12,7 @@ vi.mock("./core", async (importOriginal) => ({
   startCore: core.startCore,
 }));
 vi.mock("./repository", () => repository);
+vi.mock("./status", () => status);
 
 const descriptor = {
   worktreeRoot: "/work/project",
@@ -27,6 +29,10 @@ describe("Desktop repository open", () => {
     core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.11", capabilities: null });
     repository.selectRepositoryDirectory.mockResolvedValue("/work/project");
     repository.openRepository.mockResolvedValue(descriptor);
+    status.getWorkingTreeStatus.mockResolvedValue({
+      branch: { head: "main", oid: "a".repeat(40), upstream: "origin/main", ahead: 1, behind: 2 },
+      entries: [],
+    });
   });
 
   it("opens only the explicitly selected directory and presents Core facts", async () => {
@@ -37,6 +43,61 @@ describe("Desktop repository open", () => {
     expect(repository.openRepository).toHaveBeenCalledWith("/work/project");
     expect(screen.getByText("/work/project/.git")).toBeInTheDocument();
     expect(screen.getByText("git version 2.50.0")).toBeInTheDocument();
+    expect(await screen.findByText("Working tree clean")).toBeInTheDocument();
+    expect(status.getWorkingTreeStatus).toHaveBeenCalledOnce();
+  });
+
+  it("keeps staged and working tree changes distinct and preserves rename paths", async () => {
+    status.getWorkingTreeStatus.mockResolvedValue({
+      branch: { head: "feature/status", oid: "b".repeat(40), upstream: null, ahead: 0, behind: 0 },
+      entries: [
+        { path: "src/new.ts", originalPath: "src/old.ts", kind: "renameOrCopy", indexStatus: "renamed", worktreeStatus: "modified" },
+        { path: "notes.txt", originalPath: null, kind: "untracked", indexStatus: "unmodified", worktreeStatus: "untracked" },
+        { path: "conflict.txt", originalPath: null, kind: "unmerged", indexStatus: "unmerged", worktreeStatus: "unmerged" },
+      ],
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+
+    expect(await screen.findByRole("heading", { name: "feature/status" })).toBeInTheDocument();
+    expect(screen.getByText("from src/old.ts")).toBeInTheDocument();
+    expect(screen.getByText("Staged · Renamed")).toBeInTheDocument();
+    expect(screen.getByText("Working · Modified")).toBeInTheDocument();
+    expect(screen.getByText("Working · Untracked")).toBeInTheDocument();
+    expect(screen.getAllByText(/Conflict/)).toHaveLength(2);
+  });
+
+  it("does not request working tree status for a bare repository", async () => {
+    repository.openRepository.mockResolvedValue({ ...descriptor, kind: "bare", worktreeRoot: null });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+
+    expect(await screen.findByText("Bare repositories do not have a working tree.")).toBeInTheDocument();
+    expect(status.getWorkingTreeStatus).not.toHaveBeenCalled();
+  });
+
+  it("distinguishes an unborn named branch from detached HEAD", async () => {
+    status.getWorkingTreeStatus.mockResolvedValue({
+      branch: { head: "main", oid: null, upstream: null, ahead: 0, behind: 0 },
+      entries: [],
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+
+    expect(await screen.findByRole("heading", { name: "main · Unborn" })).toBeInTheDocument();
+  });
+
+  it("keeps the repository open when status fails and retries explicitly", async () => {
+    status.getWorkingTreeStatus
+      .mockRejectedValueOnce({ code: "git.command_failed", message: "Git could not read status", retryable: true })
+      .mockResolvedValueOnce({ branch: { head: null, oid: "c".repeat(40), upstream: null, ahead: 0, behind: 0 }, entries: [] });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Git could not read status. The repository remains open.");
+    expect(screen.getByRole("heading", { name: "Worktree" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(await screen.findByRole("heading", { name: "Detached HEAD" })).toBeInTheDocument();
   });
 
   it("reopens the same Core repository idempotently without another picker", async () => {

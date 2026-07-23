@@ -3,6 +3,8 @@ import type { RepositoryDescriptor } from "@gitnova/protocol";
 import markUrl from "../../../assets/icons/gitnova-mark.svg";
 import { asDesktopError, getCoreStatus, startCore, type DesktopError } from "./core";
 import { openRepository, selectRepositoryDirectory } from "./repository";
+import { getWorkingTreeStatus } from "./status";
+import { WorkingTreePanel, type WorkingTreeState } from "./WorkingTreePanel";
 
 type Connection =
   | { kind: "checking" }
@@ -25,6 +27,7 @@ const repositoryKindLabel: Record<RepositoryDescriptor["kind"], string> = {
 export function App() {
   const [connection, setConnection] = useState<Connection>({ kind: "checking" });
   const [repository, setRepository] = useState<RepositoryState>({ kind: "idle" });
+  const [workingTree, setWorkingTree] = useState<WorkingTreeState>({ kind: "idle" });
 
   useEffect(() => {
     let active = true;
@@ -63,7 +66,9 @@ export function App() {
         setRepository({ kind: "idle" });
         return;
       }
-      setRepository({ kind: "open", repository: await openRepository(path) });
+      const opened = await openRepository(path);
+      setRepository({ kind: "open", repository: opened });
+      if (opened.kind !== "bare") await refreshWorkingTree();
     } catch (error) {
       setRepository({ kind: "error", error: asDesktopError(error) });
     }
@@ -74,9 +79,20 @@ export function App() {
     const path = repository.repository.worktreeRoot ?? repository.repository.gitDirectory;
     setRepository({ kind: "selecting" });
     try {
-      setRepository({ kind: "open", repository: await openRepository(path) });
+      const opened = await openRepository(path);
+      setRepository({ kind: "open", repository: opened });
+      if (opened.kind !== "bare") await refreshWorkingTree();
     } catch (error) {
       setRepository({ kind: "error", error: asDesktopError(error) });
+    }
+  }
+
+  async function refreshWorkingTree() {
+    setWorkingTree({ kind: "loading" });
+    try {
+      setWorkingTree({ kind: "ready", status: await getWorkingTreeStatus() });
+    } catch (error) {
+      setWorkingTree({ kind: "error", error: asDesktopError(error) });
     }
   }
 
@@ -140,6 +156,16 @@ export function App() {
                 to establish the local data path.
               </span>
             </div>
+          )}
+          {repository.kind === "open" && repository.repository.kind === "bare" && (
+            <section className="working-tree" aria-labelledby="working-tree-title">
+              <p className="eyebrow">Working tree</p>
+              <h2 id="working-tree-title">Not available</h2>
+              <p className="empty-state">Bare repositories do not have a working tree.</p>
+            </section>
+          )}
+          {repository.kind === "open" && repository.repository.kind !== "bare" && (
+            <WorkingTreePanel state={workingTree} onRefresh={() => void refreshWorkingTree()} />
           )}
         </section>
 

@@ -24,6 +24,24 @@ export interface CoreResponse<T = unknown> {
   };
 }
 
+export function coreResult<T>(response: CoreResponse<T>): T {
+  if (response.error) {
+    throw {
+      code: response.error.data.stableCode,
+      message: response.error.message,
+      retryable: response.error.data.retryable,
+    } satisfies DesktopError;
+  }
+  if (!("result" in response) || response.result === undefined) {
+    throw {
+      code: "desktop.core_protocol_failed",
+      message: "GitNova Core returned an invalid protocol response",
+      retryable: false,
+    } satisfies DesktopError;
+  }
+  return response.result;
+}
+
 const stopped: CoreStatus = {
   connected: false,
   protocolVersion: null,

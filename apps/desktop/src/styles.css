@@ -41,6 +41,23 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
 .repository-card dl div { display: grid; gap: 5px; }
 .repository-card dt { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .repository-card dd { margin: 0; color: #e7eaff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.working-tree { display: grid; gap: 18px; margin-top: 18px; padding: 22px; border: 1px solid var(--border); border-radius: 18px; background: rgb(12 17 29 / 88%); }
+.working-tree h2 { margin: 0; font-size: 24px; }
+.working-tree__header { display: flex; align-items: start; justify-content: space-between; gap: 18px; }
+.working-tree__header button { min-height: 36px; padding: 0 14px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+.working-tree__header button:disabled { cursor: wait; opacity: .65; }
+.branch-meta, .empty-state, .status-error { margin: 7px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.status-error { color: #ffc8c8; }
+.change-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.change-list li { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 58px; padding: 10px 0; border-top: 1px solid var(--border); }
+.change-path { display: grid; min-width: 0; gap: 3px; }
+.change-path strong, .change-path span { overflow-wrap: anywhere; }
+.change-path strong { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+.change-path span { color: var(--muted); font-size: 11px; }
+.change-badges { display: flex; flex: 0 0 auto; flex-wrap: wrap; justify-content: end; gap: 6px; }
+.change-badge { padding: 5px 8px; border: 1px solid #45417d; border-radius: 999px; color: #dfe2ff; font-size: 10px; font-weight: 750; }
+.change-badge--unmerged { border-color: #b9616b; color: #ffc8c8; }
+.change-badge--untracked { border-color: #4e8e82; color: #a9f5db; }
 
 .foundation-card { padding: 26px; border: 1px solid var(--border); border-radius: 22px; background: linear-gradient(145deg, rgb(23 30 48 / 95%), rgb(12 17 29 / 95%)); box-shadow: 0 28px 70px rgb(0 0 0 / 32%); }
 .foundation-card h2 { margin: 0; font-size: 28px; }
@@ -65,6 +82,8 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
   .local-badge::after { content: "Local"; font-size: 13px; }
   .workspace { grid-template-columns: 1fr; align-items: start; padding: 48px 0; }
   h1 { font-size: clamp(42px, 14vw, 64px); }
+  .change-list li { align-items: start; flex-direction: column; gap: 9px; }
+  .change-badges { justify-content: start; }
 }
 
 @media (prefers-reduced-motion: reduce) {

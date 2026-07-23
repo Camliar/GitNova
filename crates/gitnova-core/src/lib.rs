@@ -2,16 +2,18 @@ mod framing;
 mod repository;
 
 use gitnova_protocol::{
-    CancelParams, CancellationRegistry, DiffParams, ERROR_ALREADY_INITIALIZED, ERROR_COMMIT_PARSE,
-    ERROR_DIFF_PARSE, ERROR_DIFFERENT_REPOSITORY_OPEN, ERROR_GIT_COMMAND_FAILED,
-    ERROR_GIT_UNAVAILABLE, ERROR_HISTORY_ENCODING, ERROR_INCOMPATIBLE_PROTOCOL,
-    ERROR_INVALID_HISTORY_CURSOR, ERROR_INVALID_PARAMS, ERROR_INVALID_PATH,
-    ERROR_INVALID_REPOSITORY_PATH, ERROR_INVALID_REQUEST, ERROR_METHOD_NOT_FOUND,
-    ERROR_NOT_INITIALIZED, ERROR_PARSE, ERROR_REPOSITORY_NOT_FOUND, ERROR_REPOSITORY_NOT_OPEN,
-    ERROR_REQUEST_CANCELLED, ERROR_STATUS_PARSE, ERROR_UNSAFE_REPOSITORY, ERROR_WORKTREE_REQUIRED,
-    HistoryParams, ImplementationInfo, InitializeParams, InitializeResult, JSON_RPC_VERSION,
-    Notification, PROTOCOL_VERSION, RepositoryDescriptor, RepositoryPathParams, Request, Response,
-    ResponseError, ServerCapabilities,
+    CancelParams, CancellationRegistry, CommitDiffParams, DiffParams, ERROR_ALREADY_INITIALIZED,
+    ERROR_COMMIT_DIFF_PARSE, ERROR_COMMIT_NOT_FOUND, ERROR_COMMIT_PARENT_REQUIRED,
+    ERROR_COMMIT_PARSE, ERROR_DIFF_PARSE, ERROR_DIFFERENT_REPOSITORY_OPEN,
+    ERROR_GIT_COMMAND_FAILED, ERROR_GIT_UNAVAILABLE, ERROR_HISTORY_ENCODING,
+    ERROR_INCOMPATIBLE_PROTOCOL, ERROR_INVALID_COMMIT_PARENT, ERROR_INVALID_HISTORY_CURSOR,
+    ERROR_INVALID_PARAMS, ERROR_INVALID_PATH, ERROR_INVALID_REPOSITORY_PATH, ERROR_INVALID_REQUEST,
+    ERROR_METHOD_NOT_FOUND, ERROR_NOT_INITIALIZED, ERROR_PARSE, ERROR_REPOSITORY_NOT_FOUND,
+    ERROR_REPOSITORY_NOT_OPEN, ERROR_REQUEST_CANCELLED, ERROR_STATUS_PARSE,
+    ERROR_UNSAFE_REPOSITORY, ERROR_WORKTREE_REQUIRED, HistoryParams, ImplementationInfo,
+    InitializeParams, InitializeResult, JSON_RPC_VERSION, Notification, PROTOCOL_VERSION,
+    RepositoryDescriptor, RepositoryPathParams, Request, Response, ResponseError,
+    ServerCapabilities,
 };
 use serde_json::Value;
 use std::io::{self, BufRead, Write};
@@ -143,6 +145,7 @@ fn dispatch_request(
         "repository/status" => status_request(request, state),
         "repository/diff" => diff_request(request, state),
         "repository/history" => history_request(request, state),
+        "repository/commitDiff" => commit_diff_request(request, state),
         _ => Response::error(
             Some(request.id),
             ResponseError::new(
@@ -208,6 +211,7 @@ fn initialize(request: Request, state: &mut CoreState) -> Response {
             working_tree_status: true,
             structured_file_diff: true,
             paginated_commit_history: true,
+            structured_commit_diff: true,
         },
     };
     Response::success(
@@ -367,6 +371,30 @@ fn repository_error(error: repository::RepositoryError) -> ResponseError {
             "Commit metadata is not UTF-8 encoded",
             false,
         ),
+        repository::RepositoryError::CommitNotFound => ResponseError::new(
+            ERROR_COMMIT_NOT_FOUND,
+            "commit.not_found",
+            "Commit does not exist in the opened repository",
+            false,
+        ),
+        repository::RepositoryError::CommitParentRequired => ResponseError::new(
+            ERROR_COMMIT_PARENT_REQUIRED,
+            "commit.parent_required",
+            "A direct parent must be selected for a merge commit",
+            false,
+        ),
+        repository::RepositoryError::InvalidCommitParent => ResponseError::new(
+            ERROR_INVALID_COMMIT_PARENT,
+            "commit.invalid_parent",
+            "Selected parent is not a direct parent of the commit",
+            false,
+        ),
+        repository::RepositoryError::CommitDiffParse => ResponseError::new(
+            ERROR_COMMIT_DIFF_PARSE,
+            "git.commit_diff_parse_failed",
+            "System Git returned an invalid commit diff payload",
+            false,
+        ),
     }
 }
 
@@ -500,6 +528,74 @@ fn history_request(request: Request, state: &CoreState) -> Response {
         Ok(page) => Response::success(
             request.id,
             serde_json::to_value(page).expect("serializable history page"),
+        ),
+        Err(error) => Response::error(Some(request.id), repository_error(error)),
+    }
+}
+
+fn commit_diff_request(request: Request, state: &CoreState) -> Response {
+    let params: CommitDiffParams = match serde_json::from_value(request.params) {
+        Ok(params) => params,
+        Err(_) => {
+            return Response::error(
+                Some(request.id),
+                ResponseError::new(
+                    ERROR_INVALID_PARAMS,
+                    "protocol.invalid_params",
+                    "Invalid commit diff parameters",
+                    false,
+                ),
+            );
+        }
+    };
+    if !repository::valid_oid(&params.oid)
+        || params
+            .parent_oid
+            .as_deref()
+            .is_some_and(|oid| !repository::valid_oid(oid))
+    {
+        return Response::error(
+            Some(request.id),
+            ResponseError::new(
+                ERROR_INVALID_PARAMS,
+                "protocol.invalid_params",
+                "oid and parentOid must be full hexadecimal object IDs",
+                false,
+            ),
+        );
+    }
+    let context_lines = params.context_lines.unwrap_or(3);
+    if context_lines > 20 {
+        return Response::error(
+            Some(request.id),
+            ResponseError::new(
+                ERROR_INVALID_PARAMS,
+                "protocol.invalid_params",
+                "contextLines must be between 0 and 20",
+                false,
+            ),
+        );
+    }
+    let Some(descriptor) = &state.active_repository else {
+        return Response::error(
+            Some(request.id),
+            ResponseError::new(
+                ERROR_REPOSITORY_NOT_OPEN,
+                "repository.not_open",
+                "Open a repository before requesting a commit diff",
+                true,
+            ),
+        );
+    };
+    match repository::commit_diff(
+        descriptor,
+        &params.oid,
+        params.parent_oid.as_deref(),
+        context_lines,
+    ) {
+        Ok(diff) => Response::success(
+            request.id,
+            serde_json::to_value(diff).expect("serializable commit diff"),
         ),
         Err(error) => Response::error(Some(request.id), repository_error(error)),
     }

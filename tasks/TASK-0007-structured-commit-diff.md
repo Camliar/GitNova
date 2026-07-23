@@ -1,6 +1,6 @@
 # TASK-0007: Structured Commit Diff
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/007-structured-commit-diff`
@@ -34,26 +34,26 @@
 
 ## Deliverables
 
-- [ ] `repository/commitDiff` 与明确 parent 规则
-- [ ] NUL-delimited commit file-change parser 与逐文件结构化 patch
-- [ ] Rust、Schema、TypeScript、capability 与稳定错误同步
-- [ ] root/merge/multifile/rename/binary/bare/error 契约测试
-- [ ] commit diff 语义和限制文档
+- [x] `repository/commitDiff` 与明确 parent 规则
+- [x] NUL-delimited commit file-change parser 与逐文件结构化 patch
+- [x] Rust、Schema、TypeScript、capability 与稳定错误同步
+- [x] root/merge/multifile/rename/binary/bare/error 契约测试
+- [x] commit diff 语义和限制文档
 
 ## Review Checklist
 
-- [ ] 只调用 System Git，不经 shell、不读取 worktree 内容、无写操作。
-- [ ] object ID 和 parent relationship 均验证，参数不能注入 revision/pathspec。
-- [ ] root、single-parent 和 merge parent 语义无歧义。
-- [ ] 路径、rename、binary、empty file 与 hunk 行号保真。
-- [ ] 未实现 GitHub、PR、Squash Trace、graph 或写操作。
-- [ ] fmt、Clippy、Rust tests、`npm run check` 与文档检查通过。
+- [x] 只调用 System Git，不经 shell、不读取 worktree 内容、无写操作。
+- [x] object ID 和 parent relationship 均验证，参数不能注入 revision/pathspec。
+- [x] root、single-parent 和 merge parent 语义无歧义。
+- [x] 路径、rename、binary、empty file 与 hunk 行号保真。
+- [x] 未实现 GitHub、PR、Squash Trace、graph 或写操作。
+- [x] fmt、Clippy、Rust tests、`npm run check` 与文档检查通过。
 
 ## Done Definition
 
-- [ ] Deliverables 和 Review Checklist 完成。
-- [ ] 自主 Review 无阻塞项。
-- [ ] 状态更新 Done，提交并推送。
+- [x] Deliverables 和 Review Checklist 完成。
+- [x] 自主 Review 无阻塞项。
+- [x] 状态更新 Done，提交并推送。
 
 ## References
 

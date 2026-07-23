@@ -124,7 +124,7 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let responses = responses(&output.stdout);
     assert_eq!(responses.len(), 2);
     assert_eq!(responses[0]["id"], "init-1");
-    assert_eq!(responses[0]["result"]["protocolVersion"], "1.4");
+    assert_eq!(responses[0]["result"]["protocolVersion"], "1.5");
     assert_eq!(responses[0]["result"]["capabilities"]["cancellation"], true);
     assert_eq!(
         responses[0]["result"]["capabilities"]["workingTreeStatus"],
@@ -136,6 +136,10 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     );
     assert_eq!(
         responses[0]["result"]["capabilities"]["paginatedCommitHistory"],
+        true
+    );
+    assert_eq!(
+        responses[0]["result"]["capabilities"]["structuredCommitDiff"],
         true
     );
     assert_eq!(responses[1]["result"], Value::Null);
@@ -166,6 +170,197 @@ fn history_response(repository: &Path, params: Value) -> Value {
     ]);
     assert!(output.status.success());
     responses(&output.stdout).remove(2)
+}
+
+fn head_oid(repository: &Path) -> String {
+    String::from_utf8(git_output(&["rev-parse", "HEAD"], repository).stdout)
+        .unwrap()
+        .trim()
+        .to_owned()
+}
+
+fn commit_diff_response(repository: &Path, oid: &str, extra: Value) -> Value {
+    let mut params = serde_json::Map::new();
+    params.insert("oid".into(), json!(oid));
+    if let Some(extra) = extra.as_object() {
+        params.extend(extra.clone());
+    }
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", repository),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/commitDiff","params":params}),
+    ]);
+    assert!(output.status.success());
+    responses(&output.stdout).remove(2)
+}
+
+#[test]
+fn returns_structured_root_and_single_parent_commit_diffs() {
+    let directory = TestDirectory::new("commit-diff-root");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    fs::write(repository.join("alpha.txt"), "one\ntwo\n").unwrap();
+    fs::write(repository.join("binary.bin"), [0, 1, 2, 0, 3]).unwrap();
+    git(&["add", "."], &repository);
+    git(
+        &[
+            "-c",
+            "user.name=GitNova Test",
+            "-c",
+            "user.email=test@gitnova.invalid",
+            "commit",
+            "-m",
+            "root",
+        ],
+        &repository,
+    );
+    let root_oid = head_oid(&repository);
+    let root = commit_diff_response(&repository, &root_oid, json!({"contextLines": 0}));
+    assert!(root["result"]["parentOid"].is_null());
+    assert_eq!(root["result"]["files"].as_array().unwrap().len(), 2);
+    assert!(
+        root["result"]["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|file| file["isBinary"] == true)
+    );
+    assert!(
+        root["result"]["files"][0]["hunks"][0]["lines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|line| line["kind"] != "context")
+    );
+
+    git(&["mv", "alpha.txt", "renamed.txt"], &repository);
+    git(&["add", "-A"], &repository);
+    git(
+        &[
+            "-c",
+            "user.name=GitNova Test",
+            "-c",
+            "user.email=test@gitnova.invalid",
+            "commit",
+            "-m",
+            "rename",
+        ],
+        &repository,
+    );
+    let oid = head_oid(&repository);
+    let changed = commit_diff_response(&repository, &oid, json!({"contextLines": 0}));
+    assert_eq!(changed["result"]["parentOid"], root_oid);
+    assert_eq!(changed["result"]["files"][0]["oldPath"], "alpha.txt");
+    assert_eq!(changed["result"]["files"][0]["newPath"], "renamed.txt");
+    assert!(
+        changed["result"]["files"][0]["hunks"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn requires_and_validates_a_direct_merge_parent() {
+    let directory = TestDirectory::new("commit-diff-merge");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    commit_file(&repository, 1, "root");
+    git(&["switch", "-c", "topic"], &repository);
+    fs::write(repository.join("topic.txt"), "topic\n").unwrap();
+    git(&["add", "topic.txt"], &repository);
+    git(
+        &[
+            "-c",
+            "user.name=GitNova Test",
+            "-c",
+            "user.email=test@gitnova.invalid",
+            "commit",
+            "-m",
+            "topic",
+        ],
+        &repository,
+    );
+    let topic_oid = head_oid(&repository);
+    git(&["checkout", "-"], &repository);
+    commit_file(&repository, 2, "main");
+    git(
+        &[
+            "-c",
+            "user.name=GitNova Test",
+            "-c",
+            "user.email=test@gitnova.invalid",
+            "merge",
+            "--no-ff",
+            "topic",
+            "-m",
+            "merge",
+        ],
+        &repository,
+    );
+    let merge_oid = head_oid(&repository);
+    let required = commit_diff_response(&repository, &merge_oid, json!({}));
+    assert_eq!(
+        required["error"]["data"]["stableCode"],
+        "commit.parent_required"
+    );
+    let selected = commit_diff_response(&repository, &merge_oid, json!({"parentOid": topic_oid}));
+    assert_eq!(selected["result"]["files"][0]["newPath"], "history.txt");
+    let invalid = commit_diff_response(
+        &repository,
+        &merge_oid,
+        json!({"parentOid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}),
+    );
+    assert_eq!(
+        invalid["error"]["data"]["stableCode"],
+        "commit.invalid_parent"
+    );
+}
+
+#[test]
+fn commit_diff_supports_bare_and_reports_invalid_objects() {
+    let directory = TestDirectory::new("commit-diff-bare");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    commit_file(&repository, 1, "root");
+    let oid = head_oid(&repository);
+    git(&["checkout", "--detach", "HEAD"], &repository);
+    let detached = commit_diff_response(&repository, &oid, json!({}));
+    assert_eq!(detached["result"]["commit"]["oid"], oid);
+    git(
+        &[
+            "-c",
+            "user.name=GitNova Test",
+            "-c",
+            "user.email=test@gitnova.invalid",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "empty",
+        ],
+        &repository,
+    );
+    let empty_oid = head_oid(&repository);
+    let empty = commit_diff_response(&repository, &empty_oid, json!({}));
+    assert!(empty["result"]["files"].as_array().unwrap().is_empty());
+    git(
+        &["clone", "--bare", repository.to_str().unwrap(), "bare.git"],
+        &directory.0,
+    );
+    let bare = commit_diff_response(
+        &directory.0.join("bare.git"),
+        &oid.to_uppercase(),
+        json!({}),
+    );
+    assert_eq!(bare["result"]["commit"]["oid"], oid);
+    let malformed = commit_diff_response(&repository, "HEAD", json!({}));
+    assert_eq!(malformed["error"]["code"], -32602);
+    let missing = commit_diff_response(
+        &repository,
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        json!({}),
+    );
+    assert_eq!(missing["error"]["data"]["stableCode"], "commit.not_found");
 }
 
 #[test]

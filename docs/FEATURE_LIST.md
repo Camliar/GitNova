@@ -17,6 +17,7 @@
 - 单文件 staged/working-tree 行级 diff（已实现）
 - 提交与分支操作
 - 固定 HEAD 快照的分页提交历史（已实现）
+- 指定 commit-parent 的文件列表与行级 diff（已实现）
 - 提交图谱浏览
 - GitHub Provider（`gh`、REST 或 GraphQL 适配器，由 Core 统一封装）
 - PR 查看与原始 commit 列表

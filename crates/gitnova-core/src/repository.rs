@@ -1,7 +1,7 @@
 use gitnova_protocol::{
-    BranchStatus, CommitIdentity, CommitSummary, DiffHunk, DiffLine, DiffLineKind, DiffScope,
-    FileDiff, FileStatus, HistoryPage, RepositoryDescriptor, RepositoryKind, StatusEntry,
-    StatusEntryKind, WorkingTreeStatus,
+    BranchStatus, CommitDiff, CommitIdentity, CommitSummary, DiffHunk, DiffLine, DiffLineKind,
+    DiffScope, FileDiff, FileStatus, HistoryPage, RepositoryDescriptor, RepositoryKind,
+    StatusEntry, StatusEntryKind, WorkingTreeStatus,
 };
 use std::ffi::{OsStr, OsString};
 use std::fs;
@@ -24,6 +24,10 @@ pub enum RepositoryError {
     InvalidHistoryCursor,
     CommitParse,
     HistoryEncoding,
+    CommitNotFound,
+    CommitParentRequired,
+    InvalidCommitParent,
+    CommitDiffParse,
 }
 
 #[derive(Debug)]
@@ -181,6 +185,193 @@ pub fn history(
     })
 }
 
+pub fn commit_diff(
+    descriptor: &RepositoryDescriptor,
+    oid: &str,
+    parent_oid: Option<&str>,
+    context_lines: u8,
+) -> Result<CommitDiff, RepositoryError> {
+    let base = descriptor
+        .worktree_root
+        .as_ref()
+        .unwrap_or(&descriptor.git_directory);
+    let oid = oid.to_ascii_lowercase();
+    let commit = load_commit(base, &oid)?;
+    let selected_parent = match (commit.parents.as_slice(), parent_oid) {
+        ([], None) => None,
+        ([], Some(_)) => return Err(RepositoryError::InvalidCommitParent),
+        ([only], None) => Some(only.clone()),
+        ([_, _, ..], None) => return Err(RepositoryError::CommitParentRequired),
+        (parents, Some(parent)) => match parents
+            .iter()
+            .find(|candidate| candidate.eq_ignore_ascii_case(parent))
+        {
+            Some(parent) => Some(parent.clone()),
+            None => return Err(RepositoryError::InvalidCommitParent),
+        },
+    };
+
+    let changed_paths = commit_changed_paths(base, &oid, selected_parent.as_deref())?;
+    let mut files = Vec::with_capacity(changed_paths.len());
+    for changed_path in changed_paths {
+        let mut arguments = vec![
+            OsString::from("--literal-pathspecs"),
+            OsString::from("-C"),
+            OsString::from(base),
+            OsString::from("-c"),
+            OsString::from("core.quotePath=false"),
+        ];
+        if let Some(parent) = &selected_parent {
+            arguments.extend([
+                OsString::from("diff"),
+                OsString::from("--patch"),
+                OsString::from("--no-color"),
+                OsString::from("--no-ext-diff"),
+                OsString::from("--no-textconv"),
+                OsString::from("--find-renames"),
+                OsString::from(format!("--unified={context_lines}")),
+                OsString::from(parent),
+                OsString::from(&oid),
+            ]);
+        } else {
+            arguments.extend([
+                OsString::from("diff-tree"),
+                OsString::from("--root"),
+                OsString::from("--no-commit-id"),
+                OsString::from("-r"),
+                OsString::from("--patch"),
+                OsString::from("--no-color"),
+                OsString::from("--no-ext-diff"),
+                OsString::from("--no-textconv"),
+                OsString::from("--find-renames"),
+                OsString::from(format!("--unified={context_lines}")),
+                OsString::from(&oid),
+            ]);
+        }
+        arguments.push(OsString::from("--"));
+        arguments.push(OsString::from(&changed_path.old_path));
+        if changed_path.new_path != changed_path.old_path {
+            arguments.push(OsString::from(&changed_path.new_path));
+        }
+        let output = SystemGit.run(&arguments).map_err(map_io_error)?;
+        if !output.success {
+            return Err(map_failed_output(&output.stderr));
+        }
+        files.push(parse_diff(&output.stdout, &changed_path.new_path)?);
+    }
+    Ok(CommitDiff {
+        commit,
+        parent_oid: selected_parent,
+        files,
+    })
+}
+
+fn load_commit(base: &str, oid: &str) -> Result<CommitSummary, RepositoryError> {
+    let arguments = [
+        OsString::from("-C"),
+        OsString::from(base),
+        OsString::from("cat-file"),
+        OsString::from("commit"),
+        OsString::from(oid),
+    ];
+    let output = SystemGit.run(&arguments).map_err(map_io_error)?;
+    if !output.success {
+        return Err(RepositoryError::CommitNotFound);
+    }
+    parse_commit(oid, &output.stdout)
+}
+
+fn commit_changed_paths(
+    base: &str,
+    oid: &str,
+    parent_oid: Option<&str>,
+) -> Result<Vec<ChangedPath>, RepositoryError> {
+    let mut arguments = vec![
+        OsString::from("-C"),
+        OsString::from(base),
+        OsString::from("-c"),
+        OsString::from("core.quotePath=false"),
+    ];
+    if let Some(parent) = parent_oid {
+        arguments.extend([
+            OsString::from("diff"),
+            OsString::from("--name-status"),
+            OsString::from("-z"),
+            OsString::from("--find-renames"),
+            OsString::from(parent),
+            OsString::from(oid),
+        ]);
+    } else {
+        arguments.extend([
+            OsString::from("diff-tree"),
+            OsString::from("--root"),
+            OsString::from("--no-commit-id"),
+            OsString::from("-r"),
+            OsString::from("--name-status"),
+            OsString::from("-z"),
+            OsString::from("--find-renames"),
+            OsString::from(oid),
+        ]);
+    }
+    let output = SystemGit.run(&arguments).map_err(map_io_error)?;
+    if !output.success {
+        return Err(map_failed_output(&output.stderr));
+    }
+    parse_changed_paths(&output.stdout)
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct ChangedPath {
+    old_path: String,
+    new_path: String,
+}
+
+fn parse_changed_paths(output: &[u8]) -> Result<Vec<ChangedPath>, RepositoryError> {
+    let records: Vec<&[u8]> = output.split(|byte| *byte == 0).collect();
+    let mut paths = Vec::new();
+    let mut index = 0;
+    while index < records.len() {
+        let status = records[index];
+        index += 1;
+        if status.is_empty() {
+            continue;
+        }
+        let status = std::str::from_utf8(status).map_err(|_| RepositoryError::CommitDiffParse)?;
+        let status_kind = status
+            .as_bytes()
+            .first()
+            .ok_or(RepositoryError::CommitDiffParse)?;
+        if !matches!(
+            status_kind,
+            b'A' | b'C' | b'D' | b'M' | b'R' | b'T' | b'U' | b'X' | b'B'
+        ) {
+            return Err(RepositoryError::CommitDiffParse);
+        }
+        let renamed = matches!(status_kind, b'R' | b'C');
+        let old_record = records.get(index).ok_or(RepositoryError::CommitDiffParse)?;
+        let new_record = if renamed {
+            records
+                .get(index + 1)
+                .ok_or(RepositoryError::CommitDiffParse)?
+        } else {
+            old_record
+        };
+        let old_path = std::str::from_utf8(old_record)
+            .map_err(|_| RepositoryError::UnsupportedPathEncoding)?;
+        let new_path = std::str::from_utf8(new_record)
+            .map_err(|_| RepositoryError::UnsupportedPathEncoding)?;
+        validate_repository_path(old_path).map_err(|_| RepositoryError::CommitDiffParse)?;
+        validate_repository_path(new_path).map_err(|_| RepositoryError::CommitDiffParse)?;
+        paths.push(ChangedPath {
+            old_path: old_path.to_owned(),
+            new_path: new_path.to_owned(),
+        });
+        let path_count = if renamed { 2 } else { 1 };
+        index += path_count;
+    }
+    Ok(paths)
+}
+
 fn resolve_head(base: &str) -> Result<Option<String>, RepositoryError> {
     let arguments = [
         OsString::from("-C"),
@@ -232,7 +423,7 @@ fn parse_history_cursor(cursor: &str) -> Result<(String, usize), RepositoryError
     Ok((snapshot.to_owned(), offset))
 }
 
-fn valid_oid(value: &str) -> bool {
+pub(crate) fn valid_oid(value: &str) -> bool {
     matches!(value.len(), 40 | 64) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
@@ -348,6 +539,7 @@ fn civil_from_days(days_since_epoch: i64) -> (i64, i64, i64) {
 
 fn validate_repository_path(path: &str) -> Result<(), RepositoryError> {
     if path.is_empty()
+        || path.contains(['\r', '\n'])
         || path.starts_with(':')
         || path
             .split('/')
@@ -845,6 +1037,38 @@ mod tests {
         assert_eq!(
             parse_commit(oid, raw),
             Err(RepositoryError::HistoryEncoding)
+        );
+    }
+
+    #[test]
+    fn parses_nul_delimited_changed_paths_and_renames() {
+        let paths =
+            parse_changed_paths(b"M\0src/lib.rs\0R100\0old name.txt\0new name.txt\0D\0gone.txt\0")
+                .unwrap();
+        assert_eq!(
+            paths,
+            [
+                ChangedPath {
+                    old_path: "src/lib.rs".into(),
+                    new_path: "src/lib.rs".into(),
+                },
+                ChangedPath {
+                    old_path: "old name.txt".into(),
+                    new_path: "new name.txt".into(),
+                },
+                ChangedPath {
+                    old_path: "gone.txt".into(),
+                    new_path: "gone.txt".into(),
+                },
+            ]
+        );
+        assert_eq!(
+            parse_changed_paths(b"R100\0old-only\0"),
+            Err(RepositoryError::CommitDiffParse)
+        );
+        assert_eq!(
+            parse_changed_paths(b"invalid\0path\0"),
+            Err(RepositoryError::CommitDiffParse)
         );
     }
 

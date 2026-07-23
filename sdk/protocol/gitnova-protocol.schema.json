@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitnova.dev/schema/protocol/1.4/gitnova-protocol.schema.json",
-  "title": "GitNova Core Protocol 1.4",
+  "$id": "https://gitnova.dev/schema/protocol/1.5/gitnova-protocol.schema.json",
+  "title": "GitNova Core Protocol 1.5",
   "type": "object",
-  "properties": { "protocolVersion": { "const": "1.4" } },
+  "properties": { "protocolVersion": { "const": "1.5" } },
   "required": ["protocolVersion"],
   "$defs": {
     "RequestId": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
@@ -26,9 +26,10 @@
         "repositoryDiscovery": { "type": "boolean" },
         "workingTreeStatus": { "type": "boolean" },
         "structuredFileDiff": { "type": "boolean" },
-        "paginatedCommitHistory": { "type": "boolean" }
+        "paginatedCommitHistory": { "type": "boolean" },
+        "structuredCommitDiff": { "type": "boolean" }
       },
-      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory"]
+      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff"]
     },
     "InitializeParams": {
       "type": "object",
@@ -212,6 +213,26 @@
         "nextCursor": { "type": ["string", "null"] }
       },
       "required": ["commits", "nextCursor"]
+    },
+    "CommitDiffParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "oid": { "type": "string", "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$" },
+        "parentOid": { "type": "string", "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$" },
+        "contextLines": { "type": "integer", "minimum": 0, "maximum": 20 }
+      },
+      "required": ["oid"]
+    },
+    "CommitDiff": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "commit": { "$ref": "#/$defs/CommitSummary" },
+        "parentOid": { "type": ["string", "null"] },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/FileDiff" } }
+      },
+      "required": ["commit", "parentOid", "files"]
     }
   }
 }

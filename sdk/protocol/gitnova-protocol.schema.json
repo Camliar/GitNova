@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitnova.dev/schema/protocol/1.1/gitnova-protocol.schema.json",
-  "title": "GitNova Core Protocol 1.1",
+  "$id": "https://gitnova.dev/schema/protocol/1.2/gitnova-protocol.schema.json",
+  "title": "GitNova Core Protocol 1.2",
   "type": "object",
-  "properties": { "protocolVersion": { "const": "1.1" } },
+  "properties": { "protocolVersion": { "const": "1.2" } },
   "required": ["protocolVersion"],
   "$defs": {
     "RequestId": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
@@ -23,9 +23,10 @@
       "additionalProperties": false,
       "properties": {
         "cancellation": { "type": "boolean" },
-        "repositoryDiscovery": { "type": "boolean" }
+        "repositoryDiscovery": { "type": "boolean" },
+        "workingTreeStatus": { "type": "boolean" }
       },
-      "required": ["cancellation", "repositoryDiscovery"]
+      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus"]
     },
     "InitializeParams": {
       "type": "object",
@@ -83,6 +84,45 @@
         "gitVersion": { "type": "string" }
       },
       "required": ["worktreeRoot", "gitDirectory", "commonGitDirectory", "kind", "gitVersion"]
+    },
+    "StatusEntryKind": {
+      "enum": ["ordinary", "renameOrCopy", "unmerged", "untracked"]
+    },
+    "FileStatus": {
+      "enum": ["unmodified", "modified", "added", "deleted", "renamed", "copied", "unmerged", "untracked", "typeChanged", "unknown"]
+    },
+    "StatusEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string" },
+        "originalPath": { "type": ["string", "null"] },
+        "kind": { "$ref": "#/$defs/StatusEntryKind" },
+        "indexStatus": { "$ref": "#/$defs/FileStatus" },
+        "worktreeStatus": { "$ref": "#/$defs/FileStatus" }
+      },
+      "required": ["path", "originalPath", "kind", "indexStatus", "worktreeStatus"]
+    },
+    "BranchStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "head": { "type": ["string", "null"] },
+        "oid": { "type": ["string", "null"] },
+        "upstream": { "type": ["string", "null"] },
+        "ahead": { "type": "integer", "minimum": 0 },
+        "behind": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["head", "oid", "upstream", "ahead", "behind"]
+    },
+    "WorkingTreeStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "branch": { "$ref": "#/$defs/BranchStatus" },
+        "entries": { "type": "array", "items": { "$ref": "#/$defs/StatusEntry" } }
+      },
+      "required": ["branch", "entries"]
     }
   }
 }

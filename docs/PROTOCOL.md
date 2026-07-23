@@ -28,9 +28,9 @@ spawn → gitnova/initialize → requests and notifications → gitnova/shutdown
 
 ## Initialize
 
-`gitnova/initialize` 参数包含 `clientInfo`、`protocolVersion` 和 Host capabilities。结果包含 `coreInfo`、协商后的协议版本和 Core capabilities。初始协议版本为 `1.0`，当前版本为 `1.1`；主版本不同即不兼容，次版本能力通过 capability 字段协商。
+`gitnova/initialize` 参数包含 `clientInfo`、`protocolVersion` 和 Host capabilities。结果包含 `coreInfo`、协商后的协议版本和 Core capabilities。初始协议版本为 `1.0`，当前版本为 `1.2`；主版本不同即不兼容，次版本能力通过 capability 字段协商。
 
-Core 当前声明 `cancellation` 和 `repositoryDiscovery` capability。仓库方法及路径语义见[仓库发现](REPOSITORIES.md)。
+Core 当前声明 `cancellation`、`repositoryDiscovery` 和 `workingTreeStatus` capability。仓库方法及路径语义见[仓库发现](REPOSITORIES.md)，状态契约见[工作区状态](STATUS.md)。
 
 请求 id 可以是 JSON string 或 integer，Core 必须在响应中保持其类型和值。
 
@@ -53,6 +53,9 @@ JSON-RPC error 使用标准数值 `code`，同时在 `data.stableCode` 提供稳
 | `-32103` | `git.command_failed` | Git 只读检查失败 |
 | `-32104` | `repository.unsafe_ownership` | Git 拒绝不安全所有权 |
 | `-32105` | `repository.different_repository_open` | 会话已打开另一仓库 |
+| `-32106` | `repository.not_open` | 会话尚未打开仓库 |
+| `-32107` | `repository.worktree_required` | 操作不支持 bare repository |
+| `-32108` | `git.status_parse_failed` | porcelain status 无法解析 |
 | `-32800` | `request.cancelled` | 请求已取消 |
 
 ## Cancellation and timeouts

@@ -5,10 +5,11 @@ use gitnova_protocol::{
     CancelParams, CancellationRegistry, ERROR_ALREADY_INITIALIZED, ERROR_DIFFERENT_REPOSITORY_OPEN,
     ERROR_GIT_COMMAND_FAILED, ERROR_GIT_UNAVAILABLE, ERROR_INCOMPATIBLE_PROTOCOL,
     ERROR_INVALID_PARAMS, ERROR_INVALID_PATH, ERROR_INVALID_REQUEST, ERROR_METHOD_NOT_FOUND,
-    ERROR_NOT_INITIALIZED, ERROR_PARSE, ERROR_REPOSITORY_NOT_FOUND, ERROR_REQUEST_CANCELLED,
-    ERROR_UNSAFE_REPOSITORY, ImplementationInfo, InitializeParams, InitializeResult,
-    JSON_RPC_VERSION, Notification, PROTOCOL_VERSION, RepositoryDescriptor, RepositoryPathParams,
-    Request, Response, ResponseError, ServerCapabilities,
+    ERROR_NOT_INITIALIZED, ERROR_PARSE, ERROR_REPOSITORY_NOT_FOUND, ERROR_REPOSITORY_NOT_OPEN,
+    ERROR_REQUEST_CANCELLED, ERROR_STATUS_PARSE, ERROR_UNSAFE_REPOSITORY, ERROR_WORKTREE_REQUIRED,
+    ImplementationInfo, InitializeParams, InitializeResult, JSON_RPC_VERSION, Notification,
+    PROTOCOL_VERSION, RepositoryDescriptor, RepositoryPathParams, Request, Response, ResponseError,
+    ServerCapabilities,
 };
 use serde_json::Value;
 use std::io::{self, BufRead, Write};
@@ -137,6 +138,7 @@ fn dispatch_request(
         ),
         "repository/discover" => repository_request(request, state, false),
         "repository/open" => repository_request(request, state, true),
+        "repository/status" => status_request(request, state),
         _ => Response::error(
             Some(request.id),
             ResponseError::new(
@@ -199,6 +201,7 @@ fn initialize(request: Request, state: &mut CoreState) -> Response {
         capabilities: ServerCapabilities {
             cancellation: true,
             repository_discovery: true,
+            working_tree_status: true,
         },
     };
     Response::success(
@@ -316,6 +319,55 @@ fn repository_error(error: repository::RepositoryError) -> ResponseError {
             "Git rejected the repository ownership as unsafe",
             false,
         ),
+        repository::RepositoryError::WorktreeRequired => ResponseError::new(
+            ERROR_WORKTREE_REQUIRED,
+            "repository.worktree_required",
+            "This operation requires a non-bare worktree",
+            false,
+        ),
+        repository::RepositoryError::StatusParse => ResponseError::new(
+            ERROR_STATUS_PARSE,
+            "git.status_parse_failed",
+            "System Git returned an invalid status payload",
+            false,
+        ),
+    }
+}
+
+fn status_request(request: Request, state: &CoreState) -> Response {
+    let params_are_empty = request.params.is_null()
+        || request
+            .params
+            .as_object()
+            .is_some_and(serde_json::Map::is_empty);
+    if !params_are_empty {
+        return Response::error(
+            Some(request.id),
+            ResponseError::new(
+                ERROR_INVALID_PARAMS,
+                "protocol.invalid_params",
+                "repository/status does not accept parameters",
+                false,
+            ),
+        );
+    }
+    let Some(descriptor) = &state.active_repository else {
+        return Response::error(
+            Some(request.id),
+            ResponseError::new(
+                ERROR_REPOSITORY_NOT_OPEN,
+                "repository.not_open",
+                "Open a repository before requesting status",
+                true,
+            ),
+        );
+    };
+    match repository::status(descriptor) {
+        Ok(status) => Response::success(
+            request.id,
+            serde_json::to_value(status).expect("serializable working tree status"),
+        ),
+        Err(error) => Response::error(Some(request.id), repository_error(error)),
     }
 }
 

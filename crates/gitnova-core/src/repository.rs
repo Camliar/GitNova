@@ -1,4 +1,7 @@
-use gitnova_protocol::{RepositoryDescriptor, RepositoryKind};
+use gitnova_protocol::{
+    BranchStatus, FileStatus, RepositoryDescriptor, RepositoryKind, StatusEntry, StatusEntryKind,
+    WorkingTreeStatus,
+};
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io;
@@ -13,6 +16,8 @@ pub enum RepositoryError {
     GitUnavailable,
     GitCommandFailed,
     UnsafeRepository,
+    WorktreeRequired,
+    StatusParse,
 }
 
 #[derive(Debug)]
@@ -45,6 +50,28 @@ impl GitRunner for SystemGit {
 
 pub fn discover(path: &str) -> Result<RepositoryDescriptor, RepositoryError> {
     discover_with(&SystemGit, path)
+}
+
+pub fn status(descriptor: &RepositoryDescriptor) -> Result<WorkingTreeStatus, RepositoryError> {
+    let worktree = descriptor
+        .worktree_root
+        .as_ref()
+        .ok_or(RepositoryError::WorktreeRequired)?;
+    let arguments = [
+        OsString::from("-C"),
+        OsString::from(worktree),
+        OsString::from("status"),
+        OsString::from("--porcelain=v2"),
+        OsString::from("-z"),
+        OsString::from("--branch"),
+        OsString::from("--untracked-files=all"),
+        OsString::from("--renames"),
+    ];
+    let output = SystemGit.run(&arguments).map_err(map_io_error)?;
+    if !output.success {
+        return Err(map_failed_output(&output.stderr));
+    }
+    parse_status(&output.stdout)
 }
 
 fn discover_with(
@@ -127,22 +154,9 @@ fn run_git(
         .into_iter()
         .map(|argument| argument.as_ref().to_owned())
         .collect();
-    let output = git.run(&arguments).map_err(|error| {
-        if error.kind() == io::ErrorKind::NotFound {
-            RepositoryError::GitUnavailable
-        } else {
-            RepositoryError::GitCommandFailed
-        }
-    })?;
+    let output = git.run(&arguments).map_err(map_io_error)?;
     if !output.success {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        if stderr.contains("dubious ownership") {
-            return Err(RepositoryError::UnsafeRepository);
-        }
-        if stderr.contains("not a git repository") {
-            return Err(RepositoryError::NotFound);
-        }
-        return Err(RepositoryError::GitCommandFailed);
+        return Err(map_failed_output(&output.stderr));
     }
     String::from_utf8(output.stdout)
         .map(|value| {
@@ -153,6 +167,137 @@ fn run_git(
                 .to_owned()
         })
         .map_err(|_| RepositoryError::UnsupportedPathEncoding)
+}
+
+fn map_io_error(error: io::Error) -> RepositoryError {
+    if error.kind() == io::ErrorKind::NotFound {
+        RepositoryError::GitUnavailable
+    } else {
+        RepositoryError::GitCommandFailed
+    }
+}
+
+fn map_failed_output(stderr: &[u8]) -> RepositoryError {
+    let stderr = String::from_utf8_lossy(stderr);
+    if stderr.contains("dubious ownership") {
+        RepositoryError::UnsafeRepository
+    } else if stderr.contains("not a git repository") {
+        RepositoryError::NotFound
+    } else {
+        RepositoryError::GitCommandFailed
+    }
+}
+
+fn parse_status(output: &[u8]) -> Result<WorkingTreeStatus, RepositoryError> {
+    let mut branch = BranchStatus {
+        head: None,
+        oid: None,
+        upstream: None,
+        ahead: 0,
+        behind: 0,
+    };
+    let records: Vec<&[u8]> = output.split(|byte| *byte == 0).collect();
+    let mut entries = Vec::new();
+    let mut index = 0;
+    while index < records.len() {
+        let record = records[index];
+        index += 1;
+        if record.is_empty() {
+            continue;
+        }
+        let record =
+            std::str::from_utf8(record).map_err(|_| RepositoryError::UnsupportedPathEncoding)?;
+        if let Some(header) = record.strip_prefix("# ") {
+            parse_branch_header(header, &mut branch)?;
+            continue;
+        }
+        if let Some(path) = record.strip_prefix("? ") {
+            entries.push(StatusEntry {
+                path: path.to_owned(),
+                original_path: None,
+                kind: StatusEntryKind::Untracked,
+                index_status: FileStatus::Unmodified,
+                worktree_status: FileStatus::Untracked,
+            });
+            continue;
+        }
+        let record_type = record.as_bytes()[0];
+        let field_count = match record_type {
+            b'1' => 9,
+            b'2' => 10,
+            b'u' => 11,
+            _ => return Err(RepositoryError::StatusParse),
+        };
+        let fields: Vec<&str> = record.splitn(field_count, ' ').collect();
+        if fields.len() != field_count || fields[1].len() != 2 {
+            return Err(RepositoryError::StatusParse);
+        }
+        let mut xy = fields[1].chars();
+        let index_status = map_status(xy.next().ok_or(RepositoryError::StatusParse)?);
+        let worktree_status = map_status(xy.next().ok_or(RepositoryError::StatusParse)?);
+        let (path, original_path, kind) = match record_type {
+            b'1' => (fields[8].to_owned(), None, StatusEntryKind::Ordinary),
+            b'2' => {
+                let original = records.get(index).ok_or(RepositoryError::StatusParse)?;
+                index += 1;
+                let original = std::str::from_utf8(original)
+                    .map_err(|_| RepositoryError::UnsupportedPathEncoding)?;
+                (
+                    fields[9].to_owned(),
+                    Some(original.to_owned()),
+                    StatusEntryKind::RenameOrCopy,
+                )
+            }
+            b'u' => (fields[10].to_owned(), None, StatusEntryKind::Unmerged),
+            _ => unreachable!(),
+        };
+        entries.push(StatusEntry {
+            path,
+            original_path,
+            kind,
+            index_status,
+            worktree_status,
+        });
+    }
+    Ok(WorkingTreeStatus { branch, entries })
+}
+
+fn parse_branch_header(header: &str, branch: &mut BranchStatus) -> Result<(), RepositoryError> {
+    if let Some(value) = header.strip_prefix("branch.oid ") {
+        branch.oid = (value != "(initial)").then(|| value.to_owned());
+    } else if let Some(value) = header.strip_prefix("branch.head ") {
+        branch.head = (value != "(detached)").then(|| value.to_owned());
+    } else if let Some(value) = header.strip_prefix("branch.upstream ") {
+        branch.upstream = Some(value.to_owned());
+    } else if let Some(value) = header.strip_prefix("branch.ab ") {
+        let (ahead, behind) = value.split_once(' ').ok_or(RepositoryError::StatusParse)?;
+        branch.ahead = ahead
+            .strip_prefix('+')
+            .ok_or(RepositoryError::StatusParse)?
+            .parse()
+            .map_err(|_| RepositoryError::StatusParse)?;
+        branch.behind = behind
+            .strip_prefix('-')
+            .ok_or(RepositoryError::StatusParse)?
+            .parse()
+            .map_err(|_| RepositoryError::StatusParse)?;
+    }
+    Ok(())
+}
+
+fn map_status(status: char) -> FileStatus {
+    match status {
+        '.' => FileStatus::Unmodified,
+        'M' => FileStatus::Modified,
+        'A' => FileStatus::Added,
+        'D' => FileStatus::Deleted,
+        'R' => FileStatus::Renamed,
+        'C' => FileStatus::Copied,
+        'U' => FileStatus::Unmerged,
+        '?' => FileStatus::Untracked,
+        'T' => FileStatus::TypeChanged,
+        _ => FileStatus::Unknown,
+    }
 }
 
 fn resolve_git_path(base: &Path, value: &str) -> Result<PathBuf, RepositoryError> {
@@ -236,5 +381,46 @@ mod tests {
             run_git(&git, [OsStr::new("test")]).unwrap(),
             "path-ending-in-newline\n"
         );
+    }
+
+    #[test]
+    fn parses_porcelain_v2_branch_and_all_entry_shapes() {
+        let output = concat!(
+            "# branch.oid abc123\0",
+            "# branch.head main\0",
+            "# branch.upstream origin/main\0",
+            "# branch.ab +2 -3\0",
+            "1 M. N... 100644 100644 100644 aaa bbb modified.txt\0",
+            "2 R. N... 100644 100644 100644 aaa bbb R100 renamed.txt\0",
+            "original.txt\0",
+            "u UU N... 100644 100644 100644 100644 aaa bbb ccc conflict.txt\0",
+            "? untracked.txt\0"
+        )
+        .as_bytes();
+        let status = parse_status(output).unwrap();
+        assert_eq!(status.branch.head.as_deref(), Some("main"));
+        assert_eq!(status.branch.oid.as_deref(), Some("abc123"));
+        assert_eq!(status.branch.upstream.as_deref(), Some("origin/main"));
+        assert_eq!((status.branch.ahead, status.branch.behind), (2, 3));
+        assert_eq!(status.entries.len(), 4);
+        assert_eq!(status.entries[0].index_status, FileStatus::Modified);
+        assert_eq!(status.entries[0].worktree_status, FileStatus::Unmodified);
+        assert_eq!(status.entries[1].kind, StatusEntryKind::RenameOrCopy);
+        assert_eq!(status.entries[1].path, "renamed.txt");
+        assert_eq!(
+            status.entries[1].original_path.as_deref(),
+            Some("original.txt")
+        );
+        assert_eq!(status.entries[2].kind, StatusEntryKind::Unmerged);
+        assert_eq!(status.entries[3].worktree_status, FileStatus::Untracked);
+    }
+
+    #[test]
+    fn parses_initial_and_detached_branch_markers() {
+        let status = parse_status(b"# branch.oid (initial)\0# branch.head (detached)\0").unwrap();
+        assert_eq!(status.branch.oid, None);
+        assert_eq!(status.branch.head, None);
+        assert_eq!(status.branch.upstream, None);
+        assert_eq!((status.branch.ahead, status.branch.behind), (0, 0));
     }
 }

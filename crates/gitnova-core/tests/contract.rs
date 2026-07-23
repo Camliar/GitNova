@@ -86,17 +86,21 @@ impl Drop for TestDirectory {
 }
 
 fn git(arguments: &[&str], directory: &Path) {
-    let output = Command::new("git")
-        .args(arguments)
-        .current_dir(directory)
-        .env("LC_ALL", "C")
-        .output()
-        .unwrap();
+    let output = git_output(arguments, directory);
     assert!(
         output.status.success(),
         "git command failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+fn git_output(arguments: &[&str], directory: &Path) -> Output {
+    Command::new("git")
+        .args(arguments)
+        .current_dir(directory)
+        .env("LC_ALL", "C")
+        .output()
+        .unwrap()
 }
 
 fn repository_request(id: i64, method: &str, path: &Path) -> Value {
@@ -120,8 +124,12 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let responses = responses(&output.stdout);
     assert_eq!(responses.len(), 2);
     assert_eq!(responses[0]["id"], "init-1");
-    assert_eq!(responses[0]["result"]["protocolVersion"], "1.1");
+    assert_eq!(responses[0]["result"]["protocolVersion"], "1.2");
     assert_eq!(responses[0]["result"]["capabilities"]["cancellation"], true);
+    assert_eq!(
+        responses[0]["result"]["capabilities"]["workingTreeStatus"],
+        true
+    );
     assert_eq!(responses[1]["result"], Value::Null);
 }
 
@@ -255,5 +263,191 @@ fn reports_invalid_path_and_non_repository_separately() {
     assert_eq!(
         responses[2]["error"]["data"]["stableCode"],
         "repository.not_found"
+    );
+}
+
+#[test]
+fn reports_staged_unstaged_untracked_and_renamed_entries() {
+    let directory = TestDirectory::new("status-entries");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    fs::write(repository.join("modified.txt"), "base").unwrap();
+    fs::write(repository.join("original.txt"), "base").unwrap();
+    git(&["add", "."], &repository);
+    git(
+        &[
+            "-c",
+            "user.name=GitNova Test",
+            "-c",
+            "user.email=test@gitnova.invalid",
+            "commit",
+            "-m",
+            "initial",
+        ],
+        &repository,
+    );
+    fs::write(repository.join("modified.txt"), "changed").unwrap();
+    fs::write(repository.join("staged.txt"), "staged").unwrap();
+    git(&["add", "staged.txt"], &repository);
+    git(&["mv", "original.txt", "renamed.txt"], &repository);
+    fs::write(repository.join("untracked.txt"), "untracked").unwrap();
+
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &repository),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/status"}),
+    ]);
+    let responses = responses(&output.stdout);
+    let entries = responses[2]["result"]["entries"].as_array().unwrap();
+    let by_path = |path: &str| entries.iter().find(|entry| entry["path"] == path).unwrap();
+    assert_eq!(by_path("modified.txt")["worktreeStatus"], "modified");
+    assert_eq!(by_path("staged.txt")["indexStatus"], "added");
+    assert_eq!(by_path("renamed.txt")["indexStatus"], "renamed");
+    assert_eq!(by_path("renamed.txt")["originalPath"], "original.txt");
+    assert_eq!(by_path("untracked.txt")["worktreeStatus"], "untracked");
+}
+
+#[test]
+fn reports_conflict() {
+    let directory = TestDirectory::new("status-conflict");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    git(&["config", "user.name", "GitNova Test"], &repository);
+    git(
+        &["config", "user.email", "test@gitnova.invalid"],
+        &repository,
+    );
+    fs::write(repository.join("conflict.txt"), "base\n").unwrap();
+    git(&["add", "."], &repository);
+    git(&["commit", "-m", "initial"], &repository);
+    git(&["branch", "-M", "main"], &repository);
+    git(&["checkout", "-b", "other"], &repository);
+    fs::write(repository.join("conflict.txt"), "other\n").unwrap();
+    git(
+        &[
+            "commit",
+            "-am",
+            "other",
+            "--author=GitNova Test <test@gitnova.invalid>",
+        ],
+        &repository,
+    );
+    git(&["checkout", "main"], &repository);
+    fs::write(repository.join("conflict.txt"), "master\n").unwrap();
+    git(
+        &[
+            "commit",
+            "-am",
+            "master",
+            "--author=GitNova Test <test@gitnova.invalid>",
+        ],
+        &repository,
+    );
+    let merge = git_output(&["merge", "other"], &repository);
+    assert!(!merge.status.success());
+
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &repository),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/status","params":{}}),
+    ]);
+    let responses = responses(&output.stdout);
+    assert_eq!(responses[2]["result"]["entries"][0]["kind"], "unmerged");
+}
+
+#[test]
+fn reports_detached_head() {
+    let directory = TestDirectory::new("status-detached");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    fs::write(repository.join("file.txt"), "base").unwrap();
+    git(&["add", "."], &repository);
+    git(
+        &[
+            "-c",
+            "user.name=GitNova Test",
+            "-c",
+            "user.email=test@gitnova.invalid",
+            "commit",
+            "-m",
+            "initial",
+        ],
+        &repository,
+    );
+    git(&["checkout", "--detach"], &repository);
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &repository),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/status"}),
+    ]);
+    let responses = responses(&output.stdout);
+    assert_eq!(responses[2]["result"]["branch"]["head"], Value::Null);
+    assert!(responses[2]["result"]["branch"]["oid"].is_string());
+}
+
+#[test]
+fn reports_upstream_ahead_and_behind() {
+    let directory = TestDirectory::new("status-upstream");
+    git(&["init", "--bare", "remote.git"], &directory.0);
+    let remote = directory.0.join("remote.git");
+    git(&["clone", remote.to_str().unwrap(), "work"], &directory.0);
+    let work = directory.0.join("work");
+    git(&["config", "user.name", "GitNova Test"], &work);
+    git(&["config", "user.email", "test@gitnova.invalid"], &work);
+    fs::write(work.join("base.txt"), "base").unwrap();
+    git(&["add", "."], &work);
+    git(&["commit", "-m", "initial"], &work);
+    git(&["branch", "-M", "main"], &work);
+    git(&["push", "-u", "origin", "main"], &work);
+    git(&["symbolic-ref", "HEAD", "refs/heads/main"], &remote);
+    git(&["clone", remote.to_str().unwrap(), "other"], &directory.0);
+    let other = directory.0.join("other");
+    git(&["config", "user.name", "GitNova Test"], &other);
+    git(&["config", "user.email", "test@gitnova.invalid"], &other);
+    fs::write(other.join("remote.txt"), "remote").unwrap();
+    git(&["add", "."], &other);
+    git(&["commit", "-m", "remote"], &other);
+    git(&["push"], &other);
+    fs::write(work.join("local.txt"), "local").unwrap();
+    git(&["add", "."], &work);
+    git(&["commit", "-m", "local"], &work);
+    git(&["fetch", "origin"], &work);
+
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &work),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/status"}),
+    ]);
+    let responses = responses(&output.stdout);
+    let branch = &responses[2]["result"]["branch"];
+    assert_eq!(branch["head"], "main");
+    assert_eq!(branch["upstream"], "origin/main");
+    assert_eq!(branch["ahead"], 1);
+    assert_eq!(branch["behind"], 1);
+}
+
+#[test]
+fn status_requires_open_non_bare_repository() {
+    let directory = TestDirectory::new("status-errors");
+    git(&["init", "--bare", "bare.git"], &directory.0);
+    let no_open = run(&[
+        initialize(json!(1)),
+        json!({"jsonrpc":"2.0","id":2,"method":"repository/status"}),
+    ]);
+    let no_open_responses = responses(&no_open.stdout);
+    assert_eq!(
+        no_open_responses[1]["error"]["data"]["stableCode"],
+        "repository.not_open"
+    );
+
+    let bare = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &directory.0.join("bare.git")),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/status"}),
+    ]);
+    let bare_responses = responses(&bare.stdout);
+    assert_eq!(
+        bare_responses[2]["error"]["data"]["stableCode"],
+        "repository.worktree_required"
     );
 }

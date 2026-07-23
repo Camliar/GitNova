@@ -47,4 +47,4 @@ Core 不自动添加 `safe.directory`，不修改 global/system Git config，也
 
 ## Deliberate limits
 
-当前能力不读取 Status、HEAD、branch、remote、history 或 diff，不初始化、clone 或修改仓库，也不保存最近仓库。后续能力必须通过独立 Task 复用活动仓库上下文。
+仓库发现本身不读取 HEAD、branch、remote、history 或 diff，不初始化、clone 或修改仓库，也不保存最近仓库。工作区状态由独立的 [`repository/status`](STATUS.md) 契约复用活动仓库上下文。

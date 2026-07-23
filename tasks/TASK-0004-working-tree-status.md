@@ -1,6 +1,6 @@
 # TASK-0004: Working Tree Status
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/004-working-tree-status`
@@ -47,28 +47,32 @@ TASK-0003 已在 Core 会话中建立唯一活动仓库。本 Task 是 Local Git
 
 ## Deliverables
 
-- [ ] `repository/status` Core method 与 System Git 适配
-- [ ] porcelain v2 `-z` branch/status parser
-- [ ] Rust、Schema 与 TypeScript 契约
-- [ ] clean/变更/rename/conflict/branch/bare/error 自动测试
-- [ ] 工作区状态协议和边界文档
-- [ ] README、Feature List 与 Roadmap 状态同步
+- [x] `repository/status` Core method 与 System Git 适配
+- [x] porcelain v2 `-z` branch/status parser
+- [x] Rust、Schema 与 TypeScript 契约
+- [x] clean/变更/rename/conflict/branch/bare/error 自动测试
+- [x] 工作区状态协议和边界文档
+- [x] README、Feature List 与 Roadmap 状态同步
 
 ## Review Checklist
 
-- [ ] 只调用 System Git porcelain v2，Host 无 Git 调用或解析逻辑。
-- [ ] 命令不经 shell，无仓库写操作。
-- [ ] XY、rename/copy、unmerged、untracked 和 branch headers 解析可测试。
-- [ ] 未 open、bare、非 UTF-8 路径与 Git 失败具有稳定错误。
-- [ ] 未实现 Diff、stage、commit、branch、history、GitHub 或 UI。
-- [ ] Rust/Schema/TypeScript 类型与 capability 一致。
-- [ ] fmt、Clippy `-D warnings`、Rust tests、`npm run check` 与文档检查通过。
+- [x] 只调用 System Git porcelain v2，Host 无 Git 调用或解析逻辑。
+- [x] 命令不经 shell，无仓库写操作。
+- [x] XY、rename/copy、unmerged、untracked 和 branch headers 解析可测试。
+- [x] 未 open、bare、非 UTF-8 路径与 Git 失败具有稳定错误。
+- [x] 未实现 Diff、stage、commit、branch、history、GitHub 或 UI。
+- [x] Rust/Schema/TypeScript 类型与 capability 一致。
+- [x] fmt、Clippy `-D warnings`、Rust tests、`npm run check` 与文档检查通过。
 
 ## Done Definition
 
-- [ ] Deliverables 和 Review Checklist 全部完成。
-- [ ] 自主 Review 无阻塞意见。
-- [ ] 状态更新为 Done 并提交推送。
+- [x] Deliverables 和 Review Checklist 全部完成。
+- [x] 自主 Review 无阻塞意见。
+- [x] 状态更新为 Done 并提交推送。
+
+## Review Record
+
+- 2026-07-23：根据用户授权执行自主 Review；范围、架构、安全、协议一致性和自动验证均通过。
 
 ## References
 

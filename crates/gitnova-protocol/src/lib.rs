@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: &str = "1.1";
+pub const PROTOCOL_VERSION: &str = "1.2";
 
 pub const ERROR_PARSE: i64 = -32700;
 pub const ERROR_INVALID_REQUEST: i64 = -32600;
@@ -22,6 +22,9 @@ pub const ERROR_GIT_UNAVAILABLE: i64 = -32102;
 pub const ERROR_GIT_COMMAND_FAILED: i64 = -32103;
 pub const ERROR_UNSAFE_REPOSITORY: i64 = -32104;
 pub const ERROR_DIFFERENT_REPOSITORY_OPEN: i64 = -32105;
+pub const ERROR_REPOSITORY_NOT_OPEN: i64 = -32106;
+pub const ERROR_WORKTREE_REQUIRED: i64 = -32107;
+pub const ERROR_STATUS_PARSE: i64 = -32108;
 pub const ERROR_REQUEST_CANCELLED: i64 = -32800;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -143,6 +146,7 @@ pub struct InitializeParams {
 pub struct ServerCapabilities {
     pub cancellation: bool,
     pub repository_discovery: bool,
+    pub working_tree_status: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -179,6 +183,56 @@ pub struct RepositoryDescriptor {
     pub common_git_directory: String,
     pub kind: RepositoryKind,
     pub git_version: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StatusEntryKind {
+    Ordinary,
+    RenameOrCopy,
+    Unmerged,
+    Untracked,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FileStatus {
+    Unmodified,
+    Modified,
+    Added,
+    Deleted,
+    Renamed,
+    Copied,
+    Unmerged,
+    Untracked,
+    TypeChanged,
+    Unknown,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatusEntry {
+    pub path: String,
+    pub original_path: Option<String>,
+    pub kind: StatusEntryKind,
+    pub index_status: FileStatus,
+    pub worktree_status: FileStatus,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchStatus {
+    pub head: Option<String>,
+    pub oid: Option<String>,
+    pub upstream: Option<String>,
+    pub ahead: u64,
+    pub behind: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WorkingTreeStatus {
+    pub branch: BranchStatus,
+    pub entries: Vec<StatusEntry>,
 }
 
 #[derive(Clone, Default)]
@@ -246,6 +300,11 @@ mod tests {
             "RepositoryPathParams",
             "RepositoryKind",
             "RepositoryDescriptor",
+            "StatusEntryKind",
+            "FileStatus",
+            "StatusEntry",
+            "BranchStatus",
+            "WorkingTreeStatus",
         ] {
             assert!(schema["$defs"].get(definition).is_some());
         }

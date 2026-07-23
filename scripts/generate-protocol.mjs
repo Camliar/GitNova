@@ -4,7 +4,7 @@ import process from "node:process";
 const schemaUrl = new URL("../sdk/protocol/gitnova-protocol.schema.json", import.meta.url);
 const outputUrl = new URL("../packages/protocol/src/generated.ts", import.meta.url);
 const schema = JSON.parse(await readFile(schemaUrl, "utf8"));
-const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor"];
+const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus"];
 for (const name of requiredDefinitions) {
   if (!schema.$defs?.[name]) throw new Error(`Protocol schema is missing $defs.${name}`);
 }
@@ -29,6 +29,7 @@ export interface ClientCapabilities {
 export interface ServerCapabilities {
   cancellation: boolean;
   repositoryDiscovery: boolean;
+  workingTreeStatus: boolean;
 }
 
 export interface InitializeParams {
@@ -65,6 +66,31 @@ export interface RepositoryDescriptor {
   commonGitDirectory: string;
   kind: RepositoryKind;
   gitVersion: string;
+}
+
+export type StatusEntryKind = "ordinary" | "renameOrCopy" | "unmerged" | "untracked";
+
+export type FileStatus = "unmodified" | "modified" | "added" | "deleted" | "renamed" | "copied" | "unmerged" | "untracked" | "typeChanged" | "unknown";
+
+export interface StatusEntry {
+  path: string;
+  originalPath: string | null;
+  kind: StatusEntryKind;
+  indexStatus: FileStatus;
+  worktreeStatus: FileStatus;
+}
+
+export interface BranchStatus {
+  head: string | null;
+  oid: string | null;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+}
+
+export interface WorkingTreeStatus {
+  branch: BranchStatus;
+  entries: StatusEntry[];
 }
 `;
 

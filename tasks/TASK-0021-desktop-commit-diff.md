@@ -1,6 +1,6 @@
 # TASK-0021: Desktop Commit Detail and Diff
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/021-desktop-commit-diff`
@@ -34,25 +34,25 @@
 
 ## Deliverables
 
-- [ ] typed repository/commitDiff client boundary
-- [ ] commit selection, explicit merge-parent choice, loading/error state
-- [ ] commit metadata, changed files, and reusable structured diff rendering
-- [ ] frontend tests and documentation
+- [x] typed repository/commitDiff client boundary
+- [x] commit selection, explicit merge-parent choice, loading/error state
+- [x] commit metadata, changed files, and reusable structured diff rendering
+- [x] frontend tests and documentation
 
 ## Review Checklist
 
-- [ ] oid/parents 只来自 Core graph；merge parent 必须由用户明确选择。
-- [ ] root/single/merge 请求参数符合 Core contract，Host 不推断 Git parent 语义。
-- [ ] message 和 diff content 只作为 text 渲染；Host 不运行 Git 或解析 patch。
-- [ ] stale request 不覆盖新 selection；错误保留 timeline 并可 Retry。
-- [ ] 未提前实现 mutation/GitHub/Squash Trace UI。
-- [ ] Rust fmt/Clippy/tests、frontend checks 与 Tauri build 通过。
+- [x] oid/parents 只来自 Core graph；merge parent 必须由用户明确选择。
+- [x] root/single/merge 请求参数符合 Core contract，Host 不推断 Git parent 语义。
+- [x] message 和 diff content 只作为 text 渲染；Host 不运行 Git 或解析 patch。
+- [x] stale request 不覆盖新 selection；错误保留 timeline 并可 Retry。
+- [x] 未提前实现 mutation/GitHub/Squash Trace UI。
+- [x] Rust fmt/Clippy/tests、frontend checks 与 Tauri build 通过。
 
 ## Done Definition
 
-- [ ] Deliverables 和 Review Checklist 完成。
-- [ ] 自主 Review 无阻塞项。
-- [ ] 状态更新 Done，提交、推送并快进合并至 `main`。
+- [x] Deliverables 和 Review Checklist 完成。
+- [x] 自主 Review 无阻塞项。
+- [x] 状态更新 Done，提交、推送并快进合并至 `main`。
 
 ## References
 

@@ -19,3 +19,9 @@ Core invokes System Git directly. It obtains the ordered change list with NUL-de
 ## Deliberate limits
 
 The method compares exactly one commit-parent edge. It does not produce combined merge diffs, choose a preferred merge parent, compare arbitrary trees/ranges, include working-tree changes, apply patches, or retrieve remote-only objects.
+
+## Desktop presentation
+
+Desktop 从 Core graph node 获取完整 commit OID 与 ordered parents。root 和 single-parent commit 省略 `parentOid`，由 Core 按契约选择 empty tree 或唯一 parent；merge commit 在发送请求前要求用户明确选择一个 direct parent，Host 不猜测 first/preferred parent。请求固定使用 3 行 context。
+
+详情展示 Core 返回的完整 message、author/committer、实际 `parentOid` 和 ordered files。文件选择复用 structured `FileDiff` renderer，包括 rename path、binary、empty、hunks 与行号；message 和 line content 仅作为 text 呈现。错误保留 timeline 和 oid/parent selection 以便 Retry，关闭或切换 selection 后迟到 response 不会恢复旧详情。repository/history snapshot reload 会清除详情，working-tree status Refresh 不会。

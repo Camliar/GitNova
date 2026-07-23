@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { DiffScope, RepositoryDescriptor } from "@gitnova/protocol";
+import type { CommitSummary, DiffScope, RepositoryDescriptor } from "@gitnova/protocol";
 import markUrl from "../../../assets/icons/gitnova-mark.svg";
 import { asDesktopError, getCoreStatus, startCore, type DesktopError } from "./core";
 import { openRepository, selectRepositoryDirectory } from "./repository";
@@ -9,6 +9,8 @@ import { getFileDiff } from "./diff";
 import { DiffPanel, type DiffSelection, type DiffState } from "./DiffPanel";
 import { getCommitGraph } from "./history";
 import { HistoryPanel, type HistoryState } from "./HistoryPanel";
+import { getCommitDiff } from "./commitDiff";
+import { CommitDetailPanel, type CommitDetailState, type CommitSelection } from "./CommitDetailPanel";
 
 type Connection =
   | { kind: "checking" }
@@ -36,6 +38,8 @@ export function App() {
   const diffRequest = useRef(0);
   const [history, setHistory] = useState<HistoryState>({ kind: "idle" });
   const historyRequest = useRef(0);
+  const [commitDetail, setCommitDetail] = useState<CommitDetailState>({ kind: "idle" });
+  const commitRequest = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -131,6 +135,8 @@ export function App() {
   }
 
   async function refreshHistory() {
+    commitRequest.current += 1;
+    setCommitDetail({ kind: "idle" });
     const request = ++historyRequest.current;
     setHistory({ kind: "loading" });
     try {
@@ -141,6 +147,37 @@ export function App() {
     } catch (error) {
       if (request === historyRequest.current) setHistory({ kind: "error", error: asDesktopError(error) });
     }
+  }
+
+  function selectCommit(commit: CommitSummary) {
+    commitRequest.current += 1;
+    if (commit.parents.length > 1) {
+      setCommitDetail({ kind: "choosingParent", commit });
+    } else {
+      void loadCommitDiff({ commit });
+    }
+  }
+
+  async function loadCommitDiff(selection: CommitSelection) {
+    const request = ++commitRequest.current;
+    setCommitDetail({ kind: "loading", selection });
+    try {
+      const diff = await getCommitDiff(selection.commit.oid, selection.parentOid);
+      if (request === commitRequest.current) setCommitDetail({ kind: "ready", selection, diff });
+    } catch (error) {
+      if (request === commitRequest.current) setCommitDetail({ kind: "error", selection, error: asDesktopError(error) });
+    }
+  }
+
+  function chooseCommitParent(parentOid: string) {
+    if (commitDetail.kind === "choosingParent" && commitDetail.commit.parents.includes(parentOid)) {
+      void loadCommitDiff({ commit: commitDetail.commit, parentOid });
+    }
+  }
+
+  function closeCommitDetail() {
+    commitRequest.current += 1;
+    setCommitDetail({ kind: "idle" });
   }
 
   async function loadMoreHistory() {
@@ -245,7 +282,22 @@ export function App() {
             />
           )}
           {repository.kind === "open" && (
-            <HistoryPanel state={history} onRetry={() => void refreshHistory()} onLoadMore={() => void loadMoreHistory()} />
+            <HistoryPanel
+              state={history}
+              commitLoading={commitDetail.kind === "loading"}
+              onRetry={() => void refreshHistory()}
+              onLoadMore={() => void loadMoreHistory()}
+              onSelectCommit={selectCommit}
+            />
+          )}
+          {commitDetail.kind !== "idle" && (
+            <CommitDetailPanel
+              key={`${commitDetail.kind === "choosingParent" ? commitDetail.commit.oid : commitDetail.selection.commit.oid}:${commitDetail.kind === "choosingParent" ? "" : commitDetail.selection.parentOid ?? ""}`}
+              state={commitDetail}
+              onChooseParent={chooseCommitParent}
+              onRetry={() => commitDetail.kind === "error" && void loadCommitDiff(commitDetail.selection)}
+              onClose={closeCommitDetail}
+            />
           )}
         </section>
 

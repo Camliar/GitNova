@@ -21,3 +21,5 @@ The method does not search all refs, include unreachable commits, mutate branche
 Desktop 使用 projection 的 node 顺序直接呈现 timeline，包括 commit summary、OID、author timestamp、parent count、`isHead` 和 references。Host 不自行关联 refs、剥离 annotated tags 或推断 HEAD，也暂不绘制 graph lanes。
 
 分页使用固定 limit 30 和 Core opaque cursor。增量请求期间 Load more 被禁用；错误只影响该增量页面，已呈现 nodes 保持可用。repository reopen 会使旧请求失效并从无 cursor 的第一页重新加载，防止旧 snapshot 回写。
+
+Timeline node 的 commit OID 与 ordered parents 同时作为 [`repository/commitDiff`](COMMIT_DIFF.md) 的唯一选择来源。Host 不缩短 OID 后再请求，也不从 decoration 或视觉顺序推导 parent。

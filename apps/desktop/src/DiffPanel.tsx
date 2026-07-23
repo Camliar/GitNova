@@ -1,5 +1,6 @@
 import type { DiffScope, FileDiff } from "@gitnova/protocol";
 import type { DesktopError } from "./core";
+import { FileDiffView } from "./FileDiffView";
 
 export interface DiffSelection { path: string; scope: DiffScope }
 export type DiffState =
@@ -27,23 +28,7 @@ export function DiffPanel({ state, onRetry, onClose }: { state: Exclude<DiffStat
           <button type="button" onClick={onRetry}>Retry diff</button>
         </div>
       )}
-      {diff?.isBinary && <p className="empty-state">Binary file changed. Content is not returned by Core.</p>}
-      {diff && !diff.isBinary && diff.hunks.length === 0 && <p className="empty-state">No changes in this scope.</p>}
-      {diff && !diff.isBinary && diff.hunks.map((hunk, hunkIndex) => (
-        <section className="diff-hunk" key={`${hunk.oldStart}:${hunk.newStart}:${hunkIndex}`} aria-label={`Diff hunk ${hunkIndex + 1}`}>
-          <h3>{`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@${hunk.header ? ` ${hunk.header}` : ""}`}</h3>
-          <ol>
-            {hunk.lines.map((line, lineIndex) => (
-              <li className={`diff-line diff-line--${line.kind}`} key={`${lineIndex}:${line.oldLine}:${line.newLine}`}>
-                <span aria-label="Old line">{line.oldLine ?? ""}</span>
-                <span aria-label="New line">{line.newLine ?? ""}</span>
-                <span className="diff-line__prefix" aria-hidden="true">{line.kind === "addition" ? "+" : line.kind === "deletion" ? "−" : " "}</span>
-                <code>{line.content}</code>
-              </li>
-            ))}
-          </ol>
-        </section>
-      ))}
+      {diff && <FileDiffView diff={diff} emptyMessage="No changes in this scope." />}
     </section>
   );
 }

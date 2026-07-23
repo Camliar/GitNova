@@ -7,6 +7,7 @@ const repository = vi.hoisted(() => ({ selectRepositoryDirectory: vi.fn(), openR
 const status = vi.hoisted(() => ({ getWorkingTreeStatus: vi.fn() }));
 const diff = vi.hoisted(() => ({ getFileDiff: vi.fn() }));
 const history = vi.hoisted(() => ({ getCommitGraph: vi.fn() }));
+const commitDiff = vi.hoisted(() => ({ getCommitDiff: vi.fn() }));
 
 vi.mock("./core", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./core")>()),
@@ -17,6 +18,7 @@ vi.mock("./repository", () => repository);
 vi.mock("./status", () => status);
 vi.mock("./diff", () => diff);
 vi.mock("./history", () => history);
+vi.mock("./commitDiff", () => commitDiff);
 
 const descriptor = {
   worktreeRoot: "/work/project",
@@ -39,6 +41,7 @@ describe("Desktop repository open", () => {
     });
     diff.getFileDiff.mockResolvedValue({ oldPath: "src/app.ts", newPath: "src/app.ts", isBinary: false, hunks: [] });
     history.getCommitGraph.mockResolvedValue({ nodes: [], nextCursor: null });
+    commitDiff.getCommitDiff.mockResolvedValue({ commit: null, parentOid: null, files: [] });
   });
 
   it("opens only the explicitly selected directory and presents Core facts", async () => {
@@ -84,6 +87,85 @@ describe("Desktop repository open", () => {
     expect(within(historyList).getByText("main")).toBeInTheDocument();
     expect(within(historyList).getByText("v1.0")).toBeInTheDocument();
     expect(commits[0]).toHaveTextContent("Merge (2 parents)");
+  });
+
+  it("loads a root commit without choosing a parent and renders full metadata", async () => {
+    const root = { oid: "a".repeat(40), parents: [], summary: "Root", message: "Root\n\nFull message", author: { name: "Ada", email: "ada@example.com", timestamp: "2026-01-01T01:00:00Z" }, committer: { name: "Lin", email: "lin@example.com", timestamp: "2026-01-01T02:00:00Z" } };
+    history.getCommitGraph.mockResolvedValue({ nodes: [{ commit: root, isHead: true, references: [] }], nextCursor: null });
+    commitDiff.getCommitDiff.mockResolvedValue({ commit: root, parentOid: null, files: [] });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: `View commit ${"a".repeat(8)}` }));
+
+    expect(commitDiff.getCommitDiff).toHaveBeenCalledWith(root.oid, undefined);
+    expect(await screen.findByText("Root commit (empty tree)")).toBeInTheDocument();
+    expect(screen.getByText("Ada <ada@example.com> · 2026-01-01T01:00:00Z")).toBeInTheDocument();
+    expect(screen.getByText("Lin <lin@example.com> · 2026-01-01T02:00:00Z")).toBeInTheDocument();
+    expect(screen.getByText(/Full message/)).toBeInTheDocument();
+  });
+
+  it("requires explicit direct-parent choice for a merge commit", async () => {
+    const parents = ["b".repeat(40), "c".repeat(40)];
+    const merge = { oid: "a".repeat(40), parents, summary: "Merge", message: "Merge\n", author: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" }, committer: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" } };
+    history.getCommitGraph.mockResolvedValue({ nodes: [{ commit: merge, isHead: true, references: [] }], nextCursor: null });
+    commitDiff.getCommitDiff.mockResolvedValue({ commit: merge, parentOid: parents[1], files: [] });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: `View commit ${"a".repeat(8)}` }));
+
+    expect(await screen.findByText("This merge has multiple parents. Choose the parent edge to compare.")).toBeInTheDocument();
+    expect(commitDiff.getCommitDiff).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: `Compare parent ${"c".repeat(8)}` }));
+    expect(commitDiff.getCommitDiff).toHaveBeenCalledWith(merge.oid, parents[1]);
+    expect(await screen.findByText(parents[1])).toBeInTheDocument();
+  });
+
+  it("renders ordered commit files and reusable text and binary diff states", async () => {
+    const commit = { oid: "d".repeat(40), parents: ["e".repeat(40)], summary: "Change files", message: "Change files\n", author: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" }, committer: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" } };
+    history.getCommitGraph.mockResolvedValue({ nodes: [{ commit, isHead: true, references: [] }], nextCursor: null });
+    commitDiff.getCommitDiff.mockResolvedValue({ commit, parentOid: commit.parents[0], files: [
+      { oldPath: "old.ts", newPath: "new.ts", isBinary: false, hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, header: "", lines: [{ kind: "addition", content: "safe text", oldLine: null, newLine: 1 }] }] },
+      { oldPath: "image.png", newPath: "image.png", isBinary: true, hunks: [] },
+    ] });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: `View commit ${"d".repeat(8)}` }));
+
+    expect(await screen.findByRole("region", { name: "Commit diff for new.ts" })).toHaveTextContent("safe text");
+    expect(screen.getByText("from old.ts")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "image.png" }));
+    expect(await screen.findByText("Binary file changed. Content is not returned by Core.")).toBeInTheDocument();
+  });
+
+  it("keeps timeline context when commit diff fails and retries the same edge", async () => {
+    const commit = { oid: "f".repeat(40), parents: ["e".repeat(40)], summary: "Retry me", message: "Retry me\n", author: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" }, committer: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" } };
+    history.getCommitGraph.mockResolvedValue({ nodes: [{ commit, isHead: true, references: [] }], nextCursor: null });
+    commitDiff.getCommitDiff.mockRejectedValueOnce({ code: "commit.not_found", message: "Commit unavailable", retryable: true }).mockResolvedValueOnce({ commit, parentOid: commit.parents[0], files: [] });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: `View commit ${"f".repeat(8)}` }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Commit unavailable. Commit history is still available.");
+    expect(screen.getByText("Retry me", { selector: ".commit-summary strong" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry commit diff" }));
+    expect(await screen.findByText("No changed files in this comparison.")).toBeInTheDocument();
+    expect(commitDiff.getCommitDiff).toHaveBeenLastCalledWith(commit.oid, undefined);
+  });
+
+  it("does not restore a stale commit response after the detail is closed", async () => {
+    const commit = { oid: "9".repeat(40), parents: [], summary: "Slow commit", message: "Slow commit\n", author: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" }, committer: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" } };
+    history.getCommitGraph.mockResolvedValue({ nodes: [{ commit, isHead: true, references: [] }], nextCursor: null });
+    let resolveDiff!: (value: unknown) => void;
+    commitDiff.getCommitDiff.mockReturnValue(new Promise((resolve) => { resolveDiff = resolve; }));
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: `View commit ${"9".repeat(8)}` }));
+    fireEvent.click(await screen.findByRole("button", { name: "Close commit" }));
+    resolveDiff({ commit, parentOid: null, files: [] });
+    await Promise.resolve();
+
+    expect(screen.queryByRole("heading", { name: "Slow commit" })).not.toBeInTheDocument();
+    expect(screen.getByText("Slow commit", { selector: ".commit-summary strong" })).toBeInTheDocument();
   });
 
   it("appends an opaque cursor page without changing existing commits", async () => {

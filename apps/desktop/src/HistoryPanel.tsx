@@ -21,7 +21,7 @@ function formatTimestamp(value: string) {
   return Number.isNaN(timestamp.valueOf()) ? value : timestamp.toLocaleString();
 }
 
-export function HistoryPanel({ state, onRetry, onLoadMore }: { state: HistoryState; onRetry: () => void; onLoadMore: () => void }) {
+export function HistoryPanel({ state, commitLoading, onRetry, onLoadMore, onSelectCommit }: { state: HistoryState; commitLoading: boolean; onRetry: () => void; onLoadMore: () => void; onSelectCommit: (commit: CommitGraphNode["commit"]) => void }) {
   return (
     <section className="history-panel" aria-labelledby="history-title" aria-busy={state.kind === "loading" || (state.kind === "ready" && state.more.kind === "loading")}>
       <header>
@@ -53,6 +53,7 @@ export function HistoryPanel({ state, onRetry, onLoadMore }: { state: HistorySta
                     {node.references.map((reference) => <span className={`decoration decoration--${reference.kind}`} key={reference.fullName}>{reference.name}</span>)}
                   </span>
                 )}
+                <button type="button" className="commit-view" disabled={commitLoading} onClick={() => onSelectCommit(node.commit)}>View commit {shortOid(node.commit.oid)}</button>
               </div>
             </li>
           ))}

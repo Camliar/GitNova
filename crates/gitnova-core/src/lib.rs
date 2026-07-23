@@ -147,6 +147,7 @@ fn dispatch_request(
         "repository/history" => history_request(request, state),
         "repository/commitDiff" => commit_diff_request(request, state),
         "repository/references" => references_request(request, state),
+        "repository/graph" => graph_request(request, state),
         _ => Response::error(
             Some(request.id),
             ResponseError::new(
@@ -214,6 +215,7 @@ fn initialize(request: Request, state: &mut CoreState) -> Response {
             paginated_commit_history: true,
             structured_commit_diff: true,
             repository_references: true,
+            commit_graph_projection: true,
         },
     };
     Response::success(
@@ -647,6 +649,57 @@ fn references_request(request: Request, state: &CoreState) -> Response {
         Ok(references) => Response::success(
             request.id,
             serde_json::to_value(references).expect("serializable repository references"),
+        ),
+        Err(error) => Response::error(Some(request.id), repository_error(error)),
+    }
+}
+
+fn graph_request(request: Request, state: &CoreState) -> Response {
+    let params = if request.params.is_null() {
+        HistoryParams::default()
+    } else {
+        match serde_json::from_value::<HistoryParams>(request.params) {
+            Ok(params) => params,
+            Err(_) => {
+                return Response::error(
+                    Some(request.id),
+                    ResponseError::new(
+                        ERROR_INVALID_PARAMS,
+                        "protocol.invalid_params",
+                        "Invalid repository graph parameters",
+                        false,
+                    ),
+                );
+            }
+        }
+    };
+    let limit = params.limit.unwrap_or(50);
+    if !(1..=200).contains(&limit) {
+        return Response::error(
+            Some(request.id),
+            ResponseError::new(
+                ERROR_INVALID_PARAMS,
+                "protocol.invalid_params",
+                "limit must be between 1 and 200",
+                false,
+            ),
+        );
+    }
+    let Some(descriptor) = &state.active_repository else {
+        return Response::error(
+            Some(request.id),
+            ResponseError::new(
+                ERROR_REPOSITORY_NOT_OPEN,
+                "repository.not_open",
+                "Open a repository before requesting the commit graph",
+                true,
+            ),
+        );
+    };
+    match repository::graph(descriptor, limit, params.cursor.as_deref()) {
+        Ok(page) => Response::success(
+            request.id,
+            serde_json::to_value(page).expect("serializable commit graph page"),
         ),
         Err(error) => Response::error(Some(request.id), repository_error(error)),
     }

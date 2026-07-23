@@ -4,7 +4,7 @@ import process from "node:process";
 const schemaUrl = new URL("../sdk/protocol/gitnova-protocol.schema.json", import.meta.url);
 const outputUrl = new URL("../packages/protocol/src/generated.ts", import.meta.url);
 const schema = JSON.parse(await readFile(schemaUrl, "utf8"));
-const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage", "CommitDiffParams", "CommitDiff", "ReferenceKind", "RepositoryHead", "RepositoryReference", "RepositoryReferences"];
+const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage", "CommitDiffParams", "CommitDiff", "ReferenceKind", "RepositoryHead", "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage"];
 for (const name of requiredDefinitions) {
   if (!schema.$defs?.[name]) throw new Error(`Protocol schema is missing $defs.${name}`);
 }
@@ -34,6 +34,7 @@ export interface ServerCapabilities {
   paginatedCommitHistory: boolean;
   structuredCommitDiff: boolean;
   repositoryReferences: boolean;
+  commitGraphProjection: boolean;
 }
 
 export interface InitializeParams {
@@ -187,6 +188,17 @@ export interface RepositoryReference {
 export interface RepositoryReferences {
   head: RepositoryHead;
   references: RepositoryReference[];
+}
+
+export interface CommitGraphNode {
+  commit: CommitSummary;
+  isHead: boolean;
+  references: RepositoryReference[];
+}
+
+export interface CommitGraphPage {
+  nodes: CommitGraphNode[];
+  nextCursor: string | null;
 }
 `;
 

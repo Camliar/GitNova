@@ -1,6 +1,6 @@
 # TASK-0009: Commit Graph Projection
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/009-commit-graph-projection`
@@ -33,26 +33,26 @@
 
 ## Deliverables
 
-- [ ] `repository/graph` 分页 projection
-- [ ] commit/ref decoration 关联与 HEAD 标记
-- [ ] Rust、Schema、TypeScript、capability 同步
-- [ ] pagination/decorations/merge/detached/bare/empty/error 测试
-- [ ] graph projection、mutable decorations 与 UI 边界文档
+- [x] `repository/graph` 分页 projection
+- [x] commit/ref decoration 关联与 HEAD 标记
+- [x] Rust、Schema、TypeScript、capability 同步
+- [x] pagination/decorations/merge/detached/bare/empty/error 测试
+- [x] graph projection、mutable decorations 与 UI 边界文档
 
 ## Review Checklist
 
-- [ ] commit 分页复用固定快照契约，无重复实现 Host 业务逻辑。
-- [ ] annotated/lightweight tag 与 branch decoration OID 选择正确。
-- [ ] merge parents 顺序不变，HEAD 状态明确。
-- [ ] Core 不输出 UI lane/像素/颜色策略。
-- [ ] 未实现 branch/tag 写操作、fetch/push 或 GitHub。
-- [ ] fmt、Clippy、Rust tests、`npm run check` 与文档检查通过。
+- [x] commit 分页复用固定快照契约，无重复实现 Host 业务逻辑。
+- [x] annotated/lightweight tag 与 branch decoration OID 选择正确。
+- [x] merge parents 顺序不变，HEAD 状态明确。
+- [x] Core 不输出 UI lane/像素/颜色策略。
+- [x] 未实现 branch/tag 写操作、fetch/push 或 GitHub。
+- [x] fmt、Clippy、Rust tests、`npm run check` 与文档检查通过。
 
 ## Done Definition
 
-- [ ] Deliverables 和 Review Checklist 完成。
-- [ ] 自主 Review 无阻塞项。
-- [ ] 状态更新 Done，提交、推送并合并回 `main`。
+- [x] Deliverables 和 Review Checklist 完成。
+- [x] 自主 Review 无阻塞项。
+- [x] 状态更新 Done，提交、推送并合并回 `main`。
 
 ## References
 

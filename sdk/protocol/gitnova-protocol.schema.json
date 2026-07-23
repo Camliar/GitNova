@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitnova.dev/schema/protocol/1.6/gitnova-protocol.schema.json",
-  "title": "GitNova Core Protocol 1.6",
+  "$id": "https://gitnova.dev/schema/protocol/1.7/gitnova-protocol.schema.json",
+  "title": "GitNova Core Protocol 1.7",
   "type": "object",
-  "properties": { "protocolVersion": { "const": "1.6" } },
+  "properties": { "protocolVersion": { "const": "1.7" } },
   "required": ["protocolVersion"],
   "$defs": {
     "RequestId": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
@@ -28,9 +28,10 @@
         "structuredFileDiff": { "type": "boolean" },
         "paginatedCommitHistory": { "type": "boolean" },
         "structuredCommitDiff": { "type": "boolean" },
-        "repositoryReferences": { "type": "boolean" }
+        "repositoryReferences": { "type": "boolean" },
+        "commitGraphProjection": { "type": "boolean" }
       },
-      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff", "repositoryReferences"]
+      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff", "repositoryReferences", "commitGraphProjection"]
     },
     "InitializeParams": {
       "type": "object",
@@ -269,6 +270,25 @@
         "references": { "type": "array", "items": { "$ref": "#/$defs/RepositoryReference" } }
       },
       "required": ["head", "references"]
+    },
+    "CommitGraphNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "commit": { "$ref": "#/$defs/CommitSummary" },
+        "isHead": { "type": "boolean" },
+        "references": { "type": "array", "items": { "$ref": "#/$defs/RepositoryReference" } }
+      },
+      "required": ["commit", "isHead", "references"]
+    },
+    "CommitGraphPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "nodes": { "type": "array", "items": { "$ref": "#/$defs/CommitGraphNode" } },
+        "nextCursor": { "type": ["string", "null"] }
+      },
+      "required": ["nodes", "nextCursor"]
     }
   }
 }

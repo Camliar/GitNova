@@ -1,8 +1,8 @@
 use gitnova_protocol::{
-    BranchStatus, CommitDiff, CommitIdentity, CommitSummary, DiffHunk, DiffLine, DiffLineKind,
-    DiffScope, FileDiff, FileStatus, HistoryPage, ReferenceKind, RepositoryDescriptor,
-    RepositoryHead, RepositoryKind, RepositoryReference, RepositoryReferences, StatusEntry,
-    StatusEntryKind, WorkingTreeStatus,
+    BranchStatus, CommitDiff, CommitGraphNode, CommitGraphPage, CommitIdentity, CommitSummary,
+    DiffHunk, DiffLine, DiffLineKind, DiffScope, FileDiff, FileStatus, HistoryPage, ReferenceKind,
+    RepositoryDescriptor, RepositoryHead, RepositoryKind, RepositoryReference,
+    RepositoryReferences, StatusEntry, StatusEntryKind, WorkingTreeStatus,
 };
 use std::ffi::{OsStr, OsString};
 use std::fs;
@@ -299,6 +299,47 @@ pub fn references(
     Ok(RepositoryReferences {
         head,
         references: parse_references(&output.stdout)?,
+    })
+}
+
+pub fn graph(
+    descriptor: &RepositoryDescriptor,
+    limit: u16,
+    cursor: Option<&str>,
+) -> Result<CommitGraphPage, RepositoryError> {
+    let history = history(descriptor, limit, cursor)?;
+    let repository_references = references(descriptor)?;
+    let head_oid = repository_references.head.oid.as_deref();
+    let nodes = history
+        .commits
+        .into_iter()
+        .map(|commit| {
+            let references = repository_references
+                .references
+                .iter()
+                .filter(|reference| {
+                    let decoration_oid = if reference.kind == ReferenceKind::Tag {
+                        reference
+                            .peeled_target_oid
+                            .as_ref()
+                            .unwrap_or(&reference.target_oid)
+                    } else {
+                        &reference.target_oid
+                    };
+                    decoration_oid == &commit.oid
+                })
+                .cloned()
+                .collect();
+            CommitGraphNode {
+                is_head: head_oid == Some(commit.oid.as_str()),
+                commit,
+                references,
+            }
+        })
+        .collect();
+    Ok(CommitGraphPage {
+        nodes,
+        next_cursor: history.next_cursor,
     })
 }
 

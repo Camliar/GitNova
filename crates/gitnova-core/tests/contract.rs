@@ -124,7 +124,7 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let responses = responses(&output.stdout);
     assert_eq!(responses.len(), 2);
     assert_eq!(responses[0]["id"], "init-1");
-    assert_eq!(responses[0]["result"]["protocolVersion"], "1.6");
+    assert_eq!(responses[0]["result"]["protocolVersion"], "1.7");
     assert_eq!(responses[0]["result"]["capabilities"]["cancellation"], true);
     assert_eq!(
         responses[0]["result"]["capabilities"]["workingTreeStatus"],
@@ -144,6 +144,10 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     );
     assert_eq!(
         responses[0]["result"]["capabilities"]["repositoryReferences"],
+        true
+    );
+    assert_eq!(
+        responses[0]["result"]["capabilities"]["commitGraphProjection"],
         true
     );
     assert_eq!(responses[1]["result"], Value::Null);
@@ -206,6 +210,136 @@ fn references_response(repository: &Path) -> Value {
     ]);
     assert!(output.status.success());
     responses(&output.stdout).remove(2)
+}
+
+fn graph_response(repository: &Path, params: Value) -> Value {
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", repository),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/graph","params":params}),
+    ]);
+    assert!(output.status.success());
+    responses(&output.stdout).remove(2)
+}
+
+#[test]
+fn projects_paginated_commits_with_head_branch_and_tag_decorations() {
+    let directory = TestDirectory::new("graph-projection");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    for number in 1..=3 {
+        commit_file(&repository, number, &format!("commit {number}"));
+    }
+    let head = head_oid(&repository);
+    git(&["branch", "previous", "HEAD~1"], &repository);
+    git(&["tag", "lightweight"], &repository);
+    git(
+        &[
+            "-c",
+            "user.name=GitNova Test",
+            "-c",
+            "user.email=test@gitnova.invalid",
+            "tag",
+            "-a",
+            "annotated",
+            "-m",
+            "tag",
+        ],
+        &repository,
+    );
+
+    let first = graph_response(&repository, json!({"limit": 2}));
+    let nodes = first["result"]["nodes"].as_array().unwrap();
+    assert_eq!(nodes.len(), 2);
+    assert_eq!(nodes[0]["commit"]["oid"], head);
+    assert_eq!(nodes[0]["isHead"], true);
+    let names: Vec<_> = nodes[0]["references"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["name"].as_str().unwrap())
+        .collect();
+    assert!(names.contains(&"lightweight"));
+    assert!(names.contains(&"annotated"));
+    assert!(
+        nodes[1]["references"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item["name"] == "previous")
+    );
+    let cursor = first["result"]["nextCursor"].as_str().unwrap().to_owned();
+    commit_file(&repository, 4, "after snapshot");
+    let second = graph_response(&repository, json!({"limit": 2, "cursor": cursor}));
+    assert_eq!(
+        second["result"]["nodes"][0]["commit"]["summary"],
+        "commit 1"
+    );
+    assert!(second["result"]["nextCursor"].is_null());
+}
+
+#[test]
+fn graph_preserves_merge_topology_and_supports_detached_bare_and_empty() {
+    let directory = TestDirectory::new("graph-kinds");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    let empty = graph_response(&repository, Value::Null);
+    assert!(empty["result"]["nodes"].as_array().unwrap().is_empty());
+    commit_file(&repository, 1, "root");
+    git(&["switch", "-c", "topic"], &repository);
+    fs::write(repository.join("topic.txt"), "topic").unwrap();
+    git(&["add", "topic.txt"], &repository);
+    git(
+        &[
+            "-c",
+            "user.name=GitNova Test",
+            "-c",
+            "user.email=test@gitnova.invalid",
+            "commit",
+            "-m",
+            "topic",
+        ],
+        &repository,
+    );
+    git(&["checkout", "-"], &repository);
+    commit_file(&repository, 2, "main");
+    git(
+        &[
+            "-c",
+            "user.name=GitNova Test",
+            "-c",
+            "user.email=test@gitnova.invalid",
+            "merge",
+            "--no-ff",
+            "topic",
+            "-m",
+            "merge",
+        ],
+        &repository,
+    );
+    let merge_oid = head_oid(&repository);
+    git(&["checkout", "--detach", "HEAD"], &repository);
+    let detached = graph_response(&repository, json!({"limit": 1}));
+    assert_eq!(detached["result"]["nodes"][0]["commit"]["oid"], merge_oid);
+    assert_eq!(
+        detached["result"]["nodes"][0]["commit"]["parents"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(detached["result"]["nodes"][0]["isHead"], true);
+    git(
+        &["clone", "--bare", repository.to_str().unwrap(), "bare.git"],
+        &directory.0,
+    );
+    let bare = graph_response(&directory.0.join("bare.git"), json!({"limit": 1}));
+    assert_eq!(bare["result"]["nodes"][0]["commit"]["oid"], merge_oid);
+    let invalid = graph_response(&repository, json!({"cursor": "invalid"}));
+    assert_eq!(
+        invalid["error"]["data"]["stableCode"],
+        "history.invalid_cursor"
+    );
 }
 
 #[test]

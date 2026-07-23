@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: &str = "1.6";
+pub const PROTOCOL_VERSION: &str = "1.7";
 
 pub const ERROR_PARSE: i64 = -32700;
 pub const ERROR_INVALID_REQUEST: i64 = -32600;
@@ -162,6 +162,7 @@ pub struct ServerCapabilities {
     pub paginated_commit_history: bool,
     pub structured_commit_diff: bool,
     pub repository_references: bool,
+    pub commit_graph_projection: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -387,6 +388,21 @@ pub struct RepositoryReferences {
     pub references: Vec<RepositoryReference>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitGraphNode {
+    pub commit: CommitSummary,
+    pub is_head: bool,
+    pub references: Vec<RepositoryReference>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitGraphPage {
+    pub nodes: Vec<CommitGraphNode>,
+    pub next_cursor: Option<String>,
+}
+
 #[derive(Clone, Default)]
 pub struct CancellationRegistry {
     cancelled: Arc<Mutex<HashSet<RequestId>>>,
@@ -473,6 +489,8 @@ mod tests {
             "RepositoryHead",
             "RepositoryReference",
             "RepositoryReferences",
+            "CommitGraphNode",
+            "CommitGraphPage",
         ] {
             assert!(schema["$defs"].get(definition).is_some());
         }

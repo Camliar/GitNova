@@ -27,3 +27,9 @@ GitHub does not include `patch` for every file. GitNova reports those records as
 The PR and original commit model feeds the conservative [Squash Trace relationship](SQUASH_TRACE.md). Relationship inference is not duplicated in this Provider response or in Hosts.
 
 Official references: [Get a pull request and list PR commits](https://docs.github.com/en/rest/pulls/pulls), [Get a commit](https://docs.github.com/en/rest/commits/commits#get-a-commit), and [GitHub CLI pagination/slurp](https://cli.github.com/manual/gh_api).
+
+## Desktop PR navigation
+
+Desktop 要求用户输入正整数 PR number，并在 submit 后调用 `github/pullRequest`。请求绑定已由 Core normalized 的 `nameWithOwner`，Host 不构造 endpoint。错误保留 repository identity 与 number，只在用户点击 Retry 时重复同一请求。
+
+UI 展示 state/draft、author、base/head、timestamps、merge commit、body 和 Core ordered original commits。commit identity、login、OID 与 parent count 均来自协议，Host 不重排、不补全也不声称 partial sequence。本阶段不调用 `github/pullRequestCommitDiff`，original commit 的文件与行级远程 diff 属于后续 Task。

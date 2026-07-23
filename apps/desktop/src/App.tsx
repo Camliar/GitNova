@@ -11,6 +11,7 @@ import { getCommitGraph } from "./history";
 import { HistoryPanel, type HistoryState } from "./HistoryPanel";
 import { getCommitDiff } from "./commitDiff";
 import { CommitDetailPanel, type CommitDetailState, type CommitSelection } from "./CommitDetailPanel";
+import { GitHubPanel } from "./GitHubPanel";
 
 type Connection =
   | { kind: "checking" }
@@ -299,6 +300,7 @@ export function App() {
               onClose={closeCommitDetail}
             />
           )}
+          {repository.kind === "open" && <GitHubPanel key={repository.repository.gitDirectory} />}
         </section>
 
         <aside className="foundation-card" aria-labelledby="foundation-title">

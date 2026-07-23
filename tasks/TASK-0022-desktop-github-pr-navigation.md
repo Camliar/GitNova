@@ -1,6 +1,6 @@
 # TASK-0022: Desktop GitHub PR Navigation
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/022-desktop-github-pr-navigation`
@@ -31,25 +31,25 @@
 
 ## Deliverables
 
-- [ ] typed GitHub repository/PR client boundary
-- [ ] explicit network consent and PR-number navigation
-- [ ] normalized PR and original commit presentation
-- [ ] frontend tests and documentation
+- [x] typed GitHub repository/PR client boundary
+- [x] explicit network consent and PR-number navigation
+- [x] normalized PR and original commit presentation
+- [x] frontend tests and documentation
 
 ## Review Checklist
 
-- [ ] 无 repository open 后自动网络请求；每次 provider action 都由用户触发。
-- [ ] Host 不执行 gh、不处理 token、不解析 remote/provider payload。
-- [ ] PR commits 保持 Core order，不宣称 partial result。
-- [ ] errors sanitized，retry 保留安全 selection，stale response 不回写。
-- [ ] 未提前实现 remote commit diff 或 Squash Trace UI。
-- [ ] Rust fmt/Clippy/tests、frontend checks 与 Tauri build 通过。
+- [x] 无 repository open 后自动网络请求；每次 provider action 都由用户触发。
+- [x] Host 不执行 gh、不处理 token、不解析 remote/provider payload。
+- [x] PR commits 保持 Core order，不宣称 partial result。
+- [x] errors sanitized，retry 保留安全 selection，stale response 不回写。
+- [x] 未提前实现 remote commit diff 或 Squash Trace UI。
+- [x] Rust fmt/Clippy/tests、frontend checks 与 Tauri build 通过。
 
 ## Done Definition
 
-- [ ] Deliverables 和 Review Checklist 完成。
-- [ ] 自主 Review 无阻塞项。
-- [ ] 状态更新 Done，提交、推送并快进合并至 `main`。
+- [x] Deliverables 和 Review Checklist 完成。
+- [x] 自主 Review 无阻塞项。
+- [x] 状态更新 Done，提交、推送并快进合并至 `main`。
 
 ## References
 

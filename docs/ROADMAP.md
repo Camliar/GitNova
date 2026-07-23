@@ -35,3 +35,24 @@ Desktop Host 基座已经建立；后续 Task 依次接入独立 Core 进程 tra
 AI 编排和 Git 语义属于 Core；Host 只展示输入范围、建议、可编辑草稿和确认步骤。功能必须显式触发，默认只生成建议，不自动 commit，也不自动执行 reset、rebase、push 等高风险操作。模型可为本地模型或用户自行配置的直连 Provider；不得引入 GitNova 账户或中心代理，发送前必须展示并最小化将离开仓库环境的数据。
 
 产品目标见[愿景](VISION.md)，技术选择见[技术栈](TECH_STACK.md)，质量门槛见[非功能需求](NON_FUNCTIONAL.md)。
+
+## Remaining Task Baseline
+
+截至 TASK-0023 完成，后续路线按以下 14 个独立 Review 单元推进；编号锁定顺序，具体范围仍以各 Task 文档为准：
+
+1. TASK-0024 — Desktop Squash Trace 关联展示
+2. TASK-0025 — Desktop commit graph 可视化
+3. TASK-0026 — Core commit 与 branch mutation
+4. TASK-0027 — Desktop commit 与 branch workflow
+5. TASK-0028 — MVP 端到端质量、性能与网络透明性
+6. TASK-0029 — Desktop 打包、签名与 CI/CD 发布
+7. TASK-0030 — WSL、Remote SSH 与 Dev Container Core launcher
+8. TASK-0031 — VS Code Host
+9. TASK-0032 — JetBrains Host
+10. TASK-0033 — Visual Studio Host
+11. TASK-0034 — GitLab Provider
+12. TASK-0035 — AI Assist 协议、隐私与 Provider 决策
+13. TASK-0036 — Core AI commit draft 与操作建议
+14. TASK-0037 — Desktop AI Assist 交互与安全确认
+
+该基线用于回答剩余工作量并防止 AI Assist 提前；新增范围必须先更新 Roadmap，且不得把多个 Task 合并成一次实现。

@@ -1,4 +1,6 @@
 # Rust crates
 
-Rust workspace 占位目录。未来的 `gitnova-core` 将作为本地独立进程放在这里；本 Task 不创建任何业务 crate。
+- `gitnova-core`：独立 Core 二进制，当前只实现 JSON-RPC/stdio 生命周期。
+- `gitnova-protocol`：跨 Core 契约测试共享的版本化协议类型。
 
+Git、GitHub、PR 与 Squash Trace 业务能力将由后续独立 Task 增量加入 Core。

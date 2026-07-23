@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitnova.dev/schema/protocol/1.0/gitnova-protocol.schema.json",
+  "title": "GitNova Core Protocol 1.0",
+  "type": "object",
+  "properties": { "protocolVersion": { "const": "1.0" } },
+  "required": ["protocolVersion"],
+  "$defs": {
+    "RequestId": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
+    "ImplementationInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "name": { "type": "string" }, "version": { "type": "string" } },
+      "required": ["name", "version"]
+    },
+    "ClientCapabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "cancellation": { "type": "boolean", "default": false } }
+    },
+    "ServerCapabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "cancellation": { "type": "boolean" } },
+      "required": ["cancellation"]
+    },
+    "InitializeParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "clientInfo": { "$ref": "#/$defs/ImplementationInfo" },
+        "protocolVersion": { "type": "string" },
+        "capabilities": { "$ref": "#/$defs/ClientCapabilities" }
+      },
+      "required": ["clientInfo", "protocolVersion"]
+    },
+    "InitializeResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "coreInfo": { "$ref": "#/$defs/ImplementationInfo" },
+        "protocolVersion": { "type": "string" },
+        "capabilities": { "$ref": "#/$defs/ServerCapabilities" }
+      },
+      "required": ["coreInfo", "protocolVersion", "capabilities"]
+    },
+    "CancelParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "id": { "$ref": "#/$defs/RequestId" } },
+      "required": ["id"]
+    },
+    "ErrorData": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stableCode": { "type": "string" },
+        "retryable": { "type": "boolean" },
+        "details": { "type": "object", "additionalProperties": true }
+      },
+      "required": ["stableCode", "retryable"]
+    }
+  }
+}

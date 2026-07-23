@@ -1,4 +1,5 @@
 # SDK
 
-JSON-RPC 协议类型与 Host 客户端 SDK 占位目录。本 Task 不定义业务方法或实现。
+- `protocol/gitnova-protocol.schema.json`：Host/Core 公共契约的版本化 JSON Schema 事实源。
 
+各语言生成类型只描述协议，不承载 Core 业务逻辑。

@@ -1,6 +1,6 @@
 # TASK-0002: Core Contract
 
-- **Status:** Draft
+- **Status:** Review
 - **Priority:** P0
 - **Owner:** Unassigned
 - **Branch:** `feature/002-core-contract`
@@ -47,30 +47,30 @@ GitNova 的所有 Host 都必须通过独立 Core 获得业务能力。[ADR-0004
 
 ## Deliverables
 
-- [ ] `gitnova-core` 及协议 crate 骨架
-- [ ] 版本化 JSON-RPC/stdio 协议文档与 JSON Schema
-- [ ] initialize/shutdown/exit、能力协商、错误与取消实现
-- [ ] TypeScript 协议类型生成或一致性验证
-- [ ] Rust 单元测试与跨进程契约测试
-- [ ] Core 生命周期、Host 责任和跨环境定位文档
-- [ ] 相关 README、项目结构、技术栈和路线图状态同步
+- [x] `gitnova-core` 及协议 crate 骨架
+- [x] 版本化 JSON-RPC/stdio 协议文档与 JSON Schema
+- [x] initialize/shutdown/exit、能力协商、错误与取消实现
+- [x] TypeScript 协议类型生成或一致性验证
+- [x] Rust 单元测试与跨进程契约测试
+- [x] Core 生命周期、Host 责任和跨环境定位文档
+- [x] 相关 README、项目结构、技术栈和路线图状态同步
 
 ## Review Checklist
 
-- [ ] Core 是独立 Rust 进程，Host 不承载或复制协议/业务规则。
-- [ ] 仅使用 JSON-RPC 2.0 over stdio，未引入端口、daemon 或中心服务。
-- [ ] 协议版本、能力、错误、取消和生命周期具有可执行契约测试。
-- [ ] stdout 纯度与敏感数据日志约束已测试或静态验证。
-- [ ] Rust 和 TypeScript 公共类型与 JSON Schema 一致。
-- [ ] Windows、macOS、Linux 的差异已记录，无硬编码单平台路径假设。
-- [ ] 未实现 Git、GitHub、PR、Squash Trace、SQLite 或 Host UI 能力。
-- [ ] `cargo fmt --check`、`cargo clippy --workspace --all-targets -- -D warnings` 与 `cargo test --workspace` 通过。
-- [ ] Markdown 链接、JSON Schema、生成结果和目录说明已验证。
+- [x] Core 是独立 Rust 进程，Host 不承载或复制协议/业务规则。
+- [x] 仅使用 JSON-RPC 2.0 over stdio，未引入端口、daemon 或中心服务。
+- [x] 协议版本、能力、错误、取消和生命周期具有可执行契约测试。
+- [x] stdout 纯度与敏感数据日志约束已测试或静态验证。
+- [x] Rust 和 TypeScript 公共类型与 JSON Schema 一致。
+- [x] Windows、macOS、Linux 的差异已记录，无硬编码单平台路径假设。
+- [x] 未实现 Git、GitHub、PR、Squash Trace、SQLite 或 Host UI 能力。
+- [x] `cargo fmt --check`、`cargo clippy --workspace --all-targets -- -D warnings` 与 `cargo test --workspace` 通过。
+- [x] Markdown 链接、JSON Schema、生成结果和目录说明已验证。
 
 ## Done Definition
 
-- [ ] Deliverables 全部完成。
-- [ ] Review Checklist 全部通过且无未声明范围扩张。
+- [x] Deliverables 全部完成。
+- [x] Review Checklist 全部通过且无未声明范围扩张。
 - [ ] 非作者 Reviewer 批准并合并对应 PR。
 - [ ] Task 状态更新为 Done。
 

@@ -2,7 +2,7 @@
 
 本清单是产品分期参考，不代表本 Task 已实现任何功能。功能只有在独立 Task 获批、实现并 Review 后才视为存在。
 
-## Foundation（当前）
+## Foundation
 
 - Monorepo 结构与基础配置
 - 产品、架构、技术、规范和品牌文档

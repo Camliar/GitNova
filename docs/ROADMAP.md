@@ -2,11 +2,11 @@
 
 路线图表达顺序，不承诺具体日期。每一阶段都必须通过独立 Task、ADR（如需要）和 Review 才能进入实现。
 
-## Phase 0 — Foundation（当前）
+## Phase 0 — Foundation
 
 建立 Monorepo、文档、ADR、协作规范、品牌和占位 CI；不实现业务功能。
 
-## Phase 1 — Core Contract
+## Phase 1 — Core Contract（当前）
 
 定义 `gitnova-core` 进程生命周期、JSON-RPC 基础协议、能力协商、错误模型与 SDK 生成方式。协议决策需遵循 [ADR-0004](../adr/ADR-0004-Core-Process.md)。
 

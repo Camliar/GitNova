@@ -1,9 +1,12 @@
 [workspace]
 resolver = "2"
-members = []
+members = ["crates/gitnova-core", "crates/gitnova-protocol"]
 
 [workspace.package]
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/gitnova/gitnova"
 
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

@@ -13,10 +13,10 @@ GitNova 文档以本页为入口。术语以[词汇表](GLOSSARY.md)为准，已
 | [BRANDING](BRANDING.md) | 品牌语言、颜色与 Logo 规范 |
 | [UI GUIDELINE](UI_GUIDELINE.md) | 界面设计原则与可访问性 |
 | [PRODUCT REQUIREMENTS](PRODUCT_REQUIREMENTS.md) | 产品需求和非目标 |
+| [PROTOCOL](PROTOCOL.md) | Core JSON-RPC/stdio 契约与生命周期 |
 | [FEATURE LIST](FEATURE_LIST.md) | 功能分期与本 Task 禁区 |
 | [NON-FUNCTIONAL](NON_FUNCTIONAL.md) | 性能、安全、可靠性等要求 |
 | [GLOSSARY](GLOSSARY.md) | 统一术语 |
 | [PROJECT STRUCTURE](PROJECT_STRUCTURE.md) | Monorepo 目录职责 |
 
 协作方式见[贡献指南](../CONTRIBUTING.md)，Task 流程见 [`tasks/README.md`](../tasks/README.md)。
-

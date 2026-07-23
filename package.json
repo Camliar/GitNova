@@ -9,6 +9,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "check": "echo 'No implementation checks are configured in the foundation task.'"
+    "generate:protocol": "node scripts/generate-protocol.mjs",
+    "check:protocol": "node scripts/generate-protocol.mjs --check",
+    "check": "npm run check:protocol"
   }
 }

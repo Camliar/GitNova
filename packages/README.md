@@ -1,4 +1,5 @@
 # Shared packages
 
-跨 Host 的非业务 TypeScript 工具和设计令牌占位目录。本 Task 不创建实现包。
+- `protocol`：从版本化 JSON Schema 生成的 TypeScript Host/Core 契约类型。
 
+共享包不得放置 Git/GitHub 业务逻辑。

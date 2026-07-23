@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitnova.dev/schema/protocol/1.7/gitnova-protocol.schema.json",
-  "title": "GitNova Core Protocol 1.7",
+  "$id": "https://gitnova.dev/schema/protocol/1.8/gitnova-protocol.schema.json",
+  "title": "GitNova Core Protocol 1.8",
   "type": "object",
-  "properties": { "protocolVersion": { "const": "1.7" } },
+  "properties": { "protocolVersion": { "const": "1.8" } },
   "required": ["protocolVersion"],
   "$defs": {
     "RequestId": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
@@ -29,9 +29,10 @@
         "paginatedCommitHistory": { "type": "boolean" },
         "structuredCommitDiff": { "type": "boolean" },
         "repositoryReferences": { "type": "boolean" },
-        "commitGraphProjection": { "type": "boolean" }
+        "commitGraphProjection": { "type": "boolean" },
+        "githubRepository": { "type": "boolean" }
       },
-      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff", "repositoryReferences", "commitGraphProjection"]
+      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff", "repositoryReferences", "commitGraphProjection", "githubRepository"]
     },
     "InitializeParams": {
       "type": "object",
@@ -289,6 +290,28 @@
         "nextCursor": { "type": ["string", "null"] }
       },
       "required": ["nodes", "nextCursor"]
+    },
+    "GitHubRepositoryParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "remote": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "nameWithOwner": { "type": "string", "minLength": 3, "maxLength": 140 }
+      }
+    },
+    "GitHubRepository": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host": { "const": "github.com" },
+        "owner": { "type": "string" },
+        "name": { "type": "string" },
+        "nameWithOwner": { "type": "string" },
+        "url": { "type": "string" },
+        "defaultBranch": { "type": "string" },
+        "isPrivate": { "type": "boolean" }
+      },
+      "required": ["host", "owner", "name", "nameWithOwner", "url", "defaultBranch", "isPrivate"]
     }
   }
 }

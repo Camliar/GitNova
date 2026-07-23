@@ -50,7 +50,7 @@ Host 可以做平台特有的输入映射和呈现，但不能解释领域结果
 
 - 仓库是事实源，System Git 是 Git 操作边界。
 - SQLite 只保存本地数据，并应支持迁移、备份和安全重建。
-- GitHub Provider 是 MVP Squash Trace 主路径的一部分，由 Core 通过 `gh`、REST 或 GraphQL 接入；网络集成必须可配置、透明且可禁用，Foundation Task 不实现它。
+- GitHub Provider 是 MVP Squash Trace 主路径的一部分，由 Core 通过 `gh`、REST 或 GraphQL 接入；首个 adapter 遵循 [ADR-0005](../adr/ADR-0005-GitHub-Provider.md)，网络集成必须显式、透明且可禁用。
 - Core 负责获取并关联 PR、原始 commits、per-commit diff 与最终 squash commit；Host 只呈现 Core 返回的领域结果。
 - 仓库在哪个环境，Core 就运行在哪个环境；该边界后续同样适用于 WSL、Remote SSH 和 Dev Container。
 - Core 不把仓库、历史、凭据或遥测发送到 GitNova 中心服务，因为不存在这样的服务。

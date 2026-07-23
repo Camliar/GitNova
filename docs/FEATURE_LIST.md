@@ -21,7 +21,8 @@
 - HEAD、local/remote branches 与 tags 的只读枚举（已实现）
 - commits、parents 与 ref decorations 的 Core graph projection（已实现）
 - Desktop 提交图谱可视化
-- GitHub Provider（`gh`、REST 或 GraphQL 适配器，由 Core 统一封装）
+- GitHub Provider repository identity/metadata（Core-owned `gh api` adapter，已实现）
+- GitHub PR 数据与 original commits
 - PR 查看与原始 commit 列表
 - 指定 PR 原始 commit 的文件列表与行级 diff
 - PR、原始 commits 与最终 squash commit 的关联展示（Squash Trace）

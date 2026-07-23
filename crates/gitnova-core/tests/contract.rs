@@ -124,7 +124,7 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let responses = responses(&output.stdout);
     assert_eq!(responses.len(), 2);
     assert_eq!(responses[0]["id"], "init-1");
-    assert_eq!(responses[0]["result"]["protocolVersion"], "1.7");
+    assert_eq!(responses[0]["result"]["protocolVersion"], "1.8");
     assert_eq!(responses[0]["result"]["capabilities"]["cancellation"], true);
     assert_eq!(
         responses[0]["result"]["capabilities"]["workingTreeStatus"],
@@ -148,6 +148,10 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     );
     assert_eq!(
         responses[0]["result"]["capabilities"]["commitGraphProjection"],
+        true
+    );
+    assert_eq!(
+        responses[0]["result"]["capabilities"]["githubRepository"],
         true
     );
     assert_eq!(responses[1]["result"], Value::Null);
@@ -762,6 +766,50 @@ fn rejects_requests_before_initialization() {
         responses[0]["error"]["data"]["stableCode"],
         "core.not_initialized"
     );
+}
+
+#[test]
+fn github_repository_requires_session_and_valid_provider_identity() {
+    let without_repository = run(&[
+        initialize(json!(1)),
+        json!({"jsonrpc":"2.0","id":2,"method":"github/repository","params":{"nameWithOwner":"owner/repo"}}),
+    ]);
+    let values = responses(&without_repository.stdout);
+    assert_eq!(
+        values[1]["error"]["data"]["stableCode"],
+        "repository.not_open"
+    );
+
+    let directory = TestDirectory::new("github-context");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &repository),
+        json!({"jsonrpc":"2.0","id":3,"method":"github/repository"}),
+        json!({"jsonrpc":"2.0","id":4,"method":"github/repository","params":{"nameWithOwner":"owner/repo/extra"}}),
+        json!({"jsonrpc":"2.0","id":5,"method":"github/repository","params":{"remote":"--upload-pack=evil"}}),
+        json!({"jsonrpc":"2.0","id":6,"method":"github/repository","params":{"unexpected":true}}),
+    ]);
+    let values = responses(&output.stdout);
+    assert_eq!(
+        values[2]["error"]["data"]["stableCode"],
+        "github.remote_not_found"
+    );
+    assert_eq!(
+        values[3]["error"]["data"]["stableCode"],
+        "github.unsupported_remote"
+    );
+    assert_eq!(
+        values[4]["error"]["data"]["stableCode"],
+        "github.invalid_remote"
+    );
+    assert_eq!(values[5]["error"]["code"], -32602);
+    for value in &values[2..] {
+        let serialized = serde_json::to_string(value).unwrap();
+        assert!(!serialized.contains("evil"));
+        assert!(!serialized.contains("token"));
+    }
 }
 
 #[test]

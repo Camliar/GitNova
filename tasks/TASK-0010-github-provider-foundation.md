@@ -1,6 +1,6 @@
 # TASK-0010: GitHub Provider Foundation
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/010-github-provider-foundation`
@@ -35,28 +35,28 @@
 
 ## Deliverables
 
-- [ ] ADR-0005 与 Core GitHub Provider/`gh` adapter 边界
-- [ ] GitHub remote/nameWithOwner 严格解析
-- [ ] `github/repository` 与规范化 metadata
-- [ ] Rust、Schema、TypeScript、capability 与稳定错误同步
-- [ ] fake runner、contract、安全与错误测试
-- [ ] 显式联网、凭据和限制文档
+- [x] ADR-0005 与 Core GitHub Provider/`gh` adapter 边界
+- [x] GitHub remote/nameWithOwner 严格解析
+- [x] `github/repository` 与规范化 metadata
+- [x] Rust、Schema、TypeScript、capability 与稳定错误同步
+- [x] fake runner、contract、安全与错误测试
+- [x] 显式联网、凭据和限制文档
 
 ## Review Checklist
 
-- [ ] GitHub/Git 业务逻辑只在 Core，Host 不接触凭据。
-- [ ] 仅显式请求联网；不自动重试、缓存或后台访问。
-- [ ] 不调用 shell 或 `gh auth token`，命令/错误不泄漏 token、stderr 或响应正文。
-- [ ] remote/repository identity 严格验证，不能注入 endpoint/flag。
-- [ ] normalized protocol 不暴露 Provider 原始 JSON。
-- [ ] 未实现 PR、Squash Trace、Enterprise、SQLite 或 Host UI。
-- [ ] fmt、Clippy、Rust tests、`npm run check` 与文档检查通过。
+- [x] GitHub/Git 业务逻辑只在 Core，Host 不接触凭据。
+- [x] 仅显式请求联网；不自动重试、缓存或后台访问。
+- [x] 不调用 shell 或 `gh auth token`，命令/错误不泄漏 token、stderr 或响应正文。
+- [x] remote/repository identity 严格验证，不能注入 endpoint/flag。
+- [x] normalized protocol 不暴露 Provider 原始 JSON。
+- [x] 未实现 PR、Squash Trace、Enterprise、SQLite 或 Host UI。
+- [x] fmt、Clippy、Rust tests、`npm run check` 与文档检查通过。
 
 ## Done Definition
 
-- [ ] Deliverables 和 Review Checklist 完成。
-- [ ] 自主 Review 无阻塞项。
-- [ ] 状态更新 Done，提交、推送并快进合并至 `main`。
+- [x] Deliverables 和 Review Checklist 完成。
+- [x] 自主 Review 无阻塞项。
+- [x] 状态更新 Done，提交、推送并快进合并至 `main`。
 
 ## References
 

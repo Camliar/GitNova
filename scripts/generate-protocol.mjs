@@ -4,7 +4,7 @@ import process from "node:process";
 const schemaUrl = new URL("../sdk/protocol/gitnova-protocol.schema.json", import.meta.url);
 const outputUrl = new URL("../packages/protocol/src/generated.ts", import.meta.url);
 const schema = JSON.parse(await readFile(schemaUrl, "utf8"));
-const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage", "CommitDiffParams", "CommitDiff", "ReferenceKind", "RepositoryHead", "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage"];
+const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage", "CommitDiffParams", "CommitDiff", "ReferenceKind", "RepositoryHead", "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage", "GitHubRepositoryParams", "GitHubRepository"];
 for (const name of requiredDefinitions) {
   if (!schema.$defs?.[name]) throw new Error(`Protocol schema is missing $defs.${name}`);
 }
@@ -35,6 +35,7 @@ export interface ServerCapabilities {
   structuredCommitDiff: boolean;
   repositoryReferences: boolean;
   commitGraphProjection: boolean;
+  githubRepository: boolean;
 }
 
 export interface InitializeParams {
@@ -199,6 +200,21 @@ export interface CommitGraphNode {
 export interface CommitGraphPage {
   nodes: CommitGraphNode[];
   nextCursor: string | null;
+}
+
+export interface GitHubRepositoryParams {
+  remote?: string;
+  nameWithOwner?: string;
+}
+
+export interface GitHubRepository {
+  host: "github.com";
+  owner: string;
+  name: string;
+  nameWithOwner: string;
+  url: string;
+  defaultBranch: string;
+  isPrivate: boolean;
 }
 `;
 

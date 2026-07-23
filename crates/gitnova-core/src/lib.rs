@@ -1,19 +1,22 @@
 mod framing;
+mod github;
 mod repository;
 
 use gitnova_protocol::{
     CancelParams, CancellationRegistry, CommitDiffParams, DiffParams, ERROR_ALREADY_INITIALIZED,
     ERROR_COMMIT_DIFF_PARSE, ERROR_COMMIT_NOT_FOUND, ERROR_COMMIT_PARENT_REQUIRED,
-    ERROR_COMMIT_PARSE, ERROR_DIFF_PARSE, ERROR_DIFFERENT_REPOSITORY_OPEN,
-    ERROR_GIT_COMMAND_FAILED, ERROR_GIT_UNAVAILABLE, ERROR_HISTORY_ENCODING,
+    ERROR_COMMIT_PARSE, ERROR_DIFF_PARSE, ERROR_DIFFERENT_REPOSITORY_OPEN, ERROR_GH_UNAVAILABLE,
+    ERROR_GIT_COMMAND_FAILED, ERROR_GIT_UNAVAILABLE, ERROR_GITHUB_AUTH_REQUIRED,
+    ERROR_GITHUB_INVALID_REMOTE, ERROR_GITHUB_REMOTE_NOT_FOUND, ERROR_GITHUB_REQUEST_FAILED,
+    ERROR_GITHUB_RESPONSE_PARSE, ERROR_GITHUB_UNSUPPORTED_REMOTE, ERROR_HISTORY_ENCODING,
     ERROR_INCOMPATIBLE_PROTOCOL, ERROR_INVALID_COMMIT_PARENT, ERROR_INVALID_HISTORY_CURSOR,
     ERROR_INVALID_PARAMS, ERROR_INVALID_PATH, ERROR_INVALID_REPOSITORY_PATH, ERROR_INVALID_REQUEST,
     ERROR_METHOD_NOT_FOUND, ERROR_NOT_INITIALIZED, ERROR_PARSE, ERROR_REFERENCE_ENCODING,
     ERROR_REFERENCE_PARSE, ERROR_REPOSITORY_NOT_FOUND, ERROR_REPOSITORY_NOT_OPEN,
     ERROR_REQUEST_CANCELLED, ERROR_STATUS_PARSE, ERROR_UNSAFE_REPOSITORY, ERROR_WORKTREE_REQUIRED,
-    HistoryParams, ImplementationInfo, InitializeParams, InitializeResult, JSON_RPC_VERSION,
-    Notification, PROTOCOL_VERSION, RepositoryDescriptor, RepositoryPathParams, Request, Response,
-    ResponseError, ServerCapabilities,
+    GitHubRepositoryParams, HistoryParams, ImplementationInfo, InitializeParams, InitializeResult,
+    JSON_RPC_VERSION, Notification, PROTOCOL_VERSION, RepositoryDescriptor, RepositoryPathParams,
+    Request, Response, ResponseError, ServerCapabilities,
 };
 use serde_json::Value;
 use std::io::{self, BufRead, Write};
@@ -148,6 +151,7 @@ fn dispatch_request(
         "repository/commitDiff" => commit_diff_request(request, state),
         "repository/references" => references_request(request, state),
         "repository/graph" => graph_request(request, state),
+        "github/repository" => github_repository_request(request, state),
         _ => Response::error(
             Some(request.id),
             ResponseError::new(
@@ -216,6 +220,7 @@ fn initialize(request: Request, state: &mut CoreState) -> Response {
             structured_commit_diff: true,
             repository_references: true,
             commit_graph_projection: true,
+            github_repository: true,
         },
     };
     Response::success(
@@ -409,6 +414,53 @@ fn repository_error(error: repository::RepositoryError) -> ResponseError {
             ERROR_REFERENCE_ENCODING,
             "reference.unsupported_encoding",
             "Reference metadata is not UTF-8 encoded",
+            false,
+        ),
+    }
+}
+
+fn github_error(error: github::GitHubError) -> ResponseError {
+    match error {
+        github::GitHubError::InvalidRemote => ResponseError::new(
+            ERROR_GITHUB_INVALID_REMOTE,
+            "github.invalid_remote",
+            "Remote name is invalid",
+            false,
+        ),
+        github::GitHubError::RemoteNotFound => ResponseError::new(
+            ERROR_GITHUB_REMOTE_NOT_FOUND,
+            "github.remote_not_found",
+            "GitHub remote was not found",
+            false,
+        ),
+        github::GitHubError::UnsupportedRemote => ResponseError::new(
+            ERROR_GITHUB_UNSUPPORTED_REMOTE,
+            "github.unsupported_remote",
+            "Remote is not a supported github.com repository",
+            false,
+        ),
+        github::GitHubError::GhUnavailable => ResponseError::new(
+            ERROR_GH_UNAVAILABLE,
+            "github.gh_unavailable",
+            "GitHub CLI is unavailable in the repository environment",
+            true,
+        ),
+        github::GitHubError::AuthenticationRequired => ResponseError::new(
+            ERROR_GITHUB_AUTH_REQUIRED,
+            "github.authentication_required",
+            "GitHub CLI authentication is required",
+            true,
+        ),
+        github::GitHubError::RequestFailed => ResponseError::new(
+            ERROR_GITHUB_REQUEST_FAILED,
+            "github.request_failed",
+            "GitHub request failed",
+            true,
+        ),
+        github::GitHubError::ResponseParse => ResponseError::new(
+            ERROR_GITHUB_RESPONSE_PARSE,
+            "github.response_parse_failed",
+            "GitHub returned an invalid repository response",
             false,
         ),
     }
@@ -702,6 +754,45 @@ fn graph_request(request: Request, state: &CoreState) -> Response {
             serde_json::to_value(page).expect("serializable commit graph page"),
         ),
         Err(error) => Response::error(Some(request.id), repository_error(error)),
+    }
+}
+
+fn github_repository_request(request: Request, state: &CoreState) -> Response {
+    let params = if request.params.is_null() {
+        GitHubRepositoryParams::default()
+    } else {
+        match serde_json::from_value::<GitHubRepositoryParams>(request.params) {
+            Ok(params) => params,
+            Err(_) => {
+                return Response::error(
+                    Some(request.id),
+                    ResponseError::new(
+                        ERROR_INVALID_PARAMS,
+                        "protocol.invalid_params",
+                        "Invalid GitHub repository parameters",
+                        false,
+                    ),
+                );
+            }
+        }
+    };
+    let Some(descriptor) = &state.active_repository else {
+        return Response::error(
+            Some(request.id),
+            ResponseError::new(
+                ERROR_REPOSITORY_NOT_OPEN,
+                "repository.not_open",
+                "Open a repository before requesting GitHub metadata",
+                true,
+            ),
+        );
+    };
+    match github::repository(descriptor, &params) {
+        Ok(repository) => Response::success(
+            request.id,
+            serde_json::to_value(repository).expect("serializable GitHub repository"),
+        ),
+        Err(error) => Response::error(Some(request.id), github_error(error)),
     }
 }
 

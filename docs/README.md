@@ -21,6 +21,7 @@ GitNova 文档以本页为入口。术语以[词汇表](GLOSSARY.md)为准，已
 | [COMMIT DIFF](COMMIT_DIFF.md) | 指定 commit-parent 的文件与行级 diff 契约 |
 | [REFERENCES](REFERENCES.md) | HEAD、local/remote branches 与 tags 契约 |
 | [COMMIT GRAPH](COMMIT_GRAPH.md) | 分页 commits、parents 与 ref decorations 的统一读模型 |
+| [GITHUB PROVIDER](GITHUB_PROVIDER.md) | Core-owned `gh api` adapter、显式联网与凭据边界 |
 | [FEATURE LIST](FEATURE_LIST.md) | 功能分期与本 Task 禁区 |
 | [NON-FUNCTIONAL](NON_FUNCTIONAL.md) | 性能、安全、可靠性等要求 |
 | [GLOSSARY](GLOSSARY.md) | 统一术语 |

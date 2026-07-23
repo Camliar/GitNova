@@ -4,7 +4,7 @@ import process from "node:process";
 const schemaUrl = new URL("../sdk/protocol/gitnova-protocol.schema.json", import.meta.url);
 const outputUrl = new URL("../packages/protocol/src/generated.ts", import.meta.url);
 const schema = JSON.parse(await readFile(schemaUrl, "utf8"));
-const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage", "CommitDiffParams", "CommitDiff", "ReferenceKind", "RepositoryHead", "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage", "GitHubRepositoryParams", "GitHubRepository"];
+const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage", "CommitDiffParams", "CommitDiff", "ReferenceKind", "RepositoryHead", "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage", "GitHubRepositoryParams", "GitHubRepository", "GitHubPullRequestParams", "GitHubPullRequestState", "GitHubPullRequestRef", "GitHubCommitIdentity", "GitHubPullRequestCommit", "GitHubPullRequest"];
 for (const name of requiredDefinitions) {
   if (!schema.$defs?.[name]) throw new Error(`Protocol schema is missing $defs.${name}`);
 }
@@ -36,6 +36,7 @@ export interface ServerCapabilities {
   repositoryReferences: boolean;
   commitGraphProjection: boolean;
   githubRepository: boolean;
+  githubPullRequest: boolean;
 }
 
 export interface InitializeParams {
@@ -215,6 +216,57 @@ export interface GitHubRepository {
   url: string;
   defaultBranch: string;
   isPrivate: boolean;
+}
+
+export interface GitHubPullRequestParams {
+  number: number;
+  remote?: string;
+  nameWithOwner?: string;
+}
+
+export type GitHubPullRequestState = "open" | "closed" | "merged";
+
+export interface GitHubPullRequestRef {
+  name: string;
+  oid: string;
+  repository: string | null;
+}
+
+export interface GitHubCommitIdentity {
+  name: string;
+  email: string;
+  timestamp: string;
+  login: string | null;
+}
+
+export interface GitHubPullRequestCommit {
+  oid: string;
+  parents: string[];
+  author: GitHubCommitIdentity;
+  committer: GitHubCommitIdentity;
+  summary: string;
+  message: string;
+  url: string;
+}
+
+export interface GitHubPullRequest {
+  host: "github.com";
+  nameWithOwner: string;
+  number: number;
+  title: string;
+  body: string | null;
+  state: GitHubPullRequestState;
+  isDraft: boolean;
+  authorLogin: string | null;
+  url: string;
+  createdAt: string;
+  updatedAt: string;
+  closedAt: string | null;
+  mergedAt: string | null;
+  base: GitHubPullRequestRef;
+  head: GitHubPullRequestRef;
+  mergeCommitOid: string | null;
+  commits: GitHubPullRequestCommit[];
 }
 `;
 

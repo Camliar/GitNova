@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitnova.dev/schema/protocol/1.8/gitnova-protocol.schema.json",
-  "title": "GitNova Core Protocol 1.8",
+  "$id": "https://gitnova.dev/schema/protocol/1.9/gitnova-protocol.schema.json",
+  "title": "GitNova Core Protocol 1.9",
   "type": "object",
-  "properties": { "protocolVersion": { "const": "1.8" } },
+  "properties": { "protocolVersion": { "const": "1.9" } },
   "required": ["protocolVersion"],
   "$defs": {
     "RequestId": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
@@ -30,9 +30,10 @@
         "structuredCommitDiff": { "type": "boolean" },
         "repositoryReferences": { "type": "boolean" },
         "commitGraphProjection": { "type": "boolean" },
-        "githubRepository": { "type": "boolean" }
+        "githubRepository": { "type": "boolean" },
+        "githubPullRequest": { "type": "boolean" }
       },
-      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff", "repositoryReferences", "commitGraphProjection", "githubRepository"]
+      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff", "repositoryReferences", "commitGraphProjection", "githubRepository", "githubPullRequest"]
     },
     "InitializeParams": {
       "type": "object",
@@ -312,6 +313,76 @@
         "isPrivate": { "type": "boolean" }
       },
       "required": ["host", "owner", "name", "nameWithOwner", "url", "defaultBranch", "isPrivate"]
+    },
+    "GitHubPullRequestParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "number": { "type": "integer", "minimum": 1 },
+        "remote": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "nameWithOwner": { "type": "string", "minLength": 3, "maxLength": 140 }
+      },
+      "required": ["number"]
+    },
+    "GitHubPullRequestState": { "enum": ["open", "closed", "merged"] },
+    "GitHubPullRequestRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "oid": { "type": "string" },
+        "repository": { "type": ["string", "null"] }
+      },
+      "required": ["name", "oid", "repository"]
+    },
+    "GitHubCommitIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "login": { "type": ["string", "null"] }
+      },
+      "required": ["name", "email", "timestamp", "login"]
+    },
+    "GitHubPullRequestCommit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "oid": { "type": "string" },
+        "parents": { "type": "array", "items": { "type": "string" } },
+        "author": { "$ref": "#/$defs/GitHubCommitIdentity" },
+        "committer": { "$ref": "#/$defs/GitHubCommitIdentity" },
+        "summary": { "type": "string" },
+        "message": { "type": "string" },
+        "url": { "type": "string" }
+      },
+      "required": ["oid", "parents", "author", "committer", "summary", "message", "url"]
+    },
+    "GitHubPullRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host": { "const": "github.com" },
+        "nameWithOwner": { "type": "string" },
+        "number": { "type": "integer", "minimum": 1 },
+        "title": { "type": "string" },
+        "body": { "type": ["string", "null"] },
+        "state": { "$ref": "#/$defs/GitHubPullRequestState" },
+        "isDraft": { "type": "boolean" },
+        "authorLogin": { "type": ["string", "null"] },
+        "url": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "closedAt": { "type": ["string", "null"], "format": "date-time" },
+        "mergedAt": { "type": ["string", "null"], "format": "date-time" },
+        "base": { "$ref": "#/$defs/GitHubPullRequestRef" },
+        "head": { "$ref": "#/$defs/GitHubPullRequestRef" },
+        "mergeCommitOid": { "type": ["string", "null"] },
+        "commits": { "type": "array", "items": { "$ref": "#/$defs/GitHubPullRequestCommit" } }
+      },
+      "required": ["host", "nameWithOwner", "number", "title", "body", "state", "isDraft", "authorLogin", "url", "createdAt", "updatedAt", "closedAt", "mergedAt", "base", "head", "mergeCommitOid", "commits"]
     }
   }
 }

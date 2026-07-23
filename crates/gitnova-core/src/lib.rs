@@ -7,13 +7,14 @@ use gitnova_protocol::{
     ERROR_COMMIT_DIFF_PARSE, ERROR_COMMIT_NOT_FOUND, ERROR_COMMIT_PARENT_REQUIRED,
     ERROR_COMMIT_PARSE, ERROR_DIFF_PARSE, ERROR_DIFFERENT_REPOSITORY_OPEN, ERROR_GH_UNAVAILABLE,
     ERROR_GIT_COMMAND_FAILED, ERROR_GIT_UNAVAILABLE, ERROR_GITHUB_AUTH_REQUIRED,
-    ERROR_GITHUB_INVALID_REMOTE, ERROR_GITHUB_REMOTE_NOT_FOUND, ERROR_GITHUB_REQUEST_FAILED,
-    ERROR_GITHUB_RESPONSE_PARSE, ERROR_GITHUB_UNSUPPORTED_REMOTE, ERROR_HISTORY_ENCODING,
-    ERROR_INCOMPATIBLE_PROTOCOL, ERROR_INVALID_COMMIT_PARENT, ERROR_INVALID_HISTORY_CURSOR,
-    ERROR_INVALID_PARAMS, ERROR_INVALID_PATH, ERROR_INVALID_REPOSITORY_PATH, ERROR_INVALID_REQUEST,
-    ERROR_METHOD_NOT_FOUND, ERROR_NOT_INITIALIZED, ERROR_PARSE, ERROR_REFERENCE_ENCODING,
-    ERROR_REFERENCE_PARSE, ERROR_REPOSITORY_NOT_FOUND, ERROR_REPOSITORY_NOT_OPEN,
-    ERROR_REQUEST_CANCELLED, ERROR_STATUS_PARSE, ERROR_UNSAFE_REPOSITORY, ERROR_WORKTREE_REQUIRED,
+    ERROR_GITHUB_INVALID_REMOTE, ERROR_GITHUB_PR_COMMIT_LIMIT, ERROR_GITHUB_REMOTE_NOT_FOUND,
+    ERROR_GITHUB_REQUEST_FAILED, ERROR_GITHUB_RESPONSE_PARSE, ERROR_GITHUB_UNSUPPORTED_REMOTE,
+    ERROR_HISTORY_ENCODING, ERROR_INCOMPATIBLE_PROTOCOL, ERROR_INVALID_COMMIT_PARENT,
+    ERROR_INVALID_HISTORY_CURSOR, ERROR_INVALID_PARAMS, ERROR_INVALID_PATH,
+    ERROR_INVALID_REPOSITORY_PATH, ERROR_INVALID_REQUEST, ERROR_METHOD_NOT_FOUND,
+    ERROR_NOT_INITIALIZED, ERROR_PARSE, ERROR_REFERENCE_ENCODING, ERROR_REFERENCE_PARSE,
+    ERROR_REPOSITORY_NOT_FOUND, ERROR_REPOSITORY_NOT_OPEN, ERROR_REQUEST_CANCELLED,
+    ERROR_STATUS_PARSE, ERROR_UNSAFE_REPOSITORY, ERROR_WORKTREE_REQUIRED, GitHubPullRequestParams,
     GitHubRepositoryParams, HistoryParams, ImplementationInfo, InitializeParams, InitializeResult,
     JSON_RPC_VERSION, Notification, PROTOCOL_VERSION, RepositoryDescriptor, RepositoryPathParams,
     Request, Response, ResponseError, ServerCapabilities,
@@ -152,6 +153,7 @@ fn dispatch_request(
         "repository/references" => references_request(request, state),
         "repository/graph" => graph_request(request, state),
         "github/repository" => github_repository_request(request, state),
+        "github/pullRequest" => github_pull_request_request(request, state),
         _ => Response::error(
             Some(request.id),
             ResponseError::new(
@@ -221,6 +223,7 @@ fn initialize(request: Request, state: &mut CoreState) -> Response {
             repository_references: true,
             commit_graph_projection: true,
             github_repository: true,
+            github_pull_request: true,
         },
     };
     Response::success(
@@ -460,7 +463,13 @@ fn github_error(error: github::GitHubError) -> ResponseError {
         github::GitHubError::ResponseParse => ResponseError::new(
             ERROR_GITHUB_RESPONSE_PARSE,
             "github.response_parse_failed",
-            "GitHub returned an invalid repository response",
+            "GitHub returned an invalid response",
+            false,
+        ),
+        github::GitHubError::PullRequestCommitLimit => ResponseError::new(
+            ERROR_GITHUB_PR_COMMIT_LIMIT,
+            "github.pr_commit_limit_exceeded",
+            "Pull request exceeds the supported original commit limit",
             false,
         ),
     }
@@ -791,6 +800,41 @@ fn github_repository_request(request: Request, state: &CoreState) -> Response {
         Ok(repository) => Response::success(
             request.id,
             serde_json::to_value(repository).expect("serializable GitHub repository"),
+        ),
+        Err(error) => Response::error(Some(request.id), github_error(error)),
+    }
+}
+
+fn github_pull_request_request(request: Request, state: &CoreState) -> Response {
+    let params = match serde_json::from_value::<GitHubPullRequestParams>(request.params) {
+        Ok(params) if params.number > 0 => params,
+        _ => {
+            return Response::error(
+                Some(request.id),
+                ResponseError::new(
+                    ERROR_INVALID_PARAMS,
+                    "protocol.invalid_params",
+                    "Invalid GitHub pull request parameters",
+                    false,
+                ),
+            );
+        }
+    };
+    let Some(descriptor) = &state.active_repository else {
+        return Response::error(
+            Some(request.id),
+            ResponseError::new(
+                ERROR_REPOSITORY_NOT_OPEN,
+                "repository.not_open",
+                "Open a repository before requesting a GitHub pull request",
+                true,
+            ),
+        );
+    };
+    match github::pull_request(descriptor, &params) {
+        Ok(pull_request) => Response::success(
+            request.id,
+            serde_json::to_value(pull_request).expect("serializable GitHub pull request"),
         ),
         Err(error) => Response::error(Some(request.id), github_error(error)),
     }

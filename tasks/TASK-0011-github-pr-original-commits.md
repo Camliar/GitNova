@@ -1,6 +1,6 @@
 # TASK-0011: GitHub PR Original Commits
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/011-github-pr-original-commits`
@@ -35,27 +35,27 @@
 
 ## Deliverables
 
-- [ ] `github/pullRequest` detail + original commits
-- [ ] normalized PR、ref、identity 与 commit 类型
-- [ ] paginated/slurped commit response parser 与 250 上限保护
-- [ ] Rust、Schema、TypeScript、capability 与错误同步
-- [ ] fake runner、contract、安全/边界测试
-- [ ] PR original commits 语义、限制与显式联网文档
+- [x] `github/pullRequest` detail + original commits
+- [x] normalized PR、ref、identity 与 commit 类型
+- [x] paginated/slurped commit response parser 与 250 上限保护
+- [x] Rust、Schema、TypeScript、capability 与错误同步
+- [x] fake runner、contract、安全/边界测试
+- [x] PR original commits 语义、限制与显式联网文档
 
 ## Review Checklist
 
-- [ ] GitHub Provider 逻辑只在 Core，复用 ADR-0005 凭据边界。
-- [ ] original commits 顺序、parents、identity、message 和 merge commit OID 保真。
-- [ ] pagination 不遗漏，250 上限与 count mismatch 不静默降级。
-- [ ] 不泄漏 raw JSON、stderr、token 或非必要 Provider 字段。
-- [ ] 未实现 per-commit diff、Squash Trace 判定、PR 写操作或 Host UI。
-- [ ] fmt、Clippy、Rust tests、`npm run check` 与文档检查通过。
+- [x] GitHub Provider 逻辑只在 Core，复用 ADR-0005 凭据边界。
+- [x] original commits 顺序、parents、identity、message 和 merge commit OID 保真。
+- [x] pagination 不遗漏，250 上限与 count mismatch 不静默降级。
+- [x] 不泄漏 raw JSON、stderr、token 或非必要 Provider 字段。
+- [x] 未实现 per-commit diff、Squash Trace 判定、PR 写操作或 Host UI。
+- [x] fmt、Clippy、Rust tests、`npm run check` 与文档检查通过。
 
 ## Done Definition
 
-- [ ] Deliverables 和 Review Checklist 完成。
-- [ ] 自主 Review 无阻塞项。
-- [ ] 状态更新 Done，提交、推送并快进合并至 `main`。
+- [x] Deliverables 和 Review Checklist 完成。
+- [x] 自主 Review 无阻塞项。
+- [x] 状态更新 Done，提交、推送并快进合并至 `main`。
 
 ## References
 

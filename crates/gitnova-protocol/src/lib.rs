@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: &str = "1.8";
+pub const PROTOCOL_VERSION: &str = "1.9";
 
 pub const ERROR_PARSE: i64 = -32700;
 pub const ERROR_INVALID_REQUEST: i64 = -32600;
@@ -43,6 +43,7 @@ pub const ERROR_GH_UNAVAILABLE: i64 = -32123;
 pub const ERROR_GITHUB_AUTH_REQUIRED: i64 = -32124;
 pub const ERROR_GITHUB_REQUEST_FAILED: i64 = -32125;
 pub const ERROR_GITHUB_RESPONSE_PARSE: i64 = -32126;
+pub const ERROR_GITHUB_PR_COMMIT_LIMIT: i64 = -32127;
 pub const ERROR_REQUEST_CANCELLED: i64 = -32800;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -171,6 +172,7 @@ pub struct ServerCapabilities {
     pub repository_references: bool,
     pub commit_graph_projection: bool,
     pub github_repository: bool,
+    pub github_pull_request: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -432,6 +434,73 @@ pub struct GitHubRepository {
     pub is_private: bool,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubPullRequestParams {
+    pub number: u64,
+    #[serde(default)]
+    pub remote: Option<String>,
+    #[serde(default)]
+    pub name_with_owner: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GitHubPullRequestState {
+    Open,
+    Closed,
+    Merged,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubPullRequestRef {
+    pub name: String,
+    pub oid: String,
+    pub repository: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct GitHubCommitIdentity {
+    pub name: String,
+    pub email: String,
+    pub timestamp: String,
+    pub login: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct GitHubPullRequestCommit {
+    pub oid: String,
+    pub parents: Vec<String>,
+    pub author: GitHubCommitIdentity,
+    pub committer: GitHubCommitIdentity,
+    pub summary: String,
+    pub message: String,
+    pub url: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubPullRequest {
+    pub host: String,
+    pub name_with_owner: String,
+    pub number: u64,
+    pub title: String,
+    pub body: Option<String>,
+    pub state: GitHubPullRequestState,
+    pub is_draft: bool,
+    pub author_login: Option<String>,
+    pub url: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub closed_at: Option<String>,
+    pub merged_at: Option<String>,
+    pub base: GitHubPullRequestRef,
+    pub head: GitHubPullRequestRef,
+    pub merge_commit_oid: Option<String>,
+    pub commits: Vec<GitHubPullRequestCommit>,
+}
+
 #[derive(Clone, Default)]
 pub struct CancellationRegistry {
     cancelled: Arc<Mutex<HashSet<RequestId>>>,
@@ -522,6 +591,12 @@ mod tests {
             "CommitGraphPage",
             "GitHubRepositoryParams",
             "GitHubRepository",
+            "GitHubPullRequestParams",
+            "GitHubPullRequestState",
+            "GitHubPullRequestRef",
+            "GitHubCommitIdentity",
+            "GitHubPullRequestCommit",
+            "GitHubPullRequest",
         ] {
             assert!(schema["$defs"].get(definition).is_some());
         }

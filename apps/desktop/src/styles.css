@@ -85,10 +85,16 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
 .history-panel { display: grid; gap: 18px; margin-top: 18px; padding: 22px; border: 1px solid var(--border); border-radius: 18px; background: rgb(12 17 29 / 88%); }
 .history-panel h2 { margin: 0; font-size: 24px; }
 .commit-list { display: grid; margin: 0; padding: 0; list-style: none; }
-.commit-list > li { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 12px; min-height: 78px; padding: 13px 0; border-top: 1px solid var(--border); }
-.commit-dot { width: 10px; height: 10px; margin-top: 5px; border: 2px solid #69758f; border-radius: 50%; background: #0c111d; }
-.commit-dot--head { border-color: var(--cyan); background: var(--cyan); box-shadow: 0 0 0 3px rgb(85 219 234 / 12%); }
+.commit-list > li { display: grid; grid-template-columns: var(--graph-column, 46px) minmax(0, 1fr); gap: 12px; min-height: 78px; border-top: 1px solid var(--border); }
+.commit-graph { display: block; width: var(--graph-width); max-width: 100%; min-height: 78px; overflow: visible; }
+.commit-graph svg { display: block; overflow: visible; }
+.graph-line { fill: none; stroke: #69758f; stroke-width: 2; }
+.graph-line--parent-1, .graph-line--parent-3 { stroke: #8d7542; }
+.graph-line--parent-2, .graph-line--parent-4 { stroke: #4e8e82; }
+.graph-node { fill: #0c111d; stroke: #a6b0c5; stroke-width: 2.5; }
+.graph-node--head { fill: var(--cyan); stroke: var(--cyan); filter: drop-shadow(0 0 4px rgb(85 219 234 / 55%)); }
 .commit-main { display: grid; min-width: 0; gap: 6px; }
+.commit-list > li > .commit-main { padding: 13px 0; }
 .commit-summary { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .commit-summary strong { overflow-wrap: anywhere; }
 .commit-summary code { flex: 0 0 auto; color: #b9b6ff; font-size: 11px; }
@@ -205,6 +211,8 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
   .change-badges { justify-content: start; }
   .diff-panel__header, .diff-error { align-items: stretch; flex-direction: column; }
   .commit-summary, .history-error { align-items: start; flex-direction: column; gap: 7px; }
+  .commit-list { --graph-column: 36px !important; }
+  .commit-graph { max-width: 36px; overflow: hidden; }
   .commit-detail__header { align-items: stretch; flex-direction: column; }
   .github-error { align-items: stretch; flex-direction: column; }
   .github-repository { grid-template-columns: 1fr; }

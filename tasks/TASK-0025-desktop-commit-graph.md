@@ -1,6 +1,6 @@
 # TASK-0025: Desktop Commit Graph
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/025-desktop-commit-graph`
@@ -25,17 +25,17 @@
 
 ## Deliverables
 
-- [ ] deterministic visual lane projection
-- [ ] responsive graph renderer integrated with timeline
-- [ ] linear/branch/merge/pagination/accessibility tests and docs
+- [x] deterministic visual lane projection
+- [x] responsive graph renderer integrated with timeline
+- [x] linear/branch/merge/pagination/accessibility tests and docs
 
 ## Review Checklist
 
-- [ ] Host 只计算像素/lane，不推断 branch/tag/HEAD Git 语义。
-- [ ] ordered node/parent/ref 数据不被修改，commit detail 入口保持可用。
-- [ ] graph 不只依赖颜色传达信息，窄屏不截断核心文本。
-- [ ] frontend tests、typecheck、protocol check 与 production build 通过。
+- [x] Host 只计算像素/lane，不推断 branch/tag/HEAD Git 语义。
+- [x] ordered node/parent/ref 数据不被修改，commit detail 入口保持可用。
+- [x] graph 不只依赖颜色传达信息，窄屏不截断核心文本。
+- [x] frontend tests、typecheck、protocol check 与 production build 通过。
 
 ## Done Definition
 
-- [ ] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。
+- [x] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。

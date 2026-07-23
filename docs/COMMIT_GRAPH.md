@@ -18,7 +18,9 @@ The method does not search all refs, include unreachable commits, mutate branche
 
 ## Desktop presentation
 
-Desktop 使用 projection 的 node 顺序直接呈现 timeline，包括 commit summary、OID、author timestamp、parent count、`isHead` 和 references。Host 不自行关联 refs、剥离 annotated tags 或推断 HEAD，也暂不绘制 graph lanes。
+Desktop 使用 projection 的 node 顺序直接呈现 timeline，包括 commit summary、OID、author timestamp、parent count、`isHead` 和 references。Host 不自行关联 refs、剥离 annotated tags 或推断 HEAD。
+
+Desktop 的 lane projector 是纯展示算法：first parent 延续当前 lane，额外 ordered parents 使用其他 lane，遇到已等待的 parent 时复用其 lane。分页追加后，Host 对全部已加载 nodes 重新计算视觉投影，使上一页末尾的 off-page parent continuation 与新节点连接。该算法只产生 SVG lane/connector 坐标，不改变 Core 顺序、parent 关系或 decoration 语义；窄屏可以裁剪非关键 lane，commit 文本、merge parent count、HEAD/ref 标签与可访问 graph 描述仍然保留。
 
 分页使用固定 limit 30 和 Core opaque cursor。增量请求期间 Load more 被禁用；错误只影响该增量页面，已呈现 nodes 保持可用。repository reopen 会使旧请求失效并从无 cursor 的第一页重新加载，防止旧 snapshot 回写。
 

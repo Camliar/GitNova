@@ -21,7 +21,7 @@
 - HEAD、local/remote branches 与 tags 的只读枚举（已实现）
 - commits、parents 与 ref decorations 的 Core graph projection（已实现）
 - Tauri 2 + React 19 Desktop Host 基座（已实现）
-- Desktop 提交图谱可视化
+- Desktop 提交图谱可视化（已实现）
 - GitHub Provider repository identity/metadata（Core-owned `gh api` adapter，已实现）
 - GitHub PR detail 与 ordered original commits（已实现）
 - PR 查看与原始 commit 列表（Desktop 已实现）

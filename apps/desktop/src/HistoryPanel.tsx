@@ -1,5 +1,7 @@
+import type { CSSProperties } from "react";
 import type { CommitGraphNode } from "@gitnova/protocol";
 import type { DesktopError } from "./core";
+import { CommitGraph, projectGraphRows } from "./CommitGraph";
 
 export type HistoryState =
   | { kind: "idle" }
@@ -22,6 +24,8 @@ function formatTimestamp(value: string) {
 }
 
 export function HistoryPanel({ state, commitLoading, onRetry, onLoadMore, onSelectCommit }: { state: HistoryState; commitLoading: boolean; onRetry: () => void; onLoadMore: () => void; onSelectCommit: (commit: CommitGraphNode["commit"]) => void }) {
+  const graphRows = state.kind === "ready" ? projectGraphRows(state.nodes) : [];
+  const graphStyle = { "--graph-column": `${Math.max(1, ...graphRows.map((row) => row.laneCount)) * 18}px` } as CSSProperties;
   return (
     <section className="history-panel" aria-labelledby="history-title" aria-busy={state.kind === "loading" || (state.kind === "ready" && state.more.kind === "loading")}>
       <header>
@@ -37,10 +41,10 @@ export function HistoryPanel({ state, commitLoading, onRetry, onLoadMore, onSele
       )}
       {state.kind === "ready" && state.nodes.length === 0 && <p className="empty-state">No commits yet</p>}
       {state.kind === "ready" && state.nodes.length > 0 && (
-        <ol className="commit-list" aria-label="Commit history">
-          {state.nodes.map((node) => (
+        <ol className="commit-list" aria-label="Commit history" style={graphStyle}>
+          {state.nodes.map((node, index) => (
             <li key={node.commit.oid}>
-              <span className={`commit-dot${node.isHead ? " commit-dot--head" : ""}`} aria-hidden="true" />
+              <CommitGraph row={graphRows[index]} isHead={node.isHead} />
               <div className="commit-main">
                 <div className="commit-summary">
                   <strong>{node.commit.summary || "(no commit message)"}</strong>

@@ -36,7 +36,7 @@ npm run check
 
 Desktop 前端可单独使用 `pnpm --filter @gitnova/desktop check` 验证；原生无 bundle 构建使用 `pnpm --filter @gitnova/desktop tauri build --no-bundle`。
 
-阅读[项目总览](docs/PROJECT.md)、[产品需求](docs/PRODUCT_REQUIREMENTS.md)、[Core 协议](docs/PROTOCOL.md)、[Desktop Core Transport](docs/DESKTOP_CORE_TRANSPORT.md)、[仓库发现](docs/REPOSITORIES.md)、[工作区状态](docs/STATUS.md)、[结构化 Diff](docs/DIFF.md)和[贡献指南](CONTRIBUTING.md)，再从 `tasks/` 选择已批准的 Task。
+阅读[项目总览](docs/PROJECT.md)、[产品需求](docs/PRODUCT_REQUIREMENTS.md)、[Core 协议](docs/PROTOCOL.md)、[Repository Mutations](docs/MUTATIONS.md)、[Desktop Core Transport](docs/DESKTOP_CORE_TRANSPORT.md)、[仓库发现](docs/REPOSITORIES.md)、[工作区状态](docs/STATUS.md)、[结构化 Diff](docs/DIFF.md)和[贡献指南](CONTRIBUTING.md)，再从 `tasks/` 选择已批准的 Task。
 
 ## Monorepo
 

@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: &str = "1.11";
+pub const PROTOCOL_VERSION: &str = "1.12";
 
 pub const ERROR_PARSE: i64 = -32700;
 pub const ERROR_INVALID_REQUEST: i64 = -32600;
@@ -46,6 +46,14 @@ pub const ERROR_GITHUB_RESPONSE_PARSE: i64 = -32126;
 pub const ERROR_GITHUB_PR_COMMIT_LIMIT: i64 = -32127;
 pub const ERROR_GITHUB_COMMIT_NOT_IN_PR: i64 = -32128;
 pub const ERROR_GITHUB_COMMIT_FILE_LIMIT: i64 = -32129;
+pub const ERROR_COMMIT_MESSAGE_REQUIRED: i64 = -32130;
+pub const ERROR_NOTHING_STAGED: i64 = -32131;
+pub const ERROR_UNRESOLVED_CONFLICTS: i64 = -32132;
+pub const ERROR_INVALID_BRANCH_NAME: i64 = -32133;
+pub const ERROR_BRANCH_ALREADY_EXISTS: i64 = -32134;
+pub const ERROR_BRANCH_NOT_FOUND: i64 = -32135;
+pub const ERROR_UNBORN_HEAD: i64 = -32136;
+pub const ERROR_MUTATION_FAILED: i64 = -32137;
 pub const ERROR_REQUEST_CANCELLED: i64 = -32800;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -177,6 +185,7 @@ pub struct ServerCapabilities {
     pub github_pull_request: bool,
     pub github_pull_request_commit_diff: bool,
     pub github_squash_trace: bool,
+    pub repository_mutations: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -415,6 +424,32 @@ pub struct CommitGraphNode {
 pub struct CommitGraphPage {
     pub nodes: Vec<CommitGraphNode>,
     pub next_cursor: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CommitParams {
+    pub message: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BranchParams {
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepositoryMutationSnapshot {
+    pub status: WorkingTreeStatus,
+    pub references: RepositoryReferences,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitResult {
+    pub commit: CommitSummary,
+    pub snapshot: RepositoryMutationSnapshot,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -704,6 +739,10 @@ mod tests {
             "RepositoryReferences",
             "CommitGraphNode",
             "CommitGraphPage",
+            "CommitParams",
+            "BranchParams",
+            "RepositoryMutationSnapshot",
+            "CommitResult",
             "GitHubRepositoryParams",
             "GitHubRepository",
             "GitHubPullRequestParams",

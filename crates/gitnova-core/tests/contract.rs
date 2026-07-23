@@ -113,6 +113,98 @@ fn repository_request(id: i64, method: &str, path: &Path) -> Value {
 }
 
 #[test]
+fn commits_staged_changes_and_manages_local_branches() {
+    let directory = TestDirectory::new("mutations");
+    git(&["init", "-q"], &directory.0);
+    git(&["symbolic-ref", "HEAD", "refs/heads/main"], &directory.0);
+    git(&["config", "user.name", "Ada"], &directory.0);
+    git(&["config", "user.email", "ada@example.com"], &directory.0);
+    fs::write(directory.0.join("tracked.txt"), "one\n").unwrap();
+    git(&["add", "tracked.txt"], &directory.0);
+    git(&["commit", "-qm", "initial"], &directory.0);
+    fs::write(directory.0.join("tracked.txt"), "two\n").unwrap();
+    git(&["add", "tracked.txt"], &directory.0);
+
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &directory.0),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/commit","params":{"message":"change tracked\n\nDetails"}}),
+        json!({"jsonrpc":"2.0","id":4,"method":"repository/createBranch","params":{"name":"topic/test"}}),
+        json!({"jsonrpc":"2.0","id":5,"method":"repository/switchBranch","params":{"name":"topic/test"}}),
+    ]);
+    assert!(output.status.success());
+    let responses = responses(&output.stdout);
+    assert_eq!(
+        responses[2]["result"]["commit"]["summary"],
+        "change tracked"
+    );
+    assert_eq!(
+        responses[2]["result"]["snapshot"]["status"]["entries"],
+        json!([])
+    );
+    assert_eq!(responses[3]["result"]["status"]["branch"]["head"], "main");
+    assert!(
+        responses[3]["result"]["references"]["references"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|reference| reference["fullName"] == "refs/heads/topic/test")
+    );
+    assert_eq!(
+        responses[4]["result"]["status"]["branch"]["head"],
+        "topic/test"
+    );
+}
+
+#[test]
+fn mutation_preconditions_return_stable_errors() {
+    let directory = TestDirectory::new("mutation-errors");
+    git(&["init", "-q"], &directory.0);
+    git(&["symbolic-ref", "HEAD", "refs/heads/main"], &directory.0);
+    git(&["config", "user.name", "Ada"], &directory.0);
+    git(&["config", "user.email", "ada@example.com"], &directory.0);
+    fs::write(directory.0.join("tracked.txt"), "one\n").unwrap();
+    git(&["add", "tracked.txt"], &directory.0);
+    git(&["commit", "-qm", "initial"], &directory.0);
+
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &directory.0),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/commit","params":{"message":"   "}}),
+        json!({"jsonrpc":"2.0","id":4,"method":"repository/commit","params":{"message":"nothing"}}),
+        json!({"jsonrpc":"2.0","id":5,"method":"repository/createBranch","params":{"name":"bad name"}}),
+        json!({"jsonrpc":"2.0","id":6,"method":"repository/createBranch","params":{"name":"main"}}),
+        json!({"jsonrpc":"2.0","id":7,"method":"repository/switchBranch","params":{"name":"missing"}}),
+        json!({"jsonrpc":"2.0","id":8,"method":"repository/commit","params":{"message":"ok","unexpected":true}}),
+    ]);
+    let responses = responses(&output.stdout);
+    assert_eq!(
+        responses[2]["error"]["data"]["stableCode"],
+        "commit.message_required"
+    );
+    assert_eq!(
+        responses[3]["error"]["data"]["stableCode"],
+        "commit.nothing_staged"
+    );
+    assert_eq!(
+        responses[4]["error"]["data"]["stableCode"],
+        "branch.invalid_name"
+    );
+    assert_eq!(
+        responses[5]["error"]["data"]["stableCode"],
+        "branch.already_exists"
+    );
+    assert_eq!(
+        responses[6]["error"]["data"]["stableCode"],
+        "branch.not_found"
+    );
+    assert_eq!(
+        responses[7]["error"]["data"]["stableCode"],
+        "protocol.invalid_params"
+    );
+}
+
+#[test]
 fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let output = run(&[
         initialize(json!("init-1")),
@@ -124,7 +216,7 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let responses = responses(&output.stdout);
     assert_eq!(responses.len(), 2);
     assert_eq!(responses[0]["id"], "init-1");
-    assert_eq!(responses[0]["result"]["protocolVersion"], "1.11");
+    assert_eq!(responses[0]["result"]["protocolVersion"], "1.12");
     assert_eq!(responses[0]["result"]["capabilities"]["cancellation"], true);
     assert_eq!(
         responses[0]["result"]["capabilities"]["workingTreeStatus"],
@@ -164,6 +256,10 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     );
     assert_eq!(
         responses[0]["result"]["capabilities"]["githubSquashTrace"],
+        true
+    );
+    assert_eq!(
+        responses[0]["result"]["capabilities"]["repositoryMutations"],
         true
     );
     assert_eq!(responses[1]["result"], Value::Null);

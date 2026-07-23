@@ -1,6 +1,6 @@
 # TASK-0026: Core Commit and Branch Mutations
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/026-core-commit-branch-mutations`
@@ -27,17 +27,17 @@
 
 ## Deliverables
 
-- [ ] staged commit mutation and structured result
-- [ ] create/switch local branch mutations and structured result
-- [ ] protocol, stable errors, integration/contract tests and docs
+- [x] staged commit mutation and structured result
+- [x] create/switch local branch mutations and structured result
+- [x] protocol, stable errors, integration/contract tests and docs
 
 ## Review Checklist
 
-- [ ] mutation 仅由显式 JSON-RPC 请求触发，message 通过 stdin 交给 Git。
-- [ ] branch 操作无 force/guess/stash/discard，失败保持 Git 的安全边界。
-- [ ] Core 返回 authoritative post-mutation snapshots，Host 无业务逻辑。
-- [ ] fmt、Rust tests、Clippy、protocol check 与 Desktop tests 通过。
+- [x] mutation 仅由显式 JSON-RPC 请求触发，message 通过 stdin 交给 Git。
+- [x] branch 操作无 force/guess/stash/discard，失败保持 Git 的安全边界。
+- [x] Core 返回 authoritative post-mutation snapshots，Host 无业务逻辑。
+- [x] fmt、Rust tests、Clippy、protocol check 与 Desktop tests 通过。
 
 ## Done Definition
 
-- [ ] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。
+- [x] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。

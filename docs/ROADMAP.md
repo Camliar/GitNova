@@ -18,7 +18,7 @@
 
 交付 Tauri 2 Desktop Host 的端到端核心工作流：在 Core 中接入 GitHub Provider（`gh`、REST 或 GraphQL），获取 PR 原始 commits，展示指定 commit 的文件与行级 diff，并关联 PR、原始 commits 与最终 squash commit。该 Squash Trace 主路径是 MVP 验证门槛。Host 不得承载或复制任何 Git/GitHub 业务逻辑。
 
-Desktop Host 基座、独立 Core transport、仓库/PR 导航、commit graph、original commit diff 与 Squash Trace 关系呈现已经建立。后续 MVP Task 补齐必要 mutation 与交付质量。
+Desktop Host 基座、独立 Core transport、仓库/PR 导航、commit graph、original commit diff 与 Squash Trace 关系呈现已经建立；Core staged commit 与 local branch mutations 也已具备。后续 MVP Task 接入 Desktop mutation workflow 与交付质量。
 
 ## Phase 4 — MVP Quality & Delivery
 

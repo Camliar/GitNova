@@ -7,8 +7,9 @@ use gitnova_protocol::{
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum RepositoryError {
@@ -31,6 +32,14 @@ pub enum RepositoryError {
     CommitDiffParse,
     ReferenceParse,
     ReferenceEncoding,
+    CommitMessageRequired,
+    NothingStaged,
+    UnresolvedConflicts,
+    InvalidBranchName,
+    BranchAlreadyExists,
+    BranchNotFound,
+    UnbornHead,
+    MutationFailed,
 }
 
 #[derive(Debug)]
@@ -85,6 +94,154 @@ pub fn status(descriptor: &RepositoryDescriptor) -> Result<WorkingTreeStatus, Re
         return Err(map_failed_output(&output.stderr));
     }
     parse_status(&output.stdout)
+}
+
+fn mutation_snapshot(
+    descriptor: &RepositoryDescriptor,
+) -> Result<gitnova_protocol::RepositoryMutationSnapshot, RepositoryError> {
+    Ok(gitnova_protocol::RepositoryMutationSnapshot {
+        status: status(descriptor)?,
+        references: references(descriptor)?,
+    })
+}
+
+fn mutation_base(descriptor: &RepositoryDescriptor) -> Result<&str, RepositoryError> {
+    descriptor
+        .worktree_root
+        .as_deref()
+        .ok_or(RepositoryError::WorktreeRequired)
+}
+
+fn mutation_output(
+    base: &str,
+    arguments: &[&str],
+    input: Option<&[u8]>,
+) -> Result<CommandOutput, RepositoryError> {
+    let mut child = Command::new("git")
+        .arg("-C")
+        .arg(base)
+        .args(arguments)
+        .env("LC_ALL", "C")
+        .stdin(if input.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(map_io_error)?;
+    if let Some(input) = input {
+        child
+            .stdin
+            .as_mut()
+            .ok_or(RepositoryError::MutationFailed)?
+            .write_all(input)
+            .map_err(|_| RepositoryError::MutationFailed)?;
+    }
+    let output = child
+        .wait_with_output()
+        .map_err(|_| RepositoryError::MutationFailed)?;
+    Ok(CommandOutput {
+        success: output.status.success(),
+        stdout: output.stdout,
+        stderr: output.stderr,
+    })
+}
+
+pub fn commit(
+    descriptor: &RepositoryDescriptor,
+    message: &str,
+) -> Result<gitnova_protocol::CommitResult, RepositoryError> {
+    let base = mutation_base(descriptor)?;
+    if message.trim().is_empty() || message.len() > 65_536 {
+        return Err(RepositoryError::CommitMessageRequired);
+    }
+    let conflicts = mutation_output(base, &["diff", "--name-only", "--diff-filter=U"], None)?;
+    if !conflicts.success {
+        return Err(map_failed_output(&conflicts.stderr));
+    }
+    if !conflicts.stdout.is_empty() {
+        return Err(RepositoryError::UnresolvedConflicts);
+    }
+    let staged = mutation_output(base, &["diff", "--cached", "--name-only"], None)?;
+    if !staged.success {
+        return Err(map_failed_output(&staged.stderr));
+    }
+    if staged.stdout.is_empty() {
+        return Err(RepositoryError::NothingStaged);
+    }
+    let committed = mutation_output(
+        base,
+        &["commit", "--file=-", "--cleanup=verbatim"],
+        Some(message.as_bytes()),
+    )?;
+    if !committed.success {
+        return Err(RepositoryError::MutationFailed);
+    }
+    let commit = history(descriptor, 1, None)?
+        .commits
+        .into_iter()
+        .next()
+        .ok_or(RepositoryError::CommitParse)?;
+    Ok(gitnova_protocol::CommitResult {
+        commit,
+        snapshot: mutation_snapshot(descriptor)?,
+    })
+}
+
+fn validate_branch(base: &str, name: &str) -> Result<(), RepositoryError> {
+    if name.is_empty() || name.len() > 255 {
+        return Err(RepositoryError::InvalidBranchName);
+    }
+    let output = mutation_output(base, &["check-ref-format", "--branch", name], None)?;
+    if output.success {
+        Ok(())
+    } else {
+        Err(RepositoryError::InvalidBranchName)
+    }
+}
+
+fn local_branch_exists(base: &str, name: &str) -> Result<bool, RepositoryError> {
+    let reference = format!("refs/heads/{name}");
+    let output = mutation_output(base, &["show-ref", "--verify", "--quiet", &reference], None)?;
+    Ok(output.success)
+}
+
+pub fn create_branch(
+    descriptor: &RepositoryDescriptor,
+    name: &str,
+) -> Result<gitnova_protocol::RepositoryMutationSnapshot, RepositoryError> {
+    let base = mutation_base(descriptor)?;
+    validate_branch(base, name)?;
+    if local_branch_exists(base, name)? {
+        return Err(RepositoryError::BranchAlreadyExists);
+    }
+    let head = mutation_output(base, &["rev-parse", "--verify", "HEAD^{commit}"], None)?;
+    if !head.success {
+        return Err(RepositoryError::UnbornHead);
+    }
+    let output = mutation_output(base, &["branch", name, "HEAD"], None)?;
+    if !output.success {
+        return Err(RepositoryError::MutationFailed);
+    }
+    mutation_snapshot(descriptor)
+}
+
+pub fn switch_branch(
+    descriptor: &RepositoryDescriptor,
+    name: &str,
+) -> Result<gitnova_protocol::RepositoryMutationSnapshot, RepositoryError> {
+    let base = mutation_base(descriptor)?;
+    validate_branch(base, name)?;
+    if !local_branch_exists(base, name)? {
+        return Err(RepositoryError::BranchNotFound);
+    }
+    let output = mutation_output(base, &["switch", "--no-guess", name], None)?;
+    if !output.success {
+        return Err(RepositoryError::MutationFailed);
+    }
+    mutation_snapshot(descriptor)
 }
 
 pub fn diff(

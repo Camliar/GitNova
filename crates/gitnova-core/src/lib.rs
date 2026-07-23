@@ -3,18 +3,21 @@ mod github;
 mod repository;
 
 use gitnova_protocol::{
-    CancelParams, CancellationRegistry, CommitDiffParams, DiffParams, ERROR_ALREADY_INITIALIZED,
-    ERROR_COMMIT_DIFF_PARSE, ERROR_COMMIT_NOT_FOUND, ERROR_COMMIT_PARENT_REQUIRED,
-    ERROR_COMMIT_PARSE, ERROR_DIFF_PARSE, ERROR_DIFFERENT_REPOSITORY_OPEN, ERROR_GH_UNAVAILABLE,
-    ERROR_GIT_COMMAND_FAILED, ERROR_GIT_UNAVAILABLE, ERROR_GITHUB_AUTH_REQUIRED,
-    ERROR_GITHUB_COMMIT_FILE_LIMIT, ERROR_GITHUB_COMMIT_NOT_IN_PR, ERROR_GITHUB_INVALID_REMOTE,
-    ERROR_GITHUB_PR_COMMIT_LIMIT, ERROR_GITHUB_REMOTE_NOT_FOUND, ERROR_GITHUB_REQUEST_FAILED,
-    ERROR_GITHUB_RESPONSE_PARSE, ERROR_GITHUB_UNSUPPORTED_REMOTE, ERROR_HISTORY_ENCODING,
-    ERROR_INCOMPATIBLE_PROTOCOL, ERROR_INVALID_COMMIT_PARENT, ERROR_INVALID_HISTORY_CURSOR,
+    BranchParams, CancelParams, CancellationRegistry, CommitDiffParams, CommitParams, DiffParams,
+    ERROR_ALREADY_INITIALIZED, ERROR_BRANCH_ALREADY_EXISTS, ERROR_BRANCH_NOT_FOUND,
+    ERROR_COMMIT_DIFF_PARSE, ERROR_COMMIT_MESSAGE_REQUIRED, ERROR_COMMIT_NOT_FOUND,
+    ERROR_COMMIT_PARENT_REQUIRED, ERROR_COMMIT_PARSE, ERROR_DIFF_PARSE,
+    ERROR_DIFFERENT_REPOSITORY_OPEN, ERROR_GH_UNAVAILABLE, ERROR_GIT_COMMAND_FAILED,
+    ERROR_GIT_UNAVAILABLE, ERROR_GITHUB_AUTH_REQUIRED, ERROR_GITHUB_COMMIT_FILE_LIMIT,
+    ERROR_GITHUB_COMMIT_NOT_IN_PR, ERROR_GITHUB_INVALID_REMOTE, ERROR_GITHUB_PR_COMMIT_LIMIT,
+    ERROR_GITHUB_REMOTE_NOT_FOUND, ERROR_GITHUB_REQUEST_FAILED, ERROR_GITHUB_RESPONSE_PARSE,
+    ERROR_GITHUB_UNSUPPORTED_REMOTE, ERROR_HISTORY_ENCODING, ERROR_INCOMPATIBLE_PROTOCOL,
+    ERROR_INVALID_BRANCH_NAME, ERROR_INVALID_COMMIT_PARENT, ERROR_INVALID_HISTORY_CURSOR,
     ERROR_INVALID_PARAMS, ERROR_INVALID_PATH, ERROR_INVALID_REPOSITORY_PATH, ERROR_INVALID_REQUEST,
-    ERROR_METHOD_NOT_FOUND, ERROR_NOT_INITIALIZED, ERROR_PARSE, ERROR_REFERENCE_ENCODING,
-    ERROR_REFERENCE_PARSE, ERROR_REPOSITORY_NOT_FOUND, ERROR_REPOSITORY_NOT_OPEN,
-    ERROR_REQUEST_CANCELLED, ERROR_STATUS_PARSE, ERROR_UNSAFE_REPOSITORY, ERROR_WORKTREE_REQUIRED,
+    ERROR_METHOD_NOT_FOUND, ERROR_MUTATION_FAILED, ERROR_NOT_INITIALIZED, ERROR_NOTHING_STAGED,
+    ERROR_PARSE, ERROR_REFERENCE_ENCODING, ERROR_REFERENCE_PARSE, ERROR_REPOSITORY_NOT_FOUND,
+    ERROR_REPOSITORY_NOT_OPEN, ERROR_REQUEST_CANCELLED, ERROR_STATUS_PARSE, ERROR_UNBORN_HEAD,
+    ERROR_UNRESOLVED_CONFLICTS, ERROR_UNSAFE_REPOSITORY, ERROR_WORKTREE_REQUIRED,
     GitHubPullRequestCommitDiffParams, GitHubPullRequestParams, GitHubRepositoryParams,
     HistoryParams, ImplementationInfo, InitializeParams, InitializeResult, JSON_RPC_VERSION,
     Notification, PROTOCOL_VERSION, RepositoryDescriptor, RepositoryPathParams, Request, Response,
@@ -153,6 +156,9 @@ fn dispatch_request(
         "repository/commitDiff" => commit_diff_request(request, state),
         "repository/references" => references_request(request, state),
         "repository/graph" => graph_request(request, state),
+        "repository/commit" => commit_request(request, state),
+        "repository/createBranch" => branch_request(request, state, false),
+        "repository/switchBranch" => branch_request(request, state, true),
         "github/repository" => github_repository_request(request, state),
         "github/pullRequest" => github_pull_request_request(request, state),
         "github/pullRequestCommitDiff" => github_pull_request_commit_diff_request(request, state),
@@ -229,6 +235,7 @@ fn initialize(request: Request, state: &mut CoreState) -> Response {
             github_pull_request: true,
             github_pull_request_commit_diff: true,
             github_squash_trace: true,
+            repository_mutations: true,
         },
     };
     Response::success(
@@ -423,6 +430,54 @@ fn repository_error(error: repository::RepositoryError) -> ResponseError {
             "reference.unsupported_encoding",
             "Reference metadata is not UTF-8 encoded",
             false,
+        ),
+        repository::RepositoryError::CommitMessageRequired => ResponseError::new(
+            ERROR_COMMIT_MESSAGE_REQUIRED,
+            "commit.message_required",
+            "Commit message must contain text and be at most 65536 bytes",
+            false,
+        ),
+        repository::RepositoryError::NothingStaged => ResponseError::new(
+            ERROR_NOTHING_STAGED,
+            "commit.nothing_staged",
+            "There are no staged changes to commit",
+            false,
+        ),
+        repository::RepositoryError::UnresolvedConflicts => ResponseError::new(
+            ERROR_UNRESOLVED_CONFLICTS,
+            "commit.unresolved_conflicts",
+            "Resolve index conflicts before committing",
+            false,
+        ),
+        repository::RepositoryError::InvalidBranchName => ResponseError::new(
+            ERROR_INVALID_BRANCH_NAME,
+            "branch.invalid_name",
+            "Branch name is invalid",
+            false,
+        ),
+        repository::RepositoryError::BranchAlreadyExists => ResponseError::new(
+            ERROR_BRANCH_ALREADY_EXISTS,
+            "branch.already_exists",
+            "Local branch already exists",
+            false,
+        ),
+        repository::RepositoryError::BranchNotFound => ResponseError::new(
+            ERROR_BRANCH_NOT_FOUND,
+            "branch.not_found",
+            "Local branch was not found",
+            false,
+        ),
+        repository::RepositoryError::UnbornHead => ResponseError::new(
+            ERROR_UNBORN_HEAD,
+            "branch.unborn_head",
+            "Create the first commit before creating another branch",
+            false,
+        ),
+        repository::RepositoryError::MutationFailed => ResponseError::new(
+            ERROR_MUTATION_FAILED,
+            "git.mutation_failed",
+            "System Git rejected the requested mutation",
+            true,
         ),
     }
 }
@@ -785,6 +840,81 @@ fn graph_request(request: Request, state: &CoreState) -> Response {
         Ok(page) => Response::success(
             request.id,
             serde_json::to_value(page).expect("serializable commit graph page"),
+        ),
+        Err(error) => Response::error(Some(request.id), repository_error(error)),
+    }
+}
+
+fn commit_request(request: Request, state: &CoreState) -> Response {
+    let params: CommitParams = match serde_json::from_value(request.params) {
+        Ok(params) => params,
+        Err(_) => {
+            return Response::error(
+                Some(request.id),
+                ResponseError::new(
+                    ERROR_INVALID_PARAMS,
+                    "protocol.invalid_params",
+                    "Invalid commit parameters",
+                    false,
+                ),
+            );
+        }
+    };
+    let Some(descriptor) = &state.active_repository else {
+        return Response::error(
+            Some(request.id),
+            ResponseError::new(
+                ERROR_REPOSITORY_NOT_OPEN,
+                "repository.not_open",
+                "Open a repository before committing",
+                true,
+            ),
+        );
+    };
+    match repository::commit(descriptor, &params.message) {
+        Ok(result) => Response::success(
+            request.id,
+            serde_json::to_value(result).expect("serializable commit result"),
+        ),
+        Err(error) => Response::error(Some(request.id), repository_error(error)),
+    }
+}
+
+fn branch_request(request: Request, state: &CoreState, switch: bool) -> Response {
+    let params: BranchParams = match serde_json::from_value(request.params) {
+        Ok(params) => params,
+        Err(_) => {
+            return Response::error(
+                Some(request.id),
+                ResponseError::new(
+                    ERROR_INVALID_PARAMS,
+                    "protocol.invalid_params",
+                    "Invalid branch parameters",
+                    false,
+                ),
+            );
+        }
+    };
+    let Some(descriptor) = &state.active_repository else {
+        return Response::error(
+            Some(request.id),
+            ResponseError::new(
+                ERROR_REPOSITORY_NOT_OPEN,
+                "repository.not_open",
+                "Open a repository before changing branches",
+                true,
+            ),
+        );
+    };
+    let result = if switch {
+        repository::switch_branch(descriptor, &params.name)
+    } else {
+        repository::create_branch(descriptor, &params.name)
+    };
+    match result {
+        Ok(snapshot) => Response::success(
+            request.id,
+            serde_json::to_value(snapshot).expect("serializable mutation snapshot"),
         ),
         Err(error) => Response::error(Some(request.id), repository_error(error)),
     }

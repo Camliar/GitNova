@@ -28,9 +28,9 @@ spawn → gitnova/initialize → requests and notifications → gitnova/shutdown
 
 ## Initialize
 
-`gitnova/initialize` 参数包含 `clientInfo`、`protocolVersion` 和 Host capabilities。结果包含 `coreInfo`、协商后的协议版本和 Core capabilities。初始协议版本为 `1.0`，当前版本为 `1.11`；主版本不同即不兼容，次版本能力通过 capability 字段协商。
+`gitnova/initialize` 参数包含 `clientInfo`、`protocolVersion` 和 Host capabilities。结果包含 `coreInfo`、协商后的协议版本和 Core capabilities。初始协议版本为 `1.0`，当前版本为 `1.12`；主版本不同即不兼容，次版本能力通过 capability 字段协商。
 
-Core 当前声明 `cancellation`、`repositoryDiscovery`、`workingTreeStatus`、`structuredFileDiff`、`paginatedCommitHistory`、`structuredCommitDiff`、`repositoryReferences`、`commitGraphProjection`、`githubRepository`、`githubPullRequest`、`githubPullRequestCommitDiff` 和 `githubSquashTrace` capability。仓库方法及路径语义见[仓库发现](REPOSITORIES.md)，状态契约见[工作区状态](STATUS.md)，工作区 diff 契约见[结构化文件 Diff](DIFF.md)，历史契约见[分页 Commit 历史](HISTORY.md)，commit-parent diff 契约见[结构化 Commit Diff](COMMIT_DIFF.md)，refs 契约见[Repository References](REFERENCES.md)，graph 读模型见[Commit Graph Projection](COMMIT_GRAPH.md)，GitHub adapter 见[GitHub Provider](GITHUB_PROVIDER.md)，PR 契约见[GitHub Pull Requests](GITHUB_PULL_REQUESTS.md)，关系模型见[Squash Trace](SQUASH_TRACE.md)。
+Core 当前另声明 `repositoryMutations` capability；完整 capability 由 Schema 定义。仓库方法及路径语义见[仓库发现](REPOSITORIES.md)，写操作安全契约见[Repository Mutations](MUTATIONS.md)，其余读模型与 Provider 文档保持各自事实来源。
 
 请求 id 可以是 JSON string 或 integer，Core 必须在响应中保持其类型和值。
 
@@ -77,6 +77,14 @@ JSON-RPC error 使用标准数值 `code`，同时在 `data.stableCode` 提供稳
 | `-32127` | `github.pr_commit_limit_exceeded` | PR original commits 超出可证明完整性的 REST 上限 |
 | `-32128` | `github.commit_not_in_pull_request` | commit 不是指定 PR 的 original commit |
 | `-32129` | `github.commit_file_limit_exceeded` | commit 文件达到 GitHub 上限，无法证明列表完整 |
+| `-32130` | `commit.message_required` | commit message 为空或超过大小限制 |
+| `-32131` | `commit.nothing_staged` | index 没有 staged changes |
+| `-32132` | `commit.unresolved_conflicts` | index 仍有未解决冲突 |
+| `-32133` | `branch.invalid_name` | local branch 名称无效 |
+| `-32134` | `branch.already_exists` | local branch 已存在 |
+| `-32135` | `branch.not_found` | local branch 不存在 |
+| `-32136` | `branch.unborn_head` | HEAD 尚无首个 commit |
+| `-32137` | `git.mutation_failed` | hook、checkout safety 或 System Git 拒绝 mutation |
 | `-32800` | `request.cancelled` | 请求已取消 |
 
 ## Cancellation and timeouts

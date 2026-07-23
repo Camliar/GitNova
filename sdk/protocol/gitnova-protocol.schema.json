@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitnova.dev/schema/protocol/1.11/gitnova-protocol.schema.json",
-  "title": "GitNova Core Protocol 1.11",
+  "$id": "https://gitnova.dev/schema/protocol/1.12/gitnova-protocol.schema.json",
+  "title": "GitNova Core Protocol 1.12",
   "type": "object",
-  "properties": { "protocolVersion": { "const": "1.11" } },
+  "properties": { "protocolVersion": { "const": "1.12" } },
   "required": ["protocolVersion"],
   "$defs": {
     "RequestId": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
@@ -33,9 +33,10 @@
         "githubRepository": { "type": "boolean" },
         "githubPullRequest": { "type": "boolean" },
         "githubPullRequestCommitDiff": { "type": "boolean" },
-        "githubSquashTrace": { "type": "boolean" }
+        "githubSquashTrace": { "type": "boolean" },
+        "repositoryMutations": { "type": "boolean" }
       },
-      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff", "repositoryReferences", "commitGraphProjection", "githubRepository", "githubPullRequest", "githubPullRequestCommitDiff", "githubSquashTrace"]
+      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff", "repositoryReferences", "commitGraphProjection", "githubRepository", "githubPullRequest", "githubPullRequestCommitDiff", "githubSquashTrace", "repositoryMutations"]
     },
     "InitializeParams": {
       "type": "object",
@@ -293,6 +294,30 @@
         "nextCursor": { "type": ["string", "null"] }
       },
       "required": ["nodes", "nextCursor"]
+    },
+    "CommitParams": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "message": { "type": "string", "minLength": 1, "maxLength": 65536 } },
+      "required": ["message"]
+    },
+    "BranchParams": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 255 } },
+      "required": ["name"]
+    },
+    "RepositoryMutationSnapshot": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "status": { "$ref": "#/$defs/WorkingTreeStatus" },
+        "references": { "$ref": "#/$defs/RepositoryReferences" }
+      }, "required": ["status", "references"]
+    },
+    "CommitResult": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "commit": { "$ref": "#/$defs/CommitSummary" },
+        "snapshot": { "$ref": "#/$defs/RepositoryMutationSnapshot" }
+      }, "required": ["commit", "snapshot"]
     },
     "GitHubRepositoryParams": {
       "type": "object",

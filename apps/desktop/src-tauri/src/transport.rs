@@ -508,11 +508,11 @@ function drain() {
     if (request.method === 'exit') process.exit(0);
     if (request.method === 'gitnova/initialize') {
       send({jsonrpc:'2.0', id:request.id, result:{
-        coreInfo:{name:'fake-core',version:'0.1.0'}, protocolVersion:'1.11', capabilities:{
+        coreInfo:{name:'fake-core',version:'0.1.0'}, protocolVersion:'1.12', capabilities:{
           cancellation:true, repositoryDiscovery:true, workingTreeStatus:true,
           structuredFileDiff:true, paginatedCommitHistory:true, structuredCommitDiff:true,
           repositoryReferences:true, commitGraphProjection:true, githubRepository:true,
-          githubPullRequest:true, githubPullRequestCommitDiff:true, githubSquashTrace:true
+          githubPullRequest:true, githubPullRequestCommitDiff:true, githubSquashTrace:true, repositoryMutations:true
         }
       }});
     } else if (request.method === 'gitnova/shutdown') {
@@ -564,7 +564,7 @@ function drain() {
         });
         let status = supervisor.start().unwrap();
         assert!(status.connected);
-        assert_eq!(status.protocol_version.as_deref(), Some("1.11"));
+        assert_eq!(status.protocol_version.as_deref(), Some("1.12"));
         assert!(status.capabilities.unwrap().github_squash_trace);
 
         let response = supervisor

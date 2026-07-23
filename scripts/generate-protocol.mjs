@@ -4,7 +4,7 @@ import process from "node:process";
 const schemaUrl = new URL("../sdk/protocol/gitnova-protocol.schema.json", import.meta.url);
 const outputUrl = new URL("../packages/protocol/src/generated.ts", import.meta.url);
 const schema = JSON.parse(await readFile(schemaUrl, "utf8"));
-const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage", "CommitDiffParams", "CommitDiff"];
+const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage", "CommitDiffParams", "CommitDiff", "ReferenceKind", "RepositoryHead", "RepositoryReference", "RepositoryReferences"];
 for (const name of requiredDefinitions) {
   if (!schema.$defs?.[name]) throw new Error(`Protocol schema is missing $defs.${name}`);
 }
@@ -33,6 +33,7 @@ export interface ServerCapabilities {
   structuredFileDiff: boolean;
   paginatedCommitHistory: boolean;
   structuredCommitDiff: boolean;
+  repositoryReferences: boolean;
 }
 
 export interface InitializeParams {
@@ -164,6 +165,28 @@ export interface CommitDiff {
   commit: CommitSummary;
   parentOid: string | null;
   files: FileDiff[];
+}
+
+export type ReferenceKind = "localBranch" | "remoteBranch" | "tag";
+
+export interface RepositoryHead {
+  oid: string | null;
+  symbolicRef: string | null;
+}
+
+export interface RepositoryReference {
+  name: string;
+  fullName: string;
+  kind: ReferenceKind;
+  targetOid: string;
+  peeledTargetOid: string | null;
+  symbolicTarget: string | null;
+  upstream: string | null;
+}
+
+export interface RepositoryReferences {
+  head: RepositoryHead;
+  references: RepositoryReference[];
 }
 `;
 

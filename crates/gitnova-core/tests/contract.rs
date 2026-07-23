@@ -124,7 +124,7 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let responses = responses(&output.stdout);
     assert_eq!(responses.len(), 2);
     assert_eq!(responses[0]["id"], "init-1");
-    assert_eq!(responses[0]["result"]["protocolVersion"], "1.5");
+    assert_eq!(responses[0]["result"]["protocolVersion"], "1.6");
     assert_eq!(responses[0]["result"]["capabilities"]["cancellation"], true);
     assert_eq!(
         responses[0]["result"]["capabilities"]["workingTreeStatus"],
@@ -140,6 +140,10 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     );
     assert_eq!(
         responses[0]["result"]["capabilities"]["structuredCommitDiff"],
+        true
+    );
+    assert_eq!(
+        responses[0]["result"]["capabilities"]["repositoryReferences"],
         true
     );
     assert_eq!(responses[1]["result"], Value::Null);
@@ -192,6 +196,140 @@ fn commit_diff_response(repository: &Path, oid: &str, extra: Value) -> Value {
     ]);
     assert!(output.status.success());
     responses(&output.stdout).remove(2)
+}
+
+fn references_response(repository: &Path) -> Value {
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", repository),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/references"}),
+    ]);
+    assert!(output.status.success());
+    responses(&output.stdout).remove(2)
+}
+
+#[test]
+fn returns_local_remote_tag_symbolic_and_upstream_references() {
+    let directory = TestDirectory::new("references");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    commit_file(&repository, 1, "root");
+    let oid = head_oid(&repository);
+    let branch =
+        String::from_utf8(git_output(&["symbolic-ref", "--short", "HEAD"], &repository).stdout)
+            .unwrap()
+            .trim()
+            .to_owned();
+    git(&["branch", "topic"], &repository);
+    git(&["tag", "lightweight"], &repository);
+    git(
+        &[
+            "-c",
+            "user.name=GitNova Test",
+            "-c",
+            "user.email=test@gitnova.invalid",
+            "tag",
+            "-a",
+            "annotated",
+            "-m",
+            "annotated tag",
+        ],
+        &repository,
+    );
+    git(&["init", "--bare", "remote.git"], &directory.0);
+    let remote = directory.0.join("remote.git");
+    git(
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+        &repository,
+    );
+    git(
+        &["push", "origin", &format!("{branch}:{branch}")],
+        &repository,
+    );
+    git(&["fetch", "origin"], &repository);
+    git(
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            &format!("refs/remotes/origin/{branch}"),
+        ],
+        &repository,
+    );
+    git(
+        &[
+            "branch",
+            "--set-upstream-to",
+            &format!("origin/{branch}"),
+            &branch,
+        ],
+        &repository,
+    );
+
+    let response = references_response(&repository);
+    assert_eq!(response["result"]["head"]["oid"], oid);
+    assert_eq!(
+        response["result"]["head"]["symbolicRef"],
+        format!("refs/heads/{branch}")
+    );
+    let refs = response["result"]["references"].as_array().unwrap();
+    let local = refs
+        .iter()
+        .find(|item| item["fullName"] == format!("refs/heads/{branch}"))
+        .unwrap();
+    assert_eq!(local["upstream"], format!("refs/remotes/origin/{branch}"));
+    let remote_head = refs
+        .iter()
+        .find(|item| item["fullName"] == "refs/remotes/origin/HEAD")
+        .unwrap();
+    assert_eq!(remote_head["kind"], "remoteBranch");
+    assert_eq!(
+        remote_head["symbolicTarget"],
+        format!("refs/remotes/origin/{branch}")
+    );
+    let annotated = refs
+        .iter()
+        .find(|item| item["fullName"] == "refs/tags/annotated")
+        .unwrap();
+    assert_eq!(annotated["peeledTargetOid"], oid);
+    let lightweight = refs
+        .iter()
+        .find(|item| item["fullName"] == "refs/tags/lightweight")
+        .unwrap();
+    assert!(lightweight["peeledTargetOid"].is_null());
+}
+
+#[test]
+fn references_distinguish_unborn_detached_and_bare_head() {
+    let directory = TestDirectory::new("reference-heads");
+    git(&["init", "empty"], &directory.0);
+    let empty = directory.0.join("empty");
+    let unborn = references_response(&empty);
+    assert!(unborn["result"]["head"]["oid"].is_null());
+    assert!(
+        unborn["result"]["head"]["symbolicRef"]
+            .as_str()
+            .unwrap()
+            .starts_with("refs/heads/")
+    );
+    assert!(
+        unborn["result"]["references"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+
+    commit_file(&empty, 1, "root");
+    let oid = head_oid(&empty);
+    git(&["checkout", "--detach", "HEAD"], &empty);
+    let detached = references_response(&empty);
+    assert_eq!(detached["result"]["head"]["oid"], oid);
+    assert!(detached["result"]["head"]["symbolicRef"].is_null());
+    git(
+        &["clone", "--bare", empty.to_str().unwrap(), "bare.git"],
+        &directory.0,
+    );
+    let bare = references_response(&directory.0.join("bare.git"));
+    assert_eq!(bare["result"]["head"]["oid"], oid);
 }
 
 #[test]

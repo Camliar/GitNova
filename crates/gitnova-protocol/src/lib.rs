@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: &str = "1.5";
+pub const PROTOCOL_VERSION: &str = "1.6";
 
 pub const ERROR_PARSE: i64 = -32700;
 pub const ERROR_INVALID_REQUEST: i64 = -32600;
@@ -34,6 +34,8 @@ pub const ERROR_COMMIT_NOT_FOUND: i64 = -32114;
 pub const ERROR_COMMIT_PARENT_REQUIRED: i64 = -32115;
 pub const ERROR_INVALID_COMMIT_PARENT: i64 = -32116;
 pub const ERROR_COMMIT_DIFF_PARSE: i64 = -32117;
+pub const ERROR_REFERENCE_PARSE: i64 = -32118;
+pub const ERROR_REFERENCE_ENCODING: i64 = -32119;
 pub const ERROR_REQUEST_CANCELLED: i64 = -32800;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -159,6 +161,7 @@ pub struct ServerCapabilities {
     pub structured_file_diff: bool,
     pub paginated_commit_history: bool,
     pub structured_commit_diff: bool,
+    pub repository_references: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -351,6 +354,39 @@ pub struct CommitDiff {
     pub files: Vec<FileDiff>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ReferenceKind {
+    LocalBranch,
+    RemoteBranch,
+    Tag,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepositoryHead {
+    pub oid: Option<String>,
+    pub symbolic_ref: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepositoryReference {
+    pub name: String,
+    pub full_name: String,
+    pub kind: ReferenceKind,
+    pub target_oid: String,
+    pub peeled_target_oid: Option<String>,
+    pub symbolic_target: Option<String>,
+    pub upstream: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RepositoryReferences {
+    pub head: RepositoryHead,
+    pub references: Vec<RepositoryReference>,
+}
+
 #[derive(Clone, Default)]
 pub struct CancellationRegistry {
     cancelled: Arc<Mutex<HashSet<RequestId>>>,
@@ -433,6 +469,10 @@ mod tests {
             "HistoryPage",
             "CommitDiffParams",
             "CommitDiff",
+            "ReferenceKind",
+            "RepositoryHead",
+            "RepositoryReference",
+            "RepositoryReferences",
         ] {
             assert!(schema["$defs"].get(definition).is_some());
         }

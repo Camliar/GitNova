@@ -1,6 +1,6 @@
 # TASK-0008: Repository References
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/008-repository-references`
@@ -34,26 +34,26 @@
 
 ## Deliverables
 
-- [ ] `repository/references` 与 HEAD 状态模型
-- [ ] NUL-field `for-each-ref` parser 与 reference 分类
-- [ ] Rust、Schema、TypeScript、capability 与稳定错误同步
-- [ ] branch/tag/symbolic/upstream/detached/unborn/bare 契约测试
-- [ ] reference 语义和刻意限制文档
+- [x] `repository/references` 与 HEAD 状态模型
+- [x] NUL-field `for-each-ref` parser 与 reference 分类
+- [x] Rust、Schema、TypeScript、capability 与稳定错误同步
+- [x] branch/tag/symbolic/upstream/detached/unborn/bare 契约测试
+- [x] reference 语义和刻意限制文档
 
 ## Review Checklist
 
-- [ ] 只调用 System Git，不经 shell，无 repository 写操作。
-- [ ] HEAD 的 attached/detached/unborn 状态无歧义。
-- [ ] annotated tag 的直接与 peeled OID 不丢失。
-- [ ] refname、symbolic target 和 upstream 使用稳定结构化字段。
-- [ ] 未实现 graph、branch/tag 写操作、fetch/push 或 GitHub。
-- [ ] fmt、Clippy、Rust tests、`npm run check` 与文档检查通过。
+- [x] 只调用 System Git，不经 shell，无 repository 写操作。
+- [x] HEAD 的 attached/detached/unborn 状态无歧义。
+- [x] annotated tag 的直接与 peeled OID 不丢失。
+- [x] refname、symbolic target 和 upstream 使用稳定结构化字段。
+- [x] 未实现 graph、branch/tag 写操作、fetch/push 或 GitHub。
+- [x] fmt、Clippy、Rust tests、`npm run check` 与文档检查通过。
 
 ## Done Definition
 
-- [ ] Deliverables 和 Review Checklist 完成。
-- [ ] 自主 Review 无阻塞项。
-- [ ] 状态更新 Done，提交并推送。
+- [x] Deliverables 和 Review Checklist 完成。
+- [x] 自主 Review 无阻塞项。
+- [x] 状态更新 Done，提交并推送。
 
 ## References
 

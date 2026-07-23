@@ -1,7 +1,8 @@
 use gitnova_protocol::{
     BranchStatus, CommitDiff, CommitIdentity, CommitSummary, DiffHunk, DiffLine, DiffLineKind,
-    DiffScope, FileDiff, FileStatus, HistoryPage, RepositoryDescriptor, RepositoryKind,
-    StatusEntry, StatusEntryKind, WorkingTreeStatus,
+    DiffScope, FileDiff, FileStatus, HistoryPage, ReferenceKind, RepositoryDescriptor,
+    RepositoryHead, RepositoryKind, RepositoryReference, RepositoryReferences, StatusEntry,
+    StatusEntryKind, WorkingTreeStatus,
 };
 use std::ffi::{OsStr, OsString};
 use std::fs;
@@ -28,6 +29,8 @@ pub enum RepositoryError {
     CommitParentRequired,
     InvalidCommitParent,
     CommitDiffParse,
+    ReferenceParse,
+    ReferenceEncoding,
 }
 
 #[derive(Debug)]
@@ -264,6 +267,124 @@ pub fn commit_diff(
         parent_oid: selected_parent,
         files,
     })
+}
+
+pub fn references(
+    descriptor: &RepositoryDescriptor,
+) -> Result<RepositoryReferences, RepositoryError> {
+    let base = descriptor
+        .worktree_root
+        .as_ref()
+        .unwrap_or(&descriptor.git_directory);
+    let head = RepositoryHead {
+        oid: resolve_head(base)?,
+        symbolic_ref: resolve_symbolic_head(base)?,
+    };
+    let arguments = [
+        OsString::from("-C"),
+        OsString::from(base),
+        OsString::from("for-each-ref"),
+        OsString::from("--sort=refname"),
+        OsString::from(
+            "--format=%(refname)%00%(objectname)%00%(*objectname)%00%(symref)%00%(upstream)",
+        ),
+        OsString::from("refs/heads"),
+        OsString::from("refs/remotes"),
+        OsString::from("refs/tags"),
+    ];
+    let output = SystemGit.run(&arguments).map_err(map_io_error)?;
+    if !output.success {
+        return Err(map_failed_output(&output.stderr));
+    }
+    Ok(RepositoryReferences {
+        head,
+        references: parse_references(&output.stdout)?,
+    })
+}
+
+fn resolve_symbolic_head(base: &str) -> Result<Option<String>, RepositoryError> {
+    let arguments = [
+        OsString::from("-C"),
+        OsString::from(base),
+        OsString::from("symbolic-ref"),
+        OsString::from("-q"),
+        OsString::from("HEAD"),
+    ];
+    let output = SystemGit.run(&arguments).map_err(map_io_error)?;
+    if !output.success {
+        if output.stderr.is_empty() {
+            return Ok(None);
+        }
+        return Err(map_failed_output(&output.stderr));
+    }
+    let value = std::str::from_utf8(&output.stdout)
+        .map_err(|_| RepositoryError::ReferenceEncoding)?
+        .trim_end_matches(['\r', '\n']);
+    if value.starts_with("refs/heads/") {
+        Ok(Some(value.to_owned()))
+    } else {
+        Err(RepositoryError::ReferenceParse)
+    }
+}
+
+fn parse_references(output: &[u8]) -> Result<Vec<RepositoryReference>, RepositoryError> {
+    let mut references = Vec::new();
+    for record in output.split(|byte| *byte == b'\n') {
+        let record = record.strip_suffix(b"\r").unwrap_or(record);
+        if record.is_empty() {
+            continue;
+        }
+        let fields: Vec<&[u8]> = record.split(|byte| *byte == 0).collect();
+        if fields.len() != 5 {
+            return Err(RepositoryError::ReferenceParse);
+        }
+        let full_name = decode_reference_field(fields[0])?;
+        let (kind, name) = if let Some(name) = full_name.strip_prefix("refs/heads/") {
+            (ReferenceKind::LocalBranch, name)
+        } else if let Some(name) = full_name.strip_prefix("refs/remotes/") {
+            (ReferenceKind::RemoteBranch, name)
+        } else if let Some(name) = full_name.strip_prefix("refs/tags/") {
+            (ReferenceKind::Tag, name)
+        } else {
+            return Err(RepositoryError::ReferenceParse);
+        };
+        let target_oid = decode_reference_field(fields[1])?;
+        if !valid_oid(target_oid) {
+            return Err(RepositoryError::ReferenceParse);
+        }
+        let optional_oid = |field: &[u8]| -> Result<Option<String>, RepositoryError> {
+            if field.is_empty() {
+                return Ok(None);
+            }
+            let oid = decode_reference_field(field)?;
+            if valid_oid(oid) {
+                Ok(Some(oid.to_owned()))
+            } else {
+                Err(RepositoryError::ReferenceParse)
+            }
+        };
+        let optional_text = |field: &[u8]| -> Result<Option<String>, RepositoryError> {
+            if field.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(decode_reference_field(field)?.to_owned()))
+            }
+        };
+        references.push(RepositoryReference {
+            name: name.to_owned(),
+            full_name: full_name.to_owned(),
+            kind,
+            target_oid: target_oid.to_owned(),
+            peeled_target_oid: optional_oid(fields[2])?,
+            symbolic_target: optional_text(fields[3])?,
+            upstream: optional_text(fields[4])?,
+        });
+    }
+    Ok(references)
+}
+
+fn decode_reference_field(field: &[u8]) -> Result<&str, RepositoryError> {
+    std::str::from_utf8(field).map_err(|_| RepositoryError::ReferenceEncoding)
 }
 
 fn load_commit(base: &str, oid: &str) -> Result<CommitSummary, RepositoryError> {
@@ -1069,6 +1190,36 @@ mod tests {
         assert_eq!(
             parse_changed_paths(b"invalid\0path\0"),
             Err(RepositoryError::CommitDiffParse)
+        );
+    }
+
+    #[test]
+    fn parses_reference_fields_without_human_branch_output() {
+        let oid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let tag_oid = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let output = format!(
+            "refs/heads/main\0{oid}\0\0\0refs/remotes/origin/main\nrefs/remotes/origin/HEAD\0{oid}\0\0refs/remotes/origin/main\0\nrefs/tags/v1\0{tag_oid}\0{oid}\0\0\n"
+        );
+        let references = parse_references(output.as_bytes()).unwrap();
+        assert_eq!(references.len(), 3);
+        assert_eq!(references[0].kind, ReferenceKind::LocalBranch);
+        assert_eq!(
+            references[0].upstream.as_deref(),
+            Some("refs/remotes/origin/main")
+        );
+        assert_eq!(
+            references[1].symbolic_target.as_deref(),
+            Some("refs/remotes/origin/main")
+        );
+        assert_eq!(references[2].kind, ReferenceKind::Tag);
+        assert_eq!(references[2].peeled_target_oid.as_deref(), Some(oid));
+        assert_eq!(
+            parse_references(b"refs/other/x\0bad\0\0\0\n"),
+            Err(RepositoryError::ReferenceParse)
+        );
+        assert_eq!(
+            parse_references(b"refs/heads/\xff\0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\0\0\0\n"),
+            Err(RepositoryError::ReferenceEncoding)
         );
     }
 

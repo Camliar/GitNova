@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitnova.dev/schema/protocol/1.5/gitnova-protocol.schema.json",
-  "title": "GitNova Core Protocol 1.5",
+  "$id": "https://gitnova.dev/schema/protocol/1.6/gitnova-protocol.schema.json",
+  "title": "GitNova Core Protocol 1.6",
   "type": "object",
-  "properties": { "protocolVersion": { "const": "1.5" } },
+  "properties": { "protocolVersion": { "const": "1.6" } },
   "required": ["protocolVersion"],
   "$defs": {
     "RequestId": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
@@ -27,9 +27,10 @@
         "workingTreeStatus": { "type": "boolean" },
         "structuredFileDiff": { "type": "boolean" },
         "paginatedCommitHistory": { "type": "boolean" },
-        "structuredCommitDiff": { "type": "boolean" }
+        "structuredCommitDiff": { "type": "boolean" },
+        "repositoryReferences": { "type": "boolean" }
       },
-      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff"]
+      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff", "repositoryReferences"]
     },
     "InitializeParams": {
       "type": "object",
@@ -233,6 +234,41 @@
         "files": { "type": "array", "items": { "$ref": "#/$defs/FileDiff" } }
       },
       "required": ["commit", "parentOid", "files"]
+    },
+    "ReferenceKind": {
+      "enum": ["localBranch", "remoteBranch", "tag"]
+    },
+    "RepositoryHead": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "oid": { "type": ["string", "null"] },
+        "symbolicRef": { "type": ["string", "null"] }
+      },
+      "required": ["oid", "symbolicRef"]
+    },
+    "RepositoryReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "fullName": { "type": "string" },
+        "kind": { "$ref": "#/$defs/ReferenceKind" },
+        "targetOid": { "type": "string" },
+        "peeledTargetOid": { "type": ["string", "null"] },
+        "symbolicTarget": { "type": ["string", "null"] },
+        "upstream": { "type": ["string", "null"] }
+      },
+      "required": ["name", "fullName", "kind", "targetOid", "peeledTargetOid", "symbolicTarget", "upstream"]
+    },
+    "RepositoryReferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "head": { "$ref": "#/$defs/RepositoryHead" },
+        "references": { "type": "array", "items": { "$ref": "#/$defs/RepositoryReference" } }
+      },
+      "required": ["head", "references"]
     }
   }
 }

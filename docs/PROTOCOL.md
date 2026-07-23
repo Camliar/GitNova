@@ -28,9 +28,9 @@ spawn → gitnova/initialize → requests and notifications → gitnova/shutdown
 
 ## Initialize
 
-`gitnova/initialize` 参数包含 `clientInfo`、`protocolVersion` 和 Host capabilities。结果包含 `coreInfo`、协商后的协议版本和 Core capabilities。初始协议版本为 `1.0`，当前版本为 `1.5`；主版本不同即不兼容，次版本能力通过 capability 字段协商。
+`gitnova/initialize` 参数包含 `clientInfo`、`protocolVersion` 和 Host capabilities。结果包含 `coreInfo`、协商后的协议版本和 Core capabilities。初始协议版本为 `1.0`，当前版本为 `1.6`；主版本不同即不兼容，次版本能力通过 capability 字段协商。
 
-Core 当前声明 `cancellation`、`repositoryDiscovery`、`workingTreeStatus`、`structuredFileDiff`、`paginatedCommitHistory` 和 `structuredCommitDiff` capability。仓库方法及路径语义见[仓库发现](REPOSITORIES.md)，状态契约见[工作区状态](STATUS.md)，工作区 diff 契约见[结构化文件 Diff](DIFF.md)，历史契约见[分页 Commit 历史](HISTORY.md)，commit-parent diff 契约见[结构化 Commit Diff](COMMIT_DIFF.md)。
+Core 当前声明 `cancellation`、`repositoryDiscovery`、`workingTreeStatus`、`structuredFileDiff`、`paginatedCommitHistory`、`structuredCommitDiff` 和 `repositoryReferences` capability。仓库方法及路径语义见[仓库发现](REPOSITORIES.md)，状态契约见[工作区状态](STATUS.md)，工作区 diff 契约见[结构化文件 Diff](DIFF.md)，历史契约见[分页 Commit 历史](HISTORY.md)，commit-parent diff 契约见[结构化 Commit Diff](COMMIT_DIFF.md)，refs 契约见[Repository References](REFERENCES.md)。
 
 请求 id 可以是 JSON string 或 integer，Core 必须在响应中保持其类型和值。
 
@@ -65,6 +65,8 @@ JSON-RPC error 使用标准数值 `code`，同时在 `data.stableCode` 提供稳
 | `-32115` | `commit.parent_required` | merge commit 必须明确选择直接 parent |
 | `-32116` | `commit.invalid_parent` | 指定 OID 不是该 commit 的直接 parent |
 | `-32117` | `git.commit_diff_parse_failed` | NUL-delimited commit change list 无法解析 |
+| `-32118` | `git.reference_parse_failed` | System Git reference payload 无法解析 |
+| `-32119` | `reference.unsupported_encoding` | reference metadata 不是 UTF-8 |
 | `-32800` | `request.cancelled` | 请求已取消 |
 
 ## Cancellation and timeouts

@@ -8,12 +8,12 @@ use gitnova_protocol::{
     ERROR_GIT_COMMAND_FAILED, ERROR_GIT_UNAVAILABLE, ERROR_HISTORY_ENCODING,
     ERROR_INCOMPATIBLE_PROTOCOL, ERROR_INVALID_COMMIT_PARENT, ERROR_INVALID_HISTORY_CURSOR,
     ERROR_INVALID_PARAMS, ERROR_INVALID_PATH, ERROR_INVALID_REPOSITORY_PATH, ERROR_INVALID_REQUEST,
-    ERROR_METHOD_NOT_FOUND, ERROR_NOT_INITIALIZED, ERROR_PARSE, ERROR_REPOSITORY_NOT_FOUND,
-    ERROR_REPOSITORY_NOT_OPEN, ERROR_REQUEST_CANCELLED, ERROR_STATUS_PARSE,
-    ERROR_UNSAFE_REPOSITORY, ERROR_WORKTREE_REQUIRED, HistoryParams, ImplementationInfo,
-    InitializeParams, InitializeResult, JSON_RPC_VERSION, Notification, PROTOCOL_VERSION,
-    RepositoryDescriptor, RepositoryPathParams, Request, Response, ResponseError,
-    ServerCapabilities,
+    ERROR_METHOD_NOT_FOUND, ERROR_NOT_INITIALIZED, ERROR_PARSE, ERROR_REFERENCE_ENCODING,
+    ERROR_REFERENCE_PARSE, ERROR_REPOSITORY_NOT_FOUND, ERROR_REPOSITORY_NOT_OPEN,
+    ERROR_REQUEST_CANCELLED, ERROR_STATUS_PARSE, ERROR_UNSAFE_REPOSITORY, ERROR_WORKTREE_REQUIRED,
+    HistoryParams, ImplementationInfo, InitializeParams, InitializeResult, JSON_RPC_VERSION,
+    Notification, PROTOCOL_VERSION, RepositoryDescriptor, RepositoryPathParams, Request, Response,
+    ResponseError, ServerCapabilities,
 };
 use serde_json::Value;
 use std::io::{self, BufRead, Write};
@@ -146,6 +146,7 @@ fn dispatch_request(
         "repository/diff" => diff_request(request, state),
         "repository/history" => history_request(request, state),
         "repository/commitDiff" => commit_diff_request(request, state),
+        "repository/references" => references_request(request, state),
         _ => Response::error(
             Some(request.id),
             ResponseError::new(
@@ -212,6 +213,7 @@ fn initialize(request: Request, state: &mut CoreState) -> Response {
             structured_file_diff: true,
             paginated_commit_history: true,
             structured_commit_diff: true,
+            repository_references: true,
         },
     };
     Response::success(
@@ -393,6 +395,18 @@ fn repository_error(error: repository::RepositoryError) -> ResponseError {
             ERROR_COMMIT_DIFF_PARSE,
             "git.commit_diff_parse_failed",
             "System Git returned an invalid commit diff payload",
+            false,
+        ),
+        repository::RepositoryError::ReferenceParse => ResponseError::new(
+            ERROR_REFERENCE_PARSE,
+            "git.reference_parse_failed",
+            "System Git returned an invalid reference payload",
+            false,
+        ),
+        repository::RepositoryError::ReferenceEncoding => ResponseError::new(
+            ERROR_REFERENCE_ENCODING,
+            "reference.unsupported_encoding",
+            "Reference metadata is not UTF-8 encoded",
             false,
         ),
     }
@@ -596,6 +610,43 @@ fn commit_diff_request(request: Request, state: &CoreState) -> Response {
         Ok(diff) => Response::success(
             request.id,
             serde_json::to_value(diff).expect("serializable commit diff"),
+        ),
+        Err(error) => Response::error(Some(request.id), repository_error(error)),
+    }
+}
+
+fn references_request(request: Request, state: &CoreState) -> Response {
+    let params_are_empty = request.params.is_null()
+        || request
+            .params
+            .as_object()
+            .is_some_and(serde_json::Map::is_empty);
+    if !params_are_empty {
+        return Response::error(
+            Some(request.id),
+            ResponseError::new(
+                ERROR_INVALID_PARAMS,
+                "protocol.invalid_params",
+                "repository/references does not accept parameters",
+                false,
+            ),
+        );
+    }
+    let Some(descriptor) = &state.active_repository else {
+        return Response::error(
+            Some(request.id),
+            ResponseError::new(
+                ERROR_REPOSITORY_NOT_OPEN,
+                "repository.not_open",
+                "Open a repository before requesting references",
+                true,
+            ),
+        );
+    };
+    match repository::references(descriptor) {
+        Ok(references) => Response::success(
+            request.id,
+            serde_json::to_value(references).expect("serializable repository references"),
         ),
         Err(error) => Response::error(Some(request.id), repository_error(error)),
     }

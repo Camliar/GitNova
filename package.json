@@ -11,6 +11,7 @@
   "scripts": {
     "generate:protocol": "node scripts/generate-protocol.mjs",
     "check:protocol": "node scripts/generate-protocol.mjs --check",
-    "check": "npm run check:protocol"
+    "check:desktop": "pnpm --filter @gitnova/desktop check",
+    "check": "npm run check:protocol && npm run check:desktop"
   }
 }

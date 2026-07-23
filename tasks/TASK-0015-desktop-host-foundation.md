@@ -1,6 +1,6 @@
 # TASK-0015: Desktop Host Foundation
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/015-desktop-host-foundation`
@@ -30,25 +30,25 @@
 
 ## Deliverables
 
-- [ ] React 19 + Vite Desktop package
-- [ ] Tauri 2 minimal Host shell and capability configuration
-- [ ] shared visual tokens and accessible empty state
-- [ ] frontend tests, typecheck and production build
-- [ ] workspace scripts, lockfile and documentation
+- [x] React 19 + Vite Desktop package
+- [x] Tauri 2 minimal Host shell and capability configuration
+- [x] shared visual tokens and accessible empty state
+- [x] frontend tests, typecheck and production build
+- [x] workspace scripts, lockfile and documentation
 
 ## Review Checklist
 
-- [ ] Desktop/Tauri 不包含 Core 业务规则或直接 Git/GitHub 调用。
-- [ ] CSP 与 Tauri capability 保持最小权限，无 shell/network capability。
-- [ ] UI 可键盘访问、焦点可见且不以颜色作为唯一状态信息。
-- [ ] 依赖版本锁定，Rust 与 frontend checks 通过。
-- [ ] 未提前实现 TASK-0016 Core process transport 或 Squash Trace screen。
+- [x] Desktop/Tauri 不包含 Core 业务规则或直接 Git/GitHub 调用。
+- [x] CSP 与 Tauri capability 保持最小权限，无 shell/network capability。
+- [x] UI 可键盘访问、焦点可见且不以颜色作为唯一状态信息。
+- [x] 依赖版本锁定，Rust 与 frontend checks 通过。
+- [x] 未提前实现 TASK-0016 Core process transport 或 Squash Trace screen。
 
 ## Done Definition
 
-- [ ] Deliverables 和 Review Checklist 完成。
-- [ ] 自主 Review 无阻塞项。
-- [ ] 状态更新 Done，提交、推送并快进合并至 `main`。
+- [x] Deliverables 和 Review Checklist 完成。
+- [x] 自主 Review 无阻塞项。
+- [x] 状态更新 Done，提交、推送并快进合并至 `main`。
 
 ## References
 

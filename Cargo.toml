@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/gitnova-core", "crates/gitnova-protocol"]
+members = ["apps/desktop/src-tauri", "crates/gitnova-core", "crates/gitnova-protocol"]
 
 [workspace.package]
 edition = "2024"

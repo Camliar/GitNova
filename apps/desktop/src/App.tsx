@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { CommitSummary, DiffScope, RepositoryDescriptor } from "@gitnova/protocol";
+import type { CommitSummary, DiffScope, RepositoryDescriptor, RepositoryMutationSnapshot } from "@gitnova/protocol";
 import markUrl from "../../../assets/icons/gitnova-mark.svg";
 import { asDesktopError, getCoreStatus, startCore, type DesktopError } from "./core";
 import { openRepository, selectRepositoryDirectory } from "./repository";
@@ -12,11 +12,12 @@ import { HistoryPanel, type HistoryState } from "./HistoryPanel";
 import { getCommitDiff } from "./commitDiff";
 import { CommitDetailPanel, type CommitDetailState, type CommitSelection } from "./CommitDetailPanel";
 import { GitHubPanel } from "./GitHubPanel";
+import { MutationPanel } from "./MutationPanel";
 
 type Connection =
   | { kind: "checking" }
   | { kind: "stopped" }
-  | { kind: "connected"; version: string }
+  | { kind: "connected"; version: string; mutations: boolean }
   | { kind: "error"; error: DesktopError };
 
 type RepositoryState =
@@ -49,7 +50,7 @@ export function App() {
         if (!active) return;
         setConnection(
           status.connected
-            ? { kind: "connected", version: status.protocolVersion ?? "unknown" }
+            ? { kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true }
             : { kind: "stopped" },
         );
       })
@@ -65,7 +66,7 @@ export function App() {
     setConnection({ kind: "checking" });
     try {
       const status = await startCore();
-      setConnection({ kind: "connected", version: status.protocolVersion ?? "unknown" });
+      setConnection({ kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true });
     } catch (error) {
       setConnection({ kind: "error", error: asDesktopError(error) });
     }
@@ -199,6 +200,15 @@ export function App() {
     }
   }
 
+  function applyMutation(snapshot: RepositoryMutationSnapshot) {
+    diffRequest.current += 1;
+    setFileDiff({ kind: "idle" });
+    commitRequest.current += 1;
+    setCommitDetail({ kind: "idle" });
+    setWorkingTree({ kind: "ready", status: snapshot.status });
+    void refreshHistory();
+  }
+
   const coreDetail =
     connection.kind === "connected"
       ? `Connected · v${connection.version}`
@@ -275,6 +285,9 @@ export function App() {
               onDiff={(path: string, scope: DiffScope) => void loadFileDiff({ path, scope })}
             />
           )}
+          {connection.kind === "connected" && connection.mutations && repository.kind === "open" && repository.repository.kind !== "bare" && workingTree.kind === "ready" && (
+            <MutationPanel key={`mutations:${repository.repository.gitDirectory}`} status={workingTree.status} onApplied={applyMutation} />
+          )}
           {fileDiff.kind !== "idle" && (
             <DiffPanel
               state={fileDiff}
@@ -300,7 +313,7 @@ export function App() {
               onClose={closeCommitDetail}
             />
           )}
-          {repository.kind === "open" && <GitHubPanel key={repository.repository.gitDirectory} />}
+          {repository.kind === "open" && <GitHubPanel key={`github:${repository.repository.gitDirectory}`} />}
         </section>
 
         <aside className="foundation-card" aria-labelledby="foundation-title">

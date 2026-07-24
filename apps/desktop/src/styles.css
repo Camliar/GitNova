@@ -109,6 +109,24 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
 .history-error button, .history-more { min-height: 38px; padding: 0 14px; border: 1px solid #7771d7; border-radius: 10px; background: #7771d7; color: #090b17; cursor: pointer; font-weight: 800; }
 .history-more { justify-self: center; min-width: 150px; }
 .history-more:disabled { cursor: wait; opacity: .65; }
+.mutation-panel { display: grid; gap: 18px; margin-top: 18px; padding: 22px; border: 1px solid #516f67; border-radius: 18px; background: rgb(10 22 23 / 90%); }
+.mutation-panel h2, .mutation-panel h3 { margin: 0; }
+.mutation-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.mutation-grid form { display: grid; align-content: start; gap: 9px; padding: 15px; border: 1px solid #354d4a; border-radius: 12px; }
+.mutation-grid p { min-height: 34px; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.mutation-grid label { color: #a9f5db; font-size: 10px; font-weight: 800; }
+.mutation-grid input, .mutation-grid select, .mutation-grid textarea { width: 100%; box-sizing: border-box; border: 1px solid #4e6d68; border-radius: 8px; background: #081415; color: var(--text); font: inherit; }
+.mutation-grid input, .mutation-grid select { min-height: 38px; padding: 0 10px; }
+.mutation-grid textarea { min-height: 82px; padding: 10px; resize: vertical; }
+.mutation-grid button, .mutation-confirm button { min-height: 36px; padding: 0 12px; border: 1px solid #4e8e82; border-radius: 8px; background: #4e8e82; color: #07110f; cursor: pointer; font-weight: 800; }
+.mutation-grid button:disabled, .mutation-confirm button:disabled { cursor: wait; opacity: .55; }
+.mutation-confirm { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px; border: 1px solid #8d7542; border-radius: 11px; background: rgb(77 61 27 / 28%); }
+.mutation-confirm p, .mutation-success, .mutation-error { margin: 0; font-size: 12px; line-height: 1.5; }
+.mutation-confirm span { display: flex; flex: 0 0 auto; gap: 8px; }
+.mutation-confirm button:first-child { border-color: var(--border); background: transparent; color: var(--text); }
+.mutation-confirm--error { border-color: #9d5660; background: rgb(91 35 43 / 28%); }
+.mutation-success { color: #a9f5db; }
+.mutation-error, .mutation-confirm--error p { color: #ffc8c8; }
 .commit-view { justify-self: start; min-height: 30px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text); cursor: pointer; font-size: 10px; font-weight: 800; }
 .commit-view:hover { background: var(--surface-raised); }
 .commit-view:disabled { cursor: wait; opacity: .6; }
@@ -214,6 +232,8 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
   .commit-list { --graph-column: 36px !important; }
   .commit-graph { max-width: 36px; overflow: hidden; }
   .commit-detail__header { align-items: stretch; flex-direction: column; }
+  .mutation-grid { grid-template-columns: 1fr; }
+  .mutation-confirm { align-items: stretch; flex-direction: column; }
   .github-error { align-items: stretch; flex-direction: column; }
   .github-repository { grid-template-columns: 1fr; }
   .squash-trace > header { align-items: stretch; flex-direction: column; }

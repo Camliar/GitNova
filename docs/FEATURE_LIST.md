@@ -15,7 +15,7 @@
 - 本地仓库发现与打开（已实现）
 - 工作区状态（已实现）
 - 单文件 staged/working-tree 行级 diff（已实现）
-- Core staged commit 与 local branch create/switch（已实现）；Desktop workflow 待后续 Task
+- Core staged commit 与 local branch create/switch，以及 Desktop 显式确认 workflow（已实现）
 - 固定 HEAD 快照的分页提交历史（已实现）
 - 指定 commit-parent 的文件列表与行级 diff（已实现）
 - HEAD、local/remote branches 与 tags 的只读枚举（已实现）

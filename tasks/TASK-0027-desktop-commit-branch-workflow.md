@@ -1,6 +1,6 @@
 # TASK-0027: Desktop Commit and Branch Workflow
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/027-desktop-commit-branch-workflow`
@@ -26,17 +26,17 @@
 
 ## Deliverables
 
-- [ ] typed mutation client and confirmation state machine
-- [ ] commit/create/switch responsive UI
-- [ ] snapshot refresh/error/stale tests and docs
+- [x] typed mutation client and confirmation state machine
+- [x] commit/create/switch responsive UI
+- [x] snapshot refresh/error/stale tests and docs
 
 ## Review Checklist
 
-- [ ] 所有 mutation 都要求第二次明确确认，打开仓库/刷新不会触发写操作。
-- [ ] Host 不自动 stage/stash/force/discard，不推断 refs 或 Git mutation 结果。
-- [ ] 成功状态来自 Core snapshot，失败保留上下文且不宣称成功。
-- [ ] frontend/Rust tests、typecheck、Clippy、protocol check 与 production/Tauri build 通过。
+- [x] 所有 mutation 都要求第二次明确确认，打开仓库/刷新不会触发写操作。
+- [x] Host 不自动 stage/stash/force/discard，不推断 refs 或 Git mutation 结果。
+- [x] 成功状态来自 Core snapshot，失败保留上下文且不宣称成功。
+- [x] frontend/Rust tests、typecheck、Clippy、protocol check 与 production/Tauri build 通过。
 
 ## Done Definition
 
-- [ ] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。
+- [x] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。

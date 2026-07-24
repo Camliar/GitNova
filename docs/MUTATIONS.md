@@ -21,3 +21,9 @@ Both methods return the post-mutation status/reference snapshot. Bare repositori
 ## Deliberate limits
 
 This contract does not stage paths, amend, override author, bypass hooks, configure signing, detach HEAD, delete/rename branches, set upstreams, or run reset/restore/stash/merge/rebase/fetch/pull/push. Those require separate Tasks and explicit safety contracts.
+
+## Desktop workflow
+
+Desktop 只在 Core 声明 `repositoryMutations` capability、已打开非 bare worktree 且 status 可用时显示操作区。每项 mutation 都经过 Review 和 Confirm 两次明确操作；打开仓库、刷新 status/history 或读取 refs 不会触发 mutation。
+
+Commit 预览显示 Core status 中 index 非 `unmodified` 的 path 数量，但是否允许 commit 仍由 Core 决定。Branch switch 下拉只包含 Core `repository/references` 返回的 `localBranch`，不把 remote refs 猜测为可切换分支。成功后 Desktop 直接采用 Core 返回的 status/references snapshot、清除可能失效的 diff/detail 并刷新 graph；失败保留输入与 action，可 Retry 或 Cancel，且不显示成功状态。

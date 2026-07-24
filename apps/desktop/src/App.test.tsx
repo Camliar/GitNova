@@ -8,6 +8,7 @@ const status = vi.hoisted(() => ({ getWorkingTreeStatus: vi.fn() }));
 const diff = vi.hoisted(() => ({ getFileDiff: vi.fn() }));
 const history = vi.hoisted(() => ({ getCommitGraph: vi.fn() }));
 const commitDiff = vi.hoisted(() => ({ getCommitDiff: vi.fn() }));
+const mutations = vi.hoisted(() => ({ getRepositoryReferences: vi.fn(), commitStaged: vi.fn(), createLocalBranch: vi.fn(), switchLocalBranch: vi.fn() }));
 
 vi.mock("./core", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./core")>()),
@@ -19,6 +20,7 @@ vi.mock("./status", () => status);
 vi.mock("./diff", () => diff);
 vi.mock("./history", () => history);
 vi.mock("./commitDiff", () => commitDiff);
+vi.mock("./mutations", () => mutations);
 
 const descriptor = {
   worktreeRoot: "/work/project",
@@ -31,8 +33,8 @@ const descriptor = {
 describe("Desktop repository open", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.11", capabilities: null });
-    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.11", capabilities: null });
+    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.12", capabilities: { repositoryMutations: true } });
+    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.12", capabilities: { repositoryMutations: true } });
     repository.selectRepositoryDirectory.mockResolvedValue("/work/project");
     repository.openRepository.mockResolvedValue(descriptor);
     status.getWorkingTreeStatus.mockResolvedValue({
@@ -42,6 +44,10 @@ describe("Desktop repository open", () => {
     diff.getFileDiff.mockResolvedValue({ oldPath: "src/app.ts", newPath: "src/app.ts", isBinary: false, hunks: [] });
     history.getCommitGraph.mockResolvedValue({ nodes: [], nextCursor: null });
     commitDiff.getCommitDiff.mockResolvedValue({ commit: null, parentOid: null, files: [] });
+    mutations.getRepositoryReferences.mockResolvedValue({ head: { oid: "a".repeat(40), symbolicRef: "refs/heads/main" }, references: [
+      { name: "main", fullName: "refs/heads/main", kind: "localBranch", targetOid: "a".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: null },
+      { name: "origin/main", fullName: "refs/remotes/origin/main", kind: "remoteBranch", targetOid: "a".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: null },
+    ] });
   });
 
   it("opens only the explicitly selected directory and presents Core facts", async () => {
@@ -54,6 +60,14 @@ describe("Desktop repository open", () => {
     expect(screen.getByText("git version 2.50.0")).toBeInTheDocument();
     expect(await screen.findByText("Working tree clean")).toBeInTheDocument();
     expect(status.getWorkingTreeStatus).toHaveBeenCalledOnce();
+  });
+
+  it("does not expose mutations when Core does not advertise the capability", async () => {
+    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.11", capabilities: { repositoryMutations: false } });
+    render(<App />); fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    expect(await screen.findByText("Working tree clean")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Commit & branches" })).not.toBeInTheDocument();
+    expect(mutations.getRepositoryReferences).not.toHaveBeenCalled();
   });
 
   it("renders Core-projected commit order, HEAD, refs, and merge parents", async () => {
@@ -231,6 +245,52 @@ describe("Desktop repository open", () => {
     expect(screen.getByText("Working · Modified")).toBeInTheDocument();
     expect(screen.getByText("Working · Untracked")).toBeInTheDocument();
     expect(screen.getAllByText(/Conflict/)).toHaveLength(2);
+  });
+
+  it("requires review and confirmation before committing and applies the Core snapshot", async () => {
+    const commit = { oid: "c".repeat(40), parents: ["a".repeat(40)], summary: "Ship it", message: "Ship it", author: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" }, committer: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" } };
+    const snapshot = { status: { branch: { head: "main", oid: commit.oid, upstream: null, ahead: 0, behind: 0 }, entries: [] }, references: { head: { oid: commit.oid, symbolicRef: "refs/heads/main" }, references: [] } };
+    status.getWorkingTreeStatus.mockResolvedValue({ branch: { head: "main", oid: "a".repeat(40), upstream: null, ahead: 0, behind: 0 }, entries: [{ path: "staged.ts", originalPath: null, kind: "ordinary", indexStatus: "modified", worktreeStatus: "unmodified" }] });
+    mutations.commitStaged.mockResolvedValue({ commit, snapshot });
+    render(<App />); fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.change(await screen.findByLabelText("Commit message"), { target: { value: "Ship it" } }); fireEvent.click(screen.getByRole("button", { name: "Review commit" }));
+    expect(mutations.commitStaged).not.toHaveBeenCalled();
+    expect(screen.getByText(/Confirm committing the current staged index/)).toHaveTextContent("Ship it");
+    fireEvent.click(screen.getByRole("button", { name: "Confirm action" }));
+    expect(mutations.commitStaged).toHaveBeenCalledWith("Ship it");
+    expect(await screen.findByText(`Created commit ${"c".repeat(8)}`)).toBeInTheDocument();
+    expect(screen.getByText("Working tree clean")).toBeInTheDocument();
+    expect(history.getCommitGraph).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses only Core local refs and confirms create and switch independently", async () => {
+    const branchRefs = [
+      { name: "main", fullName: "refs/heads/main", kind: "localBranch", targetOid: "a".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: null },
+      { name: "topic", fullName: "refs/heads/topic", kind: "localBranch", targetOid: "a".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: null },
+    ];
+    const createSnapshot = { status: { branch: { head: "main", oid: "a".repeat(40), upstream: null, ahead: 0, behind: 0 }, entries: [] }, references: { head: { oid: "a".repeat(40), symbolicRef: "refs/heads/main" }, references: branchRefs } };
+    const switchSnapshot = { status: { branch: { head: "topic", oid: "a".repeat(40), upstream: null, ahead: 0, behind: 0 }, entries: [] }, references: { head: { oid: "a".repeat(40), symbolicRef: "refs/heads/topic" }, references: branchRefs } };
+    mutations.createLocalBranch.mockResolvedValue(createSnapshot); mutations.switchLocalBranch.mockResolvedValue(switchSnapshot);
+    render(<App />); fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    const select = await screen.findByLabelText("Local branch");
+    expect(within(select).getByRole("option", { name: "main" })).toBeInTheDocument();
+    expect(within(select).queryByRole("option", { name: "origin/main" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Branch name"), { target: { value: "topic" } }); fireEvent.click(screen.getByRole("button", { name: "Review branch creation" })); fireEvent.click(screen.getByRole("button", { name: "Confirm action" }));
+    expect(mutations.createLocalBranch).toHaveBeenCalledWith("topic");
+    expect(await screen.findByText("Created branch topic")).toBeInTheDocument();
+    fireEvent.change(select, { target: { value: "main" } }); fireEvent.click(screen.getByRole("button", { name: "Review branch switch" }));
+    expect(mutations.switchLocalBranch).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole("button", { name: "Confirm action" }));
+    expect(mutations.switchLocalBranch).toHaveBeenCalledWith("main");
+  });
+
+  it("retains a failed action for explicit retry", async () => {
+    const snapshot = { status: { branch: { head: "main", oid: "a".repeat(40), upstream: null, ahead: 0, behind: 0 }, entries: [] }, references: { head: { oid: "a".repeat(40), symbolicRef: "refs/heads/main" }, references: [] } };
+    mutations.createLocalBranch.mockRejectedValueOnce({ code: "branch.already_exists", message: "Local branch already exists", retryable: false }).mockResolvedValueOnce(snapshot);
+    render(<App />); fireEvent.click(await screen.findByRole("button", { name: "Choose repository" })); fireEvent.change(await screen.findByLabelText("Branch name"), { target: { value: "topic" } }); fireEvent.click(screen.getByRole("button", { name: "Review branch creation" })); fireEvent.click(screen.getByRole("button", { name: "Confirm action" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Local branch already exists. No success was recorded.");
+    fireEvent.click(screen.getByRole("button", { name: "Retry action" }));
+    expect(await screen.findByText("Created branch topic")).toBeInTheDocument();
+    expect(mutations.createLocalBranch).toHaveBeenCalledTimes(2);
   });
 
   it("requests the selected scope and renders structured lines as text", async () => {

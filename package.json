@@ -12,6 +12,7 @@
     "generate:protocol": "node scripts/generate-protocol.mjs",
     "check:protocol": "node scripts/generate-protocol.mjs --check",
     "check:desktop": "pnpm --filter @gitnova/desktop check",
-    "check": "npm run check:protocol && npm run check:desktop"
+    "check:quality": "node scripts/check-quality.mjs",
+    "check": "npm run check:protocol && npm run check:quality && npm run check:desktop"
   }
 }

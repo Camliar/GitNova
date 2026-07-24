@@ -46,8 +46,8 @@ export function GitHubPanel() {
 
   return (
     <section className="github-panel" aria-labelledby="github-title" aria-busy={repository.kind === "loading" || pullRequest.kind === "loading"}>
-      <header><p className="eyebrow">GitHub provider</p><h2 id="github-title">Pull request history</h2></header>
-      {repository.kind === "idle" && <><p className="empty-state">GitHub access is off until you explicitly connect. Core uses the existing gh configuration in this repository environment.</p><button type="button" className="github-connect" onClick={() => void connect()}>Connect GitHub</button></>}
+      <header><div><p className="eyebrow">GitHub provider</p><h2 id="github-title">Pull request history</h2></div><span className={`network-state network-state--${repository.kind === "idle" ? "off" : "triggered"}`}>Network: {repository.kind === "idle" ? "off" : "user-triggered"}</span></header>
+      {repository.kind === "idle" && <><p className="empty-state">No network request has been made. Connect sends only this repository's GitHub identity through Core using existing gh configuration; it does not send source files or diffs.</p><button type="button" className="github-connect" onClick={() => void connect()}>Connect GitHub</button></>}
       {repository.kind === "loading" && <p className="empty-state" role="status">Requesting GitHub repository metadata…</p>}
       {repository.kind === "error" && <div className="github-error"><p role="alert">{repository.error.message}. No credentials were requested by Desktop.</p><button type="button" onClick={() => void connect()}>Retry GitHub</button></div>}
       {repository.kind === "ready" && (
@@ -61,6 +61,7 @@ export function GitHubPanel() {
           <form className="pr-form" onSubmit={(event) => { event.preventDefault(); void loadPullRequest(); }}>
             <label htmlFor="pr-number">Pull request number</label>
             <span><input id="pr-number" inputMode="numeric" value={number} onChange={(event) => setNumber(event.target.value)} disabled={pullRequest.kind === "loading"} /><button type="submit" disabled={pullRequest.kind === "loading"}>{pullRequest.kind === "loading" ? "Loading…" : "Open PR"}</button></span>
+            <small>Open PR sends repository identity and PR number to GitHub, requesting PR metadata and ordered original commits.</small>
           </form>
         </>
       )}
@@ -90,7 +91,7 @@ function PullRequestView({ pullRequest }: { pullRequest: GitHubPullRequest }) {
       {trace.kind === "ready" && <SquashTraceView trace={trace.value} />}
     </section>
     <h4>Original commits · {pullRequest.commits.length}</h4>
-    {pullRequest.commits.length === 0 ? <p className="empty-state">No original commits returned.</p> : <ol className="pr-commits">{pullRequest.commits.map((commit) => <li key={commit.oid}><strong>{commit.summary || "(no commit message)"}</strong><code>{commit.oid.slice(0, 8)}</code><p>{commit.author.name} &lt;{commit.author.email}&gt;{commit.author.login ? ` · @${commit.author.login}` : ""} · {commit.parents.length} parent{commit.parents.length === 1 ? "" : "s"}</p><button type="button" disabled={remoteDiff.kind === "loading"} onClick={() => void load(commit.oid)}>View remote diff {commit.oid.slice(0, 8)}</button></li>)}</ol>}
+    {pullRequest.commits.length === 0 ? <p className="empty-state">No original commits returned.</p> : <ol className="pr-commits">{pullRequest.commits.map((commit) => <li key={commit.oid}><strong>{commit.summary || "(no commit message)"}</strong><code>{commit.oid.slice(0, 8)}</code><p>{commit.author.name} &lt;{commit.author.email}&gt;{commit.author.login ? ` · @${commit.author.login}` : ""} · {commit.parents.length} parent{commit.parents.length === 1 ? "" : "s"}</p><button type="button" disabled={remoteDiff.kind === "loading"} onClick={() => void load(commit.oid)}>View remote diff {commit.oid.slice(0, 8)}</button><small>Requests this listed commit's file metadata and available patch from GitHub.</small></li>)}</ol>}
     {remoteDiff.kind === "loading" && <p className="empty-state" role="status">Loading original commit diff…</p>}
     {remoteDiff.kind === "error" && <div className="github-error"><p role="alert">{remoteDiff.error.message}. PR details remain available.</p><button type="button" onClick={() => void load(remoteDiff.oid)}>Retry remote diff</button></div>}
     {remoteDiff.kind === "ready" && <section className="remote-diff" aria-label="Original commit remote diff"><h4>{remoteDiff.value.commit.summary}</h4>{remoteDiff.value.files.length === 0 ? <p className="empty-state">No changed files.</p> : remoteDiff.value.files.map((file, index) => <section key={`${file.newPath}:${index}`}><h5>{file.oldPath === file.newPath ? file.newPath : `${file.oldPath} → ${file.newPath}`}</h5><p>Provider status: {file.status} · +{file.additions} −{file.deletions} · {file.changes} changes</p>{file.patchState === "unavailable" ? <p className="empty-state">GitHub did not provide a patch for this file. Binary content is not assumed.</p> : <FileDiffView diff={{ oldPath: file.oldPath, newPath: file.newPath, isBinary: false, hunks: file.hunks }} />}</section>)}</section>}

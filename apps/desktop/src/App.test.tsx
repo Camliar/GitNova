@@ -273,7 +273,7 @@ describe("Desktop repository open", () => {
     mutations.createLocalBranch.mockResolvedValue(createSnapshot); mutations.switchLocalBranch.mockResolvedValue(switchSnapshot);
     render(<App />); fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
     const select = await screen.findByLabelText("Local branch");
-    expect(within(select).getByRole("option", { name: "main" })).toBeInTheDocument();
+    expect(await within(select).findByRole("option", { name: "main" })).toBeInTheDocument();
     expect(within(select).queryByRole("option", { name: "origin/main" })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Branch name"), { target: { value: "topic" } }); fireEvent.click(screen.getByRole("button", { name: "Review branch creation" })); fireEvent.click(screen.getByRole("button", { name: "Confirm action" }));
     expect(mutations.createLocalBranch).toHaveBeenCalledWith("topic");

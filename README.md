@@ -36,6 +36,8 @@ npm run check
 
 Desktop 前端可单独使用 `pnpm --filter @gitnova/desktop check` 验证；原生无 bundle 构建使用 `pnpm --filter @gitnova/desktop tauri build --no-bundle`。
 
+`npm run check` 同时执行协议、隐私/网络静态质量门、前端测试与 production build；完整 Rust、性能和平台矩阵见[质量基线](docs/QUALITY_BASELINE.md)。
+
 阅读[项目总览](docs/PROJECT.md)、[产品需求](docs/PRODUCT_REQUIREMENTS.md)、[Core 协议](docs/PROTOCOL.md)、[Repository Mutations](docs/MUTATIONS.md)、[Desktop Core Transport](docs/DESKTOP_CORE_TRANSPORT.md)、[仓库发现](docs/REPOSITORIES.md)、[工作区状态](docs/STATUS.md)、[结构化 Diff](docs/DIFF.md)和[贡献指南](CONTRIBUTING.md)，再从 `tasks/` 选择已批准的 Task。
 
 ## Monorepo

@@ -29,6 +29,7 @@
 - PR、原始 commits 与最终 merge commit 的保守关联模型（Squash Trace Core，已实现）
 - Squash Trace Desktop 关联展示（已实现）
 - Desktop Host 的 Squash Trace 端到端关键工作流（已实现）
+- MVP 本地质量门、冷启动性能基线与网络透明性（已实现）
 
 ## Post-MVP 候选
 

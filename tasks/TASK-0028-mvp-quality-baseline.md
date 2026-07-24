@@ -1,6 +1,6 @@
 # TASK-0028: MVP Quality Baseline
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/028-mvp-quality-baseline`
@@ -26,17 +26,17 @@
 
 ## Deliverables
 
-- [ ] cold-start performance regression test and quality matrix
-- [ ] network disclosure UI and tests
-- [ ] privacy/static quality gate and documented commands
+- [x] cold-start performance regression test and quality matrix
+- [x] network disclosure UI and tests
+- [x] privacy/static quality gate and documented commands
 
 ## Review Checklist
 
-- [ ] 性能门槛可重复且避免单次调度抖动误报。
-- [ ] 每次 GitHub 网络动作在触发前说明范围，无自动请求。
-- [ ] Host 无直接 fetch/HTTP，CSP 默认拒绝远程连接，stderr 无敏感细节。
-- [ ] quality/frontend/Rust/Clippy/build/Tauri 验证通过；未提前实现 TASK-0029。
+- [x] 性能门槛可重复且避免单次调度抖动误报。
+- [x] 每次 GitHub 网络动作在触发前说明范围，无自动请求。
+- [x] Host 无直接 fetch/HTTP，CSP 默认拒绝远程连接，stderr 无敏感细节。
+- [x] quality/frontend/Rust/Clippy/build/Tauri 验证通过；未提前实现 TASK-0029。
 
 ## Done Definition
 
-- [ ] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。
+- [x] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。

@@ -156,6 +156,9 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
 .commit-file-diff > h3 { margin: 0; color: #dfe2ff; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
 .github-panel { display: grid; gap: 18px; margin-top: 18px; padding: 22px; border: 1px solid #365c69; border-radius: 18px; background: rgb(10 18 27 / 92%); }
 .github-panel h2, .github-panel h3, .github-panel h4 { margin: 0; }
+.github-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.network-state { padding: 4px 8px; border: 1px solid #8d7542; border-radius: 999px; color: #ffe0a3; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+.network-state--off { border-color: #4e8e82; color: #a9f5db; }
 .github-connect, .github-error button, .pr-form button { min-height: 40px; padding: 0 15px; border: 1px solid #428c96; border-radius: 10px; background: #428c96; color: #071015; cursor: pointer; font-weight: 800; }
 .github-connect { justify-self: start; }
 .github-error { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
@@ -166,6 +169,7 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
 .github-repository dd { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
 .pr-form { display: grid; gap: 7px; }
 .pr-form label { color: var(--muted); font-size: 11px; font-weight: 800; }
+.pr-form small, .pr-commits small { color: var(--muted); font-size: 10px; line-height: 1.5; }
 .pr-form span { display: flex; gap: 8px; }
 .pr-form input { min-width: 0; flex: 1; min-height: 40px; padding: 0 12px; border: 1px solid var(--border); border-radius: 10px; background: #080b14; color: var(--text); }
 .pr-form button:disabled { cursor: wait; opacity: .65; }
@@ -182,6 +186,7 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
 .pr-commits code { color: #9aedf5; font-size: 11px; }
 .pr-commits p { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 10px; }
 .pr-commits button { grid-column: 1 / -1; justify-self: start; min-height: 30px; border: 1px solid #428c96; border-radius: 8px; background: transparent; color: #9aedf5; cursor: pointer; font-size: 10px; font-weight: 800; }
+.pr-commits small { grid-column: 1 / -1; }
 .remote-diff { display: grid; gap: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 .remote-diff > section { display: grid; gap: 9px; }
 .remote-diff h5, .remote-diff p { margin: 0; overflow-wrap: anywhere; }
@@ -235,6 +240,7 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
   .mutation-grid { grid-template-columns: 1fr; }
   .mutation-confirm { align-items: stretch; flex-direction: column; }
   .github-error { align-items: stretch; flex-direction: column; }
+  .github-panel > header { align-items: start; flex-direction: column; }
   .github-repository { grid-template-columns: 1fr; }
   .squash-trace > header { align-items: stretch; flex-direction: column; }
   .trace-flow { grid-template-columns: 1fr; }

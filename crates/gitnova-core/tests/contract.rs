@@ -3,7 +3,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 fn frame(value: &Value) -> Vec<u8> {
     let body = serde_json::to_vec(value).unwrap();
@@ -263,6 +263,28 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
         true
     );
     assert_eq!(responses[1]["result"], Value::Null);
+}
+
+#[test]
+fn core_cold_start_p95_meets_the_local_mvp_budget() {
+    let mut samples = Vec::with_capacity(20);
+    for id in 0..20 {
+        let started = Instant::now();
+        let output = run(&[initialize(json!(id))]);
+        assert!(output.status.success());
+        assert_eq!(responses(&output.stdout).len(), 1);
+        samples.push(started.elapsed());
+    }
+    samples.sort_unstable();
+    let (p95, maximum) = (samples[18], samples[19]);
+    assert!(
+        p95 <= Duration::from_millis(500),
+        "Core cold-start p95 {p95:?} exceeds 500ms"
+    );
+    assert!(
+        maximum <= Duration::from_secs(2),
+        "Core cold-start outlier {maximum:?} exceeds 2s"
+    );
 }
 
 fn commit_file(repository: &Path, number: usize, message: &str) {

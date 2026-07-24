@@ -24,6 +24,8 @@ Desktop Host 基座、独立 Core transport、仓库/PR 导航、commit graph、
 
 对 Desktop Squash Trace 主路径补齐跨平台测试、性能预算、凭据与网络访问透明性、签名、打包、发布和 CI/CD。GitHub 访问必须由用户明确配置或触发，结果与派生数据默认仅保存在仓库所在环境。
 
+本地自动质量门、Core 冷启动 p95、网络披露、CSP/敏感输出检查与诚实的平台矩阵已由 TASK-0028 固化。跨平台 CI、签名、打包与发布由 TASK-0029 完成。
+
 ## Phase 5 — Post-MVP Hosts & Providers
 
 扩展 VS Code、JetBrains 与 Visual Studio Host，并按独立 Task 接入其他托管平台 Provider。无论 Core 运行在本机、WSL、Remote SSH 还是 Dev Container，都必须保持“仓库在哪里，Core 就运行在哪里”。

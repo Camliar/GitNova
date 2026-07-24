@@ -10,8 +10,8 @@ fn main() -> ExitCode {
     match gitnova_core::run(&mut reader, &mut writer) {
         Ok(0) => ExitCode::SUCCESS,
         Ok(_) => ExitCode::from(1),
-        Err(error) => {
-            eprintln!("gitnova-core transport error: {error}");
+        Err(_) => {
+            eprintln!("gitnova-core transport error");
             ExitCode::from(1)
         }
     }

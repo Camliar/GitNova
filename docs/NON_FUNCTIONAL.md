@@ -16,7 +16,7 @@
 
 ## 性能预算（初始目标）
 
-- Core 冷启动目标不超过 500 ms（常见开发机，基线待首个实现 Task 固化）。
+- Core 冷启动 p95 目标不超过 500 ms；真实进程测试与 anti-flake ceiling 见[质量基线](QUALITY_BASELINE.md)。
 - UI 输入响应目标不超过 100 ms；长任务异步执行并显示进度。
 - 大型仓库操作应支持流式或分页，避免一次性加载无界数据。
 
@@ -34,3 +34,4 @@
 
 这些要求由[架构](ARCHITECTURE.md)、[技术栈](TECH_STACK.md)和[编码规范](CODING_STANDARD.md)共同落实。
 
+可执行命令、网络检查和诚实的平台验证矩阵见[质量基线](QUALITY_BASELINE.md)。

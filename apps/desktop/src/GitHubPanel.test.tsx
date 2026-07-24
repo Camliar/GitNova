@@ -13,6 +13,8 @@ describe("GitHub PR navigation", () => {
   it("does not access GitHub until the user explicitly connects", () => {
     render(<GitHubPanel />);
     expect(screen.getByRole("button", { name: "Connect GitHub" })).toBeEnabled();
+    expect(screen.getByText("Network: off")).toBeInTheDocument();
+    expect(screen.getByText(/does not send source files or diffs/)).toBeInTheDocument();
     expect(github.getGitHubRepository).not.toHaveBeenCalled();
   });
 
@@ -20,6 +22,8 @@ describe("GitHub PR navigation", () => {
     render(<GitHubPanel />);
     fireEvent.click(screen.getByRole("button", { name: "Connect GitHub" }));
     expect(await screen.findByText("owner/repo")).toBeInTheDocument();
+    expect(screen.getByText("Network: user-triggered")).toBeInTheDocument();
+    expect(screen.getByText(/requesting PR metadata and ordered original commits/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Pull request number"), { target: { value: "0" } });
     fireEvent.click(screen.getByRole("button", { name: "Open PR" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Enter a positive pull request number");
@@ -40,6 +44,7 @@ describe("GitHub PR navigation", () => {
     expect(screen.getByText("PR body <safe>")).toBeInTheDocument();
     const commits = within(screen.getByRole("list")).getAllByRole("listitem");
     expect(commits[0]).toHaveTextContent("First"); expect(commits[1]).toHaveTextContent("Second");
+    expect(screen.getAllByText(/Requests this listed commit's file metadata/)).toHaveLength(2);
   });
 
   it("retains repository and PR number when a request fails and retries", async () => {

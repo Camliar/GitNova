@@ -223,6 +223,10 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
 .connection-action .button-secondary:hover { background: var(--surface-raised); }
 .connection-action button:disabled { cursor: wait; opacity: .65; }
 .connection-action button:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+.environment-field { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.environment-field select, .environment-field input { min-width: 0; min-height: 38px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-raised); color: var(--text); font: inherit; }
+.environment-field select:focus-visible, .environment-field input:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+.connection-action .environment-note { color: var(--muted); }
 .privacy-note { margin: 0; padding-top: 18px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; line-height: 1.6; }
 
 @media (max-width: 760px) {

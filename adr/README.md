@@ -9,5 +9,6 @@ ADR 记录难以逆转或影响多个模块的技术决策。状态使用 Propos
 | [0003](ADR-0003-Local-First.md) | Accepted | Local First 且无中心服务器 |
 | [0004](ADR-0004-Core-Process.md) | Accepted | Core 独立进程与 JSON-RPC/stdio |
 | [0005](ADR-0005-GitHub-Provider.md) | Accepted | GitHub Provider 首选 Core 内 `gh api` 适配器 |
+| [0006](ADR-0006-Remote-Core-Launching.md) | Accepted | WSL、SSH 与 Dev Container 结构化 Core launcher |
 
 提交 ADR 应遵循[贡献指南](../CONTRIBUTING.md)和 [`tasks/README.md`](../tasks/README.md)。总体架构见 [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)。

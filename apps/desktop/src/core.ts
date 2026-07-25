@@ -5,7 +5,16 @@ export interface CoreStatus {
   connected: boolean;
   protocolVersion: string | null;
   capabilities: ServerCapabilities | null;
+  environment: CoreEnvironment;
 }
+
+export type CoreEnvironment = "local" | "wsl" | "ssh" | "devContainer";
+
+export type CoreLaunchTarget =
+  | { kind: "local" }
+  | { kind: "wsl"; distribution: string }
+  | { kind: "ssh"; destination: string }
+  | { kind: "devContainer"; workspaceFolder: string };
 
 export interface DesktopError {
   code: string;
@@ -46,6 +55,7 @@ const stopped: CoreStatus = {
   connected: false,
   protocolVersion: null,
   capabilities: null,
+  environment: "local",
 };
 
 export async function getCoreStatus(): Promise<CoreStatus> {
@@ -61,6 +71,17 @@ export async function startCore(): Promise<CoreStatus> {
     } satisfies DesktopError;
   }
   return invoke<CoreStatus>("core_start");
+}
+
+export async function configureCore(target: CoreLaunchTarget): Promise<CoreStatus> {
+  if (!isTauri()) {
+    throw {
+      code: "desktop.preview_only",
+      message: "Core can only be configured by the native Desktop Host",
+      retryable: false,
+    } satisfies DesktopError;
+  }
+  return invoke<CoreStatus>("core_configure", { target });
 }
 
 export async function requestCore<T>(method: string, params: unknown): Promise<CoreResponse<T>> {

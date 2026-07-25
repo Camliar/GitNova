@@ -26,7 +26,7 @@
 
 Core 的正式进程名为 `gitnova-core`，具备以下不可变约束：
 
-- 作为本机子进程独立运行，不链接进 Host 进程。
+- 作为仓库所在环境中的独立子进程运行，不链接进 Host 进程；远端启动遵循 [ADR-0006](../adr/ADR-0006-Remote-Core-Launching.md)。
 - 通过 stdin/stdout 交换 JSON-RPC 2.0 消息；stderr 只输出诊断。
 - 不监听 TCP/HTTP 端口，无常驻 Server，无 Cloud 依赖。
 - 调用用户已经安装的 System Git，而不是重新实现 Git。
@@ -53,7 +53,7 @@ Host 可以做平台特有的输入映射和呈现，但不能解释领域结果
 - GitHub Provider 是 MVP Squash Trace 主路径的一部分，由 Core 通过 `gh`、REST 或 GraphQL 接入；首个 adapter 遵循 [ADR-0005](../adr/ADR-0005-GitHub-Provider.md)，网络集成必须显式、透明且可禁用。
 - 最终阶段的 AI Assist 同样遵循 Host → Core 边界：prompt/data selection、Provider adapter、建议约束和 Git mutation gating 属于 Core；Host 只负责输入预览、草稿编辑和用户确认。AI Provider 不得成为中心服务器，也不得绕过 Core 直接执行 Git。
 - Core 负责获取并关联 PR、原始 commits、per-commit diff 与最终 squash commit；Host 只呈现 Core 返回的领域结果。
-- 仓库在哪个环境，Core 就运行在哪个环境；该边界后续同样适用于 WSL、Remote SSH 和 Dev Container。
+- 仓库在哪个环境，Core 就运行在哪个环境；Desktop 已通过结构化 launcher 支持 WSL、Remote SSH 和 Dev Container，且仍保持 stdio 协议与唯一业务层。
 - Core 不把仓库、历史、凭据或遥测发送到 GitNova 中心服务，因为不存在这样的服务。
 
 ## 约束与演进

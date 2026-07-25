@@ -4,7 +4,7 @@ GitNova Desktop is a presentation Host. It does not execute Git commands or inte
 
 ## Process discovery and startup
 
-The production Host resolves `gitnova-core` beside the Desktop executable. Debug and test builds may set `GITNOVA_CORE_BINARY` to an absolute executable path. Relative overrides are rejected, and Core is started directly without a shell, daemon, port, or Tauri shell plugin.
+The production local target resolves `gitnova-core` beside the Desktop executable. Debug and test builds may set `GITNOVA_CORE_BINARY` to an absolute executable path. Relative overrides are rejected. WSL, SSH and Dev Container targets use the closed structured projections in [Remote Core Environments](REMOTE_ENVIRONMENTS.md) and [ADR-0006](../adr/ADR-0006-Remote-Core-Launching.md). No target accepts an arbitrary command or uses a local shell, daemon, port, or Tauri shell plugin.
 
 stdin, stdout, and stderr are piped. stdout is reserved for JSON-RPC frames. stderr is drained in the background and is never returned to the UI, preventing repository paths, credentials, and provider diagnostics from crossing the Host boundary.
 
@@ -14,11 +14,10 @@ Immediately after spawn, the Host sends `gitnova/initialize`. It accepts only th
 
 Requests are serialized through one supervisor. IDs are monotonically increasing integers. Both directions use the protocol `Content-Length` framing with a 16 MiB maximum. The Host validates JSON-RPC version, response ID, and the exclusive presence of `result` or `error`; malformed frames, unexpected EOF, timeouts, and mismatched responses fail closed and terminate the child.
 
-The Tauri boundary exposes only status, start, generic request transport, and shutdown commands. Lifecycle methods cannot be sent through the generic command. Domain payloads remain opaque to the Host and are typed for UI consumers from the shared protocol package.
+The Tauri boundary exposes only structured environment configuration, status, start, generic request transport, and shutdown commands. Environment changes are rejected while Core runs. Lifecycle methods cannot be sent through the generic command. Domain payloads remain opaque to the Host and are typed for UI consumers from the shared protocol package.
 
 ## Shutdown and errors
 
 Normal shutdown sends `gitnova/shutdown`, then the `exit` notification, and waits briefly for Core to exit. Timeout, transport failure, application exit, and destructor paths kill and reap the process so no child is left behind.
 
 Desktop lifecycle errors contain only a stable code, a fixed user-safe message, and retryability. Raw operating-system errors and child stderr are intentionally excluded.
-

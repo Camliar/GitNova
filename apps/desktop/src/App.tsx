@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CommitSummary, DiffScope, RepositoryDescriptor, RepositoryMutationSnapshot } from "@gitnova/protocol";
 import markUrl from "../../../assets/icons/gitnova-mark.svg";
-import { asDesktopError, getCoreStatus, startCore, type DesktopError } from "./core";
+import { asDesktopError, configureCore, getCoreStatus, startCore, type CoreEnvironment, type CoreLaunchTarget, type DesktopError } from "./core";
 import { openRepository, selectRepositoryDirectory } from "./repository";
 import { getWorkingTreeStatus } from "./status";
 import { WorkingTreePanel, type WorkingTreeState } from "./WorkingTreePanel";
@@ -34,6 +34,9 @@ const repositoryKindLabel: Record<RepositoryDescriptor["kind"], string> = {
 
 export function App() {
   const [connection, setConnection] = useState<Connection>({ kind: "checking" });
+  const [environment, setEnvironment] = useState<CoreEnvironment>("local");
+  const [environmentDetail, setEnvironmentDetail] = useState("");
+  const [remoteRepositoryPath, setRemoteRepositoryPath] = useState("");
   const [repository, setRepository] = useState<RepositoryState>({ kind: "idle" });
   const [workingTree, setWorkingTree] = useState<WorkingTreeState>({ kind: "idle" });
   const [fileDiff, setFileDiff] = useState<DiffState>({ kind: "idle" });
@@ -48,6 +51,7 @@ export function App() {
     void getCoreStatus()
       .then((status) => {
         if (!active) return;
+        setEnvironment(status.environment ?? "local");
         setConnection(
           status.connected
             ? { kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true }
@@ -65,7 +69,14 @@ export function App() {
   async function connectCore() {
     setConnection({ kind: "checking" });
     try {
+      let target: CoreLaunchTarget;
+      if (environment === "wsl") target = { kind: "wsl", distribution: environmentDetail.trim() };
+      else if (environment === "ssh") target = { kind: "ssh", destination: environmentDetail.trim() };
+      else if (environment === "devContainer") target = { kind: "devContainer", workspaceFolder: environmentDetail.trim() };
+      else target = { kind: "local" };
+      await configureCore(target);
       const status = await startCore();
+      setEnvironment(status.environment ?? environment);
       setConnection({ kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true });
     } catch (error) {
       setConnection({ kind: "error", error: asDesktopError(error) });
@@ -75,10 +86,13 @@ export function App() {
   async function chooseRepository() {
     setRepository({ kind: "selecting" });
     try {
-      const path = await selectRepositoryDirectory();
+      const path = environment === "local" ? await selectRepositoryDirectory() : remoteRepositoryPath.trim();
       if (path === null) {
         setRepository({ kind: "idle" });
         return;
+      }
+      if (path.length === 0) {
+        throw { code: "desktop.remote_path_required", message: "Enter the repository path in the Core environment", retryable: false } satisfies DesktopError;
       }
       const opened = await openRepository(path);
       setRepository({ kind: "open", repository: opened });
@@ -211,7 +225,7 @@ export function App() {
 
   const coreDetail =
     connection.kind === "connected"
-      ? `Connected · v${connection.version}`
+      ? `Connected · ${environment} · v${connection.version}`
       : connection.kind === "checking"
         ? "Checking…"
         : connection.kind === "error"
@@ -331,6 +345,26 @@ export function App() {
           {(connection.kind === "stopped" || connection.kind === "error") && (
             <div className="connection-action">
               {connection.kind === "error" && <p role="alert">{connection.error.message}. No repository data was changed.</p>}
+              <label className="environment-field">
+                Core environment
+                <select value={environment} onChange={(event) => { setEnvironment(event.target.value as CoreEnvironment); setEnvironmentDetail(""); }}>
+                  <option value="local">This computer</option>
+                  <option value="wsl">WSL distribution</option>
+                  <option value="ssh">Remote SSH</option>
+                  <option value="devContainer">Dev Container</option>
+                </select>
+              </label>
+              {environment !== "local" && (
+                <label className="environment-field">
+                  {environment === "wsl" ? "Distribution name" : environment === "ssh" ? "SSH destination" : "Local workspace folder"}
+                  <input
+                    value={environmentDetail}
+                    onChange={(event) => setEnvironmentDetail(event.target.value)}
+                    placeholder={environment === "wsl" ? "Ubuntu-24.04" : environment === "ssh" ? "user@example.com" : "/absolute/path/to/workspace"}
+                  />
+                </label>
+              )}
+              {environment !== "local" && <p className="environment-note"><code>gitnova-core</code> must already be installed on PATH in that environment. GitNova uses non-interactive stdio transport and does not copy credentials or repositories.</p>}
               <button type="button" onClick={() => void connectCore()}>
                 {connection.kind === "error" ? "Retry Core" : "Start Core"}
               </button>
@@ -339,8 +373,14 @@ export function App() {
           {connection.kind === "connected" && repository.kind !== "open" && (
             <div className="connection-action">
               {repository.kind === "error" && <p role="alert">{repository.error.message}. No repository data was changed.</p>}
+              {environment !== "local" && (
+                <label className="environment-field">
+                  Repository path in {environment}
+                  <input value={remoteRepositoryPath} onChange={(event) => setRemoteRepositoryPath(event.target.value)} placeholder="/workspaces/project" />
+                </label>
+              )}
               <button type="button" disabled={repository.kind === "selecting"} onClick={() => void chooseRepository()}>
-                {repository.kind === "selecting" ? "Opening…" : repository.kind === "error" ? "Choose another folder" : "Choose repository"}
+                {repository.kind === "selecting" ? "Opening…" : repository.kind === "error" ? environment === "local" ? "Choose another folder" : "Open another repository path" : environment === "local" ? "Choose repository" : "Open repository path"}
               </button>
             </div>
           )}

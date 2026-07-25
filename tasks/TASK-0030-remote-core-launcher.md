@@ -1,6 +1,6 @@
 # TASK-0030: WSL, Remote SSH and Dev Container Core Launcher
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P1
 - **Owner:** Codex
 - **Branch:** `feature/030-remote-core-launcher`
@@ -27,17 +27,17 @@
 
 ## Deliverables
 
-- [ ] structured launcher model, validation and process projection
-- [ ] Desktop environment selection and remote repository path workflow
-- [ ] launcher security/lifecycle tests and documentation
+- [x] structured launcher model, validation and process projection
+- [x] Desktop environment selection and remote repository path workflow
+- [x] launcher security/lifecycle tests and documentation
 
 ## Review Checklist
 
-- [ ] 不经 shell，不接受任意 executable/arguments。
-- [ ] 远端连接为 batch/non-interactive，失败不会泄漏 stderr。
-- [ ] Core 运行环境和 repository path 由用户明确选择。
-- [ ] frontend/Rust/Clippy/rustfmt/Tauri checks 通过。
+- [x] 不经 shell，不接受任意 executable/arguments。
+- [x] 远端连接为 batch/non-interactive，失败不会泄漏 stderr。
+- [x] Core 运行环境和 repository path 由用户明确选择。
+- [x] frontend/Rust/Clippy/rustfmt/Tauri checks 通过。
 
 ## Done Definition
 
-- [ ] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。
+- [x] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。

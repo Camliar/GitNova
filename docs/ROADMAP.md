@@ -30,6 +30,8 @@ Desktop Host 基座、独立 Core transport、仓库/PR 导航、commit graph、
 
 扩展 VS Code、JetBrains 与 Visual Studio Host，并按独立 Task 接入其他托管平台 Provider。无论 Core 运行在本机、WSL、Remote SSH 还是 Dev Container，都必须保持“仓库在哪里，Core 就运行在哪里”。
 
+TASK-0030 已为 Desktop 建立本机、WSL、Remote SSH 与 Dev Container 的结构化 launcher 和远端 repository path 工作流；后续 IDE Host 复用同一进程与安全边界。
+
 ## Phase 6 — AI Assist（最终阶段）
 
 在 Squash Trace MVP、Desktop 交付质量和 Post-MVP Host/Provider 全部完成后，再以独立 Task 引入 AI Assist。候选能力包括根据 staged diff 生成 commit message 草稿，以及根据仓库状态给出拆分 commit、测试、冲突处理等操作建议。

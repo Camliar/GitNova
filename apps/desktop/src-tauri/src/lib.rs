@@ -3,11 +3,19 @@ mod transport;
 use serde_json::Value;
 use std::sync::Arc;
 use tauri::{Manager, State};
-use transport::{CoreStatus, CoreSupervisor, DesktopError};
+use transport::{CoreLaunchTarget, CoreStatus, CoreSupervisor, DesktopError};
 
 #[tauri::command]
 fn core_status(supervisor: State<'_, Arc<CoreSupervisor>>) -> CoreStatus {
     supervisor.status()
+}
+
+#[tauri::command]
+fn core_configure(
+    supervisor: State<'_, Arc<CoreSupervisor>>,
+    target: CoreLaunchTarget,
+) -> Result<CoreStatus, DesktopError> {
+    supervisor.configure(target)
 }
 
 #[tauri::command]
@@ -52,6 +60,7 @@ pub fn run() {
         .manage(supervisor)
         .invoke_handler(tauri::generate_handler![
             core_status,
+            core_configure,
             core_start,
             core_request,
             core_shutdown

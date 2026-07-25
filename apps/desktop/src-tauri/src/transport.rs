@@ -2,7 +2,7 @@ use gitnova_protocol::{
     ClientCapabilities, ImplementationInfo, InitializeParams, InitializeResult, Notification,
     PROTOCOL_VERSION, Request, RequestId, Response, ServerCapabilities,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::env;
 use std::ffi::OsString;
@@ -64,16 +64,36 @@ impl DesktopError {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CoreEnvironment {
+    #[default]
+    Local,
+    Wsl,
+    Ssh,
+    DevContainer,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum CoreLaunchTarget {
+    Local,
+    Wsl { distribution: String },
+    Ssh { destination: String },
+    DevContainer { workspace_folder: String },
+}
+
 #[derive(Clone, Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CoreStatus {
     pub connected: bool,
     pub protocol_version: Option<String>,
     pub capabilities: Option<ServerCapabilities>,
+    pub environment: CoreEnvironment,
 }
 
 pub struct CoreSupervisor {
-    command: CoreCommand,
+    command: Mutex<CoreCommand>,
     process: Mutex<Option<CoreProcess>>,
     status: Mutex<CoreStatus>,
 }
@@ -82,6 +102,7 @@ pub struct CoreSupervisor {
 struct CoreCommand {
     program: PathBuf,
     arguments: Vec<OsString>,
+    environment: CoreEnvironment,
 }
 
 struct CoreProcess {
@@ -100,15 +121,12 @@ struct ReceivedResponse {
 
 impl CoreSupervisor {
     pub fn discover() -> Result<Self, DesktopError> {
-        Ok(Self::new(CoreCommand {
-            program: resolve_core_binary()?,
-            arguments: Vec::new(),
-        }))
+        Ok(Self::new(command_for_target(CoreLaunchTarget::Local)?))
     }
 
     fn new(command: CoreCommand) -> Self {
         Self {
-            command,
+            command: Mutex::new(command),
             process: Mutex::new(None),
             status: Mutex::new(CoreStatus::default()),
         }
@@ -121,12 +139,41 @@ impl CoreSupervisor {
             .clone()
     }
 
+    pub fn configure(&self, target: CoreLaunchTarget) -> Result<CoreStatus, DesktopError> {
+        if self
+            .process
+            .lock()
+            .map_err(|_| DesktopError::transport())?
+            .is_some()
+        {
+            return Err(DesktopError::new(
+                "desktop.core_already_running",
+                "Stop GitNova Core before changing its environment",
+                false,
+            ));
+        }
+        let command = command_for_target(target)?;
+        let environment = command.environment;
+        *self.command.lock().map_err(|_| DesktopError::transport())? = command;
+        let status = CoreStatus {
+            environment,
+            ..CoreStatus::default()
+        };
+        *self.status.lock().map_err(|_| DesktopError::transport())? = status.clone();
+        Ok(status)
+    }
+
     pub fn start(&self) -> Result<CoreStatus, DesktopError> {
         let mut process = self.process.lock().map_err(|_| DesktopError::transport())?;
         if process.is_some() {
             return Ok(self.status());
         }
-        let mut child = spawn_core(&self.command)?;
+        let command = self
+            .command
+            .lock()
+            .map_err(|_| DesktopError::transport())?
+            .clone();
+        let mut child = spawn_core(&command)?;
         let stdin = child.stdin.take().ok_or_else(DesktopError::transport)?;
         let stdout = child.stdout.take().ok_or_else(DesktopError::transport)?;
         let stderr = child.stderr.take().ok_or_else(DesktopError::transport)?;
@@ -203,6 +250,7 @@ impl CoreSupervisor {
             connected: true,
             protocol_version: Some(result.protocol_version),
             capabilities: Some(result.capabilities),
+            environment: command.environment,
         };
         *self.status.lock().map_err(|_| DesktopError::transport())? = status.clone();
         *process = Some(candidate);
@@ -228,7 +276,15 @@ impl CoreSupervisor {
             Err(error) => {
                 process.terminate();
                 *guard = None;
-                *self.status.lock().map_err(|_| DesktopError::transport())? = CoreStatus::default();
+                let environment = self
+                    .command
+                    .lock()
+                    .map_err(|_| DesktopError::transport())?
+                    .environment;
+                *self.status.lock().map_err(|_| DesktopError::transport())? = CoreStatus {
+                    environment,
+                    ..CoreStatus::default()
+                };
                 Err(error)
             }
         }
@@ -237,7 +293,15 @@ impl CoreSupervisor {
     pub fn shutdown(&self) -> Result<CoreStatus, DesktopError> {
         let mut process = self.process.lock().map_err(|_| DesktopError::transport())?;
         let result = process.take().map_or(Ok(()), |mut child| child.shutdown());
-        let status = CoreStatus::default();
+        let environment = self
+            .command
+            .lock()
+            .map_err(|_| DesktopError::transport())?
+            .environment;
+        let status = CoreStatus {
+            environment,
+            ..CoreStatus::default()
+        };
         *self.status.lock().map_err(|_| DesktopError::transport())? = status.clone();
         result.map(|()| status)
     }
@@ -352,6 +416,95 @@ fn spawn_core(command: &CoreCommand) -> Result<Child, DesktopError> {
                 "GitNova Core could not be started",
                 true,
             ),
+        })
+}
+
+fn command_for_target(target: CoreLaunchTarget) -> Result<CoreCommand, DesktopError> {
+    let invalid = || {
+        DesktopError::new(
+            "desktop.invalid_core_environment",
+            "Core environment configuration is invalid",
+            false,
+        )
+    };
+    match target {
+        CoreLaunchTarget::Local => Ok(CoreCommand {
+            program: resolve_core_binary()?,
+            arguments: Vec::new(),
+            environment: CoreEnvironment::Local,
+        }),
+        CoreLaunchTarget::Wsl { distribution } => {
+            if !valid_identifier(&distribution, 64) {
+                return Err(invalid());
+            }
+            Ok(CoreCommand {
+                program: PathBuf::from("wsl.exe"),
+                arguments: vec![
+                    "--distribution".into(),
+                    distribution.into(),
+                    "--exec".into(),
+                    "gitnova-core".into(),
+                ],
+                environment: CoreEnvironment::Wsl,
+            })
+        }
+        CoreLaunchTarget::Ssh { destination } => {
+            if !valid_ssh_destination(&destination) {
+                return Err(invalid());
+            }
+            Ok(CoreCommand {
+                program: PathBuf::from("ssh"),
+                arguments: vec![
+                    "-T".into(),
+                    "-o".into(),
+                    "BatchMode=yes".into(),
+                    "-o".into(),
+                    "ConnectTimeout=10".into(),
+                    "--".into(),
+                    destination.into(),
+                    "gitnova-core".into(),
+                ],
+                environment: CoreEnvironment::Ssh,
+            })
+        }
+        CoreLaunchTarget::DevContainer { workspace_folder } => {
+            let folder = PathBuf::from(&workspace_folder);
+            if workspace_folder.len() > 4096
+                || workspace_folder.chars().any(char::is_control)
+                || !folder.is_absolute()
+            {
+                return Err(invalid());
+            }
+            Ok(CoreCommand {
+                program: PathBuf::from("devcontainer"),
+                arguments: vec![
+                    "exec".into(),
+                    "--workspace-folder".into(),
+                    workspace_folder.into(),
+                    "gitnova-core".into(),
+                ],
+                environment: CoreEnvironment::DevContainer,
+            })
+        }
+    }
+}
+
+fn valid_identifier(value: &str, max: usize) -> bool {
+    !value.is_empty()
+        && value.len() <= max
+        && !value.starts_with('-')
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+}
+
+fn valid_ssh_destination(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 255
+        && !value.starts_with('-')
+        && value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(byte, b'.' | b'_' | b'-' | b'@' | b':' | b'[' | b']')
         })
 }
 
@@ -561,6 +714,7 @@ function drain() {
         let supervisor = CoreSupervisor::new(CoreCommand {
             program: PathBuf::from("node"),
             arguments: vec![OsString::from("-e"), OsString::from(FAKE_CORE)],
+            environment: CoreEnvironment::Local,
         });
         let status = supervisor.start().unwrap();
         assert!(status.connected);
@@ -572,5 +726,48 @@ function drain() {
             .unwrap();
         assert_eq!(response["result"]["method"], "test/echo");
         assert!(!supervisor.shutdown().unwrap().connected);
+    }
+
+    #[test]
+    fn projects_structured_remote_launchers_without_a_shell() {
+        let wsl = command_for_target(CoreLaunchTarget::Wsl {
+            distribution: "Ubuntu-24.04".into(),
+        })
+        .unwrap();
+        assert_eq!(wsl.program, PathBuf::from("wsl.exe"));
+        assert_eq!(wsl.environment, CoreEnvironment::Wsl);
+        assert_eq!(wsl.arguments[3], "gitnova-core");
+
+        let ssh = command_for_target(CoreLaunchTarget::Ssh {
+            destination: "git@example.com".into(),
+        })
+        .unwrap();
+        assert_eq!(ssh.program, PathBuf::from("ssh"));
+        assert!(ssh.arguments.contains(&OsString::from("BatchMode=yes")));
+        assert_eq!(ssh.arguments.last(), Some(&OsString::from("gitnova-core")));
+
+        let container = command_for_target(CoreLaunchTarget::DevContainer {
+            workspace_folder: "/workspaces/gitnova".into(),
+        })
+        .unwrap();
+        assert_eq!(container.program, PathBuf::from("devcontainer"));
+        assert_eq!(container.environment, CoreEnvironment::DevContainer);
+    }
+
+    #[test]
+    fn rejects_launcher_argument_injection() {
+        for target in [
+            CoreLaunchTarget::Wsl {
+                distribution: "--exec".into(),
+            },
+            CoreLaunchTarget::Ssh {
+                destination: "host; touch /tmp/pwned".into(),
+            },
+            CoreLaunchTarget::DevContainer {
+                workspace_folder: "relative/workspace".into(),
+            },
+        ] {
+            assert!(command_for_target(target).is_err());
+        }
     }
 }

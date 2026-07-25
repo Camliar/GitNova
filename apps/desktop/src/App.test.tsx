@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
-const core = vi.hoisted(() => ({ getCoreStatus: vi.fn(), startCore: vi.fn() }));
+const core = vi.hoisted(() => ({ getCoreStatus: vi.fn(), configureCore: vi.fn(), startCore: vi.fn() }));
 const repository = vi.hoisted(() => ({ selectRepositoryDirectory: vi.fn(), openRepository: vi.fn() }));
 const status = vi.hoisted(() => ({ getWorkingTreeStatus: vi.fn() }));
 const diff = vi.hoisted(() => ({ getFileDiff: vi.fn() }));
@@ -13,6 +13,7 @@ const mutations = vi.hoisted(() => ({ getRepositoryReferences: vi.fn(), commitSt
 vi.mock("./core", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./core")>()),
   getCoreStatus: core.getCoreStatus,
+  configureCore: core.configureCore,
   startCore: core.startCore,
 }));
 vi.mock("./repository", () => repository);
@@ -34,6 +35,7 @@ describe("Desktop repository open", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.12", capabilities: { repositoryMutations: true } });
+    core.configureCore.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
     core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.12", capabilities: { repositoryMutations: true } });
     repository.selectRepositoryDirectory.mockResolvedValue("/work/project");
     repository.openRepository.mockResolvedValue(descriptor);
@@ -48,6 +50,22 @@ describe("Desktop repository open", () => {
       { name: "main", fullName: "refs/heads/main", kind: "localBranch", targetOid: "a".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: null },
       { name: "origin/main", fullName: "refs/remotes/origin/main", kind: "remoteBranch", targetOid: "a".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: null },
     ] });
+  });
+
+  it("launches Core in an explicit SSH environment and opens only its remote path", async () => {
+    core.getCoreStatus.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
+    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.12", capabilities: { repositoryMutations: true }, environment: "ssh" });
+    render(<App />);
+
+    fireEvent.change(await screen.findByLabelText("Core environment"), { target: { value: "ssh" } });
+    fireEvent.change(screen.getByLabelText("SSH destination"), { target: { value: "git@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start Core" }));
+    expect(core.configureCore).toHaveBeenCalledWith({ kind: "ssh", destination: "git@example.com" });
+
+    fireEvent.change(await screen.findByLabelText("Repository path in ssh"), { target: { value: "/srv/project" } });
+    fireEvent.click(screen.getByRole("button", { name: "Open repository path" }));
+    expect(repository.selectRepositoryDirectory).not.toHaveBeenCalled();
+    expect(repository.openRepository).toHaveBeenCalledWith("/srv/project");
   });
 
   it("opens only the explicitly selected directory and presents Core facts", async () => {

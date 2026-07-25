@@ -95,11 +95,20 @@ JSON-RPC error 使用标准数值 `code`，同时在 `data.stableCode` 提供稳
 | `-32145` | `gitlab.mr_commit_limit_exceeded` | MR original commits 超出支持上限 |
 | `-32146` | `gitlab.commit_not_in_merge_request` | commit 不是指定 MR 的 original commit |
 | `-32147` | `gitlab.commit_file_limit_exceeded` | commit 文件超出支持上限 |
+| `-32148` | `ai.nothing_staged` | 没有 staged changes 可供 AI 预览 |
+| `-32149` | `ai.invalid_provider` | Provider/model/loopback endpoint 无效 |
+| `-32150` | `ai.preview_stale` | index、Provider 或排除范围已变化 |
+| `-32151` | `ai.external_confirmation_required` | 当前外部披露预览尚未确认 |
+| `-32152` | `ai.credential_missing` | Core 环境缺少 Provider 凭据 |
+| `-32153` | `ai.provider_unavailable` | System curl 或 Provider 不可达 |
+| `-32154` | `ai.request_failed` | Provider 拒绝请求 |
+| `-32155` | `ai.response_invalid` | Provider 响应不符合结构化契约 |
+| `-32156` | `ai.input_limit_exceeded` | staged 输入无法在安全上限内披露 |
 | `-32800` | `request.cancelled` | 请求已取消 |
 
 GitLab Provider 方法为 `gitlab/project`、`gitlab/mergeRequest`、`gitlab/mergeRequestCommitDiff` 和 `gitlab/squashTrace`。`pathWithNamespace` 可覆盖 remote path，但 hostname 始终来自已验证 remote；任何网络动作仍必须由 Host 显式触发。
 
-AI Assist 预留 `ai/inputPreview` 与 `ai/generateCommitDraft`。1.14 定义其类型和 `aiAssist` capability；capability 为 false 时 Host 不得调用。输入披露、预览绑定与 Provider 凭据规则见 [AI Assist Contract](AI_ASSIST.md)。
+AI Assist 提供 `ai/inputPreview` 与 `ai/generateCommitDraft`。1.14 定义其类型和 `aiAssist` capability；Host 仅在 capability 为 true 时调用。输入披露、预览绑定与 Provider 凭据规则见 [AI Assist Contract](AI_ASSIST.md)。
 
 ## Cancellation and timeouts
 

@@ -1,26 +1,30 @@
+mod ai;
 mod framing;
 mod github;
 mod gitlab;
 mod repository;
 
 use gitnova_protocol::{
-    BranchParams, CancelParams, CancellationRegistry, CommitDiffParams, CommitParams, DiffParams,
-    ERROR_ALREADY_INITIALIZED, ERROR_BRANCH_ALREADY_EXISTS, ERROR_BRANCH_NOT_FOUND,
-    ERROR_COMMIT_DIFF_PARSE, ERROR_COMMIT_MESSAGE_REQUIRED, ERROR_COMMIT_NOT_FOUND,
-    ERROR_COMMIT_PARENT_REQUIRED, ERROR_COMMIT_PARSE, ERROR_DIFF_PARSE,
-    ERROR_DIFFERENT_REPOSITORY_OPEN, ERROR_GH_UNAVAILABLE, ERROR_GIT_COMMAND_FAILED,
-    ERROR_GIT_UNAVAILABLE, ERROR_GITHUB_AUTH_REQUIRED, ERROR_GITHUB_COMMIT_FILE_LIMIT,
-    ERROR_GITHUB_COMMIT_NOT_IN_PR, ERROR_GITHUB_INVALID_REMOTE, ERROR_GITHUB_PR_COMMIT_LIMIT,
-    ERROR_GITHUB_REMOTE_NOT_FOUND, ERROR_GITHUB_REQUEST_FAILED, ERROR_GITHUB_RESPONSE_PARSE,
-    ERROR_GITHUB_UNSUPPORTED_REMOTE, ERROR_GITLAB_AUTH_REQUIRED, ERROR_GITLAB_COMMIT_FILE_LIMIT,
-    ERROR_GITLAB_COMMIT_NOT_IN_MR, ERROR_GITLAB_INVALID_REMOTE, ERROR_GITLAB_MR_COMMIT_LIMIT,
-    ERROR_GITLAB_REMOTE_NOT_FOUND, ERROR_GITLAB_REQUEST_FAILED, ERROR_GITLAB_RESPONSE_PARSE,
-    ERROR_GITLAB_UNSUPPORTED_REMOTE, ERROR_GLAB_UNAVAILABLE, ERROR_HISTORY_ENCODING,
-    ERROR_INCOMPATIBLE_PROTOCOL, ERROR_INVALID_BRANCH_NAME, ERROR_INVALID_COMMIT_PARENT,
-    ERROR_INVALID_HISTORY_CURSOR, ERROR_INVALID_PARAMS, ERROR_INVALID_PATH,
-    ERROR_INVALID_REPOSITORY_PATH, ERROR_INVALID_REQUEST, ERROR_METHOD_NOT_FOUND,
-    ERROR_MUTATION_FAILED, ERROR_NOT_INITIALIZED, ERROR_NOTHING_STAGED, ERROR_PARSE,
-    ERROR_REFERENCE_ENCODING, ERROR_REFERENCE_PARSE, ERROR_REPOSITORY_NOT_FOUND,
+    AiGenerateCommitDraftParams, AiInputPreviewParams, BranchParams, CancelParams,
+    CancellationRegistry, CommitDiffParams, CommitParams, DiffParams, ERROR_AI_CREDENTIAL_MISSING,
+    ERROR_AI_EXTERNAL_CONFIRMATION_REQUIRED, ERROR_AI_INPUT_LIMIT, ERROR_AI_INVALID_PROVIDER,
+    ERROR_AI_NOTHING_STAGED, ERROR_AI_PREVIEW_STALE, ERROR_AI_PROVIDER_UNAVAILABLE,
+    ERROR_AI_REQUEST_FAILED, ERROR_AI_RESPONSE_INVALID, ERROR_ALREADY_INITIALIZED,
+    ERROR_BRANCH_ALREADY_EXISTS, ERROR_BRANCH_NOT_FOUND, ERROR_COMMIT_DIFF_PARSE,
+    ERROR_COMMIT_MESSAGE_REQUIRED, ERROR_COMMIT_NOT_FOUND, ERROR_COMMIT_PARENT_REQUIRED,
+    ERROR_COMMIT_PARSE, ERROR_DIFF_PARSE, ERROR_DIFFERENT_REPOSITORY_OPEN, ERROR_GH_UNAVAILABLE,
+    ERROR_GIT_COMMAND_FAILED, ERROR_GIT_UNAVAILABLE, ERROR_GITHUB_AUTH_REQUIRED,
+    ERROR_GITHUB_COMMIT_FILE_LIMIT, ERROR_GITHUB_COMMIT_NOT_IN_PR, ERROR_GITHUB_INVALID_REMOTE,
+    ERROR_GITHUB_PR_COMMIT_LIMIT, ERROR_GITHUB_REMOTE_NOT_FOUND, ERROR_GITHUB_REQUEST_FAILED,
+    ERROR_GITHUB_RESPONSE_PARSE, ERROR_GITHUB_UNSUPPORTED_REMOTE, ERROR_GITLAB_AUTH_REQUIRED,
+    ERROR_GITLAB_COMMIT_FILE_LIMIT, ERROR_GITLAB_COMMIT_NOT_IN_MR, ERROR_GITLAB_INVALID_REMOTE,
+    ERROR_GITLAB_MR_COMMIT_LIMIT, ERROR_GITLAB_REMOTE_NOT_FOUND, ERROR_GITLAB_REQUEST_FAILED,
+    ERROR_GITLAB_RESPONSE_PARSE, ERROR_GITLAB_UNSUPPORTED_REMOTE, ERROR_GLAB_UNAVAILABLE,
+    ERROR_HISTORY_ENCODING, ERROR_INCOMPATIBLE_PROTOCOL, ERROR_INVALID_BRANCH_NAME,
+    ERROR_INVALID_COMMIT_PARENT, ERROR_INVALID_HISTORY_CURSOR, ERROR_INVALID_PARAMS,
+    ERROR_INVALID_PATH, ERROR_INVALID_REPOSITORY_PATH, ERROR_INVALID_REQUEST,
+    ERROR_METHOD_NOT_FOUND, ERROR_MUTATION_FAILED, ERROR_NOT_INITIALIZED, ERROR_NOTHING_STAGED,
+    ERROR_PARSE, ERROR_REFERENCE_ENCODING, ERROR_REFERENCE_PARSE, ERROR_REPOSITORY_NOT_FOUND,
     ERROR_REPOSITORY_NOT_OPEN, ERROR_REQUEST_CANCELLED, ERROR_STATUS_PARSE, ERROR_UNBORN_HEAD,
     ERROR_UNRESOLVED_CONFLICTS, ERROR_UNSAFE_REPOSITORY, ERROR_WORKTREE_REQUIRED,
     GitHubPullRequestCommitDiffParams, GitHubPullRequestParams, GitHubRepositoryParams,
@@ -173,6 +177,8 @@ fn dispatch_request(
         "gitlab/mergeRequest" => gitlab_merge_request_request(request, state),
         "gitlab/mergeRequestCommitDiff" => gitlab_merge_request_commit_diff_request(request, state),
         "gitlab/squashTrace" => gitlab_squash_trace_request(request, state),
+        "ai/inputPreview" => ai_input_preview_request(request, state),
+        "ai/generateCommitDraft" => ai_generate_commit_draft_request(request, state),
         _ => Response::error(
             Some(request.id),
             ResponseError::new(
@@ -249,7 +255,7 @@ fn initialize(request: Request, state: &mut CoreState) -> Response {
             gitlab_merge_request: true,
             gitlab_merge_request_commit_diff: true,
             gitlab_squash_trace: true,
-            ai_assist: false,
+            ai_assist: true,
             repository_mutations: true,
         },
     };
@@ -1226,6 +1232,123 @@ fn gitlab_squash_trace_request(request: Request, state: &CoreState) -> Response 
             serde_json::to_value(trace).expect("serializable GitLab Squash Trace"),
         ),
         Err(error) => Response::error(Some(request.id), gitlab_squash_trace_error(error)),
+    }
+}
+
+fn ai_input_preview_request(request: Request, state: &CoreState) -> Response {
+    let params = match serde_json::from_value::<AiInputPreviewParams>(request.params) {
+        Ok(params) => params,
+        Err(_) => return invalid_params(request.id, "Invalid AI input preview parameters"),
+    };
+    let Some(descriptor) = &state.active_repository else {
+        return repository_not_open(request.id, "previewing AI Assist input");
+    };
+    match ai::preview(descriptor, &params) {
+        Ok(preview) => Response::success(
+            request.id,
+            serde_json::to_value(preview).expect("serializable AI input preview"),
+        ),
+        Err(error) => Response::error(Some(request.id), ai_error(error)),
+    }
+}
+
+fn ai_generate_commit_draft_request(request: Request, state: &CoreState) -> Response {
+    let params = match serde_json::from_value::<AiGenerateCommitDraftParams>(request.params) {
+        Ok(params) => params,
+        Err(_) => return invalid_params(request.id, "Invalid AI commit draft parameters"),
+    };
+    let Some(descriptor) = &state.active_repository else {
+        return repository_not_open(request.id, "generating an AI commit draft");
+    };
+    match ai::generate(descriptor, &params) {
+        Ok(draft) => Response::success(
+            request.id,
+            serde_json::to_value(draft).expect("serializable AI commit draft"),
+        ),
+        Err(error) => Response::error(Some(request.id), ai_error(error)),
+    }
+}
+
+fn ai_error(error: ai::AiError) -> ResponseError {
+    match error {
+        ai::AiError::WorktreeRequired => ResponseError::new(
+            ERROR_WORKTREE_REQUIRED,
+            "repository.worktree_required",
+            "AI Assist requires a non-bare worktree",
+            false,
+        ),
+        ai::AiError::GitUnavailable => ResponseError::new(
+            ERROR_GIT_UNAVAILABLE,
+            "git.unavailable",
+            "System Git is unavailable",
+            true,
+        ),
+        ai::AiError::GitCommandFailed => ResponseError::new(
+            ERROR_GIT_COMMAND_FAILED,
+            "git.command_failed",
+            "System Git could not inspect staged changes",
+            true,
+        ),
+        ai::AiError::InvalidPath => ResponseError::new(
+            ERROR_INVALID_REPOSITORY_PATH,
+            "path.invalid_repository_relative",
+            "AI exclusion and staged paths must be safe repository-relative paths",
+            false,
+        ),
+        ai::AiError::NothingStaged => ResponseError::new(
+            ERROR_AI_NOTHING_STAGED,
+            "ai.nothing_staged",
+            "AI Assist requires staged changes",
+            true,
+        ),
+        ai::AiError::InvalidProvider => ResponseError::new(
+            ERROR_AI_INVALID_PROVIDER,
+            "ai.invalid_provider",
+            "AI Provider configuration is invalid",
+            false,
+        ),
+        ai::AiError::PreviewStale => ResponseError::new(
+            ERROR_AI_PREVIEW_STALE,
+            "ai.preview_stale",
+            "Staged input or AI Provider configuration changed after preview",
+            true,
+        ),
+        ai::AiError::ExternalConfirmationRequired => ResponseError::new(
+            ERROR_AI_EXTERNAL_CONFIRMATION_REQUIRED,
+            "ai.external_confirmation_required",
+            "External AI disclosure must be confirmed for this preview",
+            false,
+        ),
+        ai::AiError::CredentialMissing => ResponseError::new(
+            ERROR_AI_CREDENTIAL_MISSING,
+            "ai.credential_missing",
+            "The selected AI Provider credential is unavailable in the Core environment",
+            true,
+        ),
+        ai::AiError::ProviderUnavailable => ResponseError::new(
+            ERROR_AI_PROVIDER_UNAVAILABLE,
+            "ai.provider_unavailable",
+            "The selected AI Provider is unavailable",
+            true,
+        ),
+        ai::AiError::RequestFailed => ResponseError::new(
+            ERROR_AI_REQUEST_FAILED,
+            "ai.request_failed",
+            "The AI Provider rejected the request",
+            true,
+        ),
+        ai::AiError::ResponseInvalid => ResponseError::new(
+            ERROR_AI_RESPONSE_INVALID,
+            "ai.response_invalid",
+            "The AI Provider returned an invalid structured response",
+            true,
+        ),
+        ai::AiError::InputLimitExceeded => ResponseError::new(
+            ERROR_AI_INPUT_LIMIT,
+            "ai.input_limit_exceeded",
+            "Staged AI input exceeds the safe disclosure limits",
+            false,
+        ),
     }
 }
 

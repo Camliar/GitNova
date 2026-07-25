@@ -11,7 +11,7 @@
 | Git | System Git | 唯一 Git 执行实现 |
 | GitHub | `gh`、REST、GraphQL | MVP Provider 的可选适配路径 |
 | GitLab | `glab api` | GitLab.com/Self-Managed Provider adapter |
-| AI（最终阶段） | Ollama loopback、OpenAI Responses API 直连（可选） | Core-owned commit draft 与结构化建议；无 GitNova proxy |
+| AI（最终阶段） | System `curl`、Ollama loopback、OpenAI Responses API 直连（可选） | Core-owned commit draft 与结构化建议；无 GitNova proxy |
 | Protocol | JSON-RPC 2.0 over stdio、`Content-Length` framing | Host/Core 通信 |
 | Workspace | Cargo workspace、pnpm workspace | Rust 与 TypeScript Monorepo |
 

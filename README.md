@@ -58,7 +58,7 @@ JetBrains Host 已提供 IntelliJ Platform plugin project 与 Squash Trace actio
 
 Visual Studio Host 已提供进程外扩展工程与 Squash Trace command；GitLab.com/Self-Managed MR Provider 位于 Core，使用与边界分别见 [`apps/visualstudio/README.md`](apps/visualstudio/README.md)和 [ADR-0007](adr/ADR-0007-GitLab-Provider.md)。
 
-最终阶段 AI Assist 已锁定安全契约：Core 可使用本地 Ollama 或用户配置的 OpenAI 直连，但生成前必须预览输入范围，AI 只返回可编辑草稿与建议。详见 [AI Assist Contract](docs/AI_ASSIST.md)。
+最终阶段 AI Assist 的 Core 能力已实现：可预览 staged 输入范围，并通过本地 Ollama 或用户配置的 OpenAI 直连生成可编辑草稿与结构化建议；Desktop 交互仍在后续 Task。详见 [AI Assist Contract](docs/AI_ASSIST.md)。
 
 ## MVP Roadmap
 

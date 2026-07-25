@@ -274,11 +274,62 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
         responses[0]["result"]["capabilities"]["gitlabSquashTrace"],
         true
     );
+    assert_eq!(responses[0]["result"]["capabilities"]["aiAssist"], true);
     assert_eq!(
         responses[0]["result"]["capabilities"]["repositoryMutations"],
         true
     );
     assert_eq!(responses[1]["result"], Value::Null);
+}
+
+#[test]
+fn previews_staged_ai_disclosure_and_requires_external_confirmation() {
+    let directory = TestDirectory::new("ai-assist");
+    git(&["init", "-q"], &directory.0);
+    git(&["symbolic-ref", "HEAD", "refs/heads/main"], &directory.0);
+    git(&["config", "user.name", "Ada"], &directory.0);
+    git(&["config", "user.email", "ada@example.com"], &directory.0);
+    fs::write(directory.0.join("safe.txt"), "staged content\n").unwrap();
+    fs::write(directory.0.join(".env"), "TOKEN=must-not-leave\n").unwrap();
+    git(&["add", "safe.txt", ".env"], &directory.0);
+
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &directory.0),
+        json!({
+            "jsonrpc":"2.0", "id":3, "method":"ai/inputPreview",
+            "params":{"provider":{"kind":"openAi","model":"user-model"},"excludedPaths":[]}
+        }),
+    ]);
+    let preview_responses = responses(&output.stdout);
+    let preview = &preview_responses[2]["result"];
+    assert_eq!(preview["destination"], "external");
+    assert_eq!(preview["externalConfirmationRequired"], true);
+    assert_eq!(preview["endpoint"], "https://api.openai.com/v1/responses");
+    assert!(preview["files"].as_array().unwrap().iter().any(|file| {
+        file["path"] == ".env" && file["state"] == "excluded" && file["patchBytes"] == 0
+    }));
+    let preview_id = preview["previewId"].as_str().unwrap();
+
+    let generation = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &directory.0),
+        json!({
+            "jsonrpc":"2.0", "id":3, "method":"ai/generateCommitDraft",
+            "params":{
+                "previewId":preview_id,
+                "provider":{"kind":"openAi","model":"user-model"},
+                "excludedPaths":[],
+                "externalDisclosureConfirmed":false
+            }
+        }),
+    ]);
+    let generated_responses = responses(&generation.stdout);
+    assert_eq!(
+        generated_responses[2]["error"]["data"]["stableCode"],
+        "ai.external_confirmation_required"
+    );
+    assert!(!String::from_utf8_lossy(&generation.stdout).contains("must-not-leave"));
 }
 
 #[test]

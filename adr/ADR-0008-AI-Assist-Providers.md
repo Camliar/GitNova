@@ -13,6 +13,7 @@ GitNova 需要根据 staged diff 生成 commit message 草稿和操作建议，�
 - 首批 Provider 是仓库环境中的本地 Ollama，以及用户选择的 OpenAI Responses API 直连。Core 是唯一 Provider client；Host 不接触 prompt、diff payload 或凭据。
 - Ollama 默认仅允许 `http://127.0.0.1:11434`，自定义 URL 也必须是 loopback HTTP。OpenAI endpoint 固定为 `https://api.openai.com/v1/responses`，模型由用户显式填写。
 - OpenAI API key 仅由 Core 在仓库环境读取 `OPENAI_API_KEY`；不得经 JSON-RPC 传递、持久化或写入日志。请求使用 `store: false`、禁用工具调用，并要求结构化 JSON 输出。
+- Core 使用仓库环境的 System `curl` 作为首个 HTTP transport；endpoint/body/header 通过 stdin config 传递，固定参数中不包含 API key 或 diff，响应受硬上限约束。
 - `ai/inputPreview` 是完全离线的披露预检。它只读取 staged diff 与最小状态，返回目标 endpoint、文件、字节数、排除/截断原因和绑定 index/provider/model/exclusion 的 `previewId`。
 - `ai/generateCommitDraft` 必须由用户显式触发。外部 Provider 还要求确认披露；Core 重新计算预览并拒绝 stale/mismatched `previewId`。
 - 默认排除常见 credential 文件，用户可再排除安全的仓库相对路径。二进制和超限内容不发送，任何无法证明范围安全的情况都 fail closed。
@@ -32,4 +33,3 @@ GitNova 需要根据 staged diff 生成 commit message 草稿和操作建议，�
 ## Links
 
 [AI Assist Contract](../docs/AI_ASSIST.md) · [Architecture](../docs/ARCHITECTURE.md) · [OpenAI Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses) · [OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data)
-

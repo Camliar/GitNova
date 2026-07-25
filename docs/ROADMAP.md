@@ -44,7 +44,7 @@ TASK-0033 已交付 VisualStudio.Extensibility 进程外 Host、Solution 环境 
 
 AI 编排和 Git 语义属于 Core；Host 只展示输入范围、建议、可编辑草稿和确认步骤。功能必须显式触发，默认只生成建议，不自动 commit，也不自动执行 reset、rebase、push 等高风险操作。模型可为本地模型或用户自行配置的直连 Provider；不得引入 GitNova 账户或中心代理，发送前必须展示并最小化将离开仓库环境的数据。
 
-TASK-0035 已锁定协议 1.14 的预览/生成类型、index-bound 确认、本地 Ollama 与可选 OpenAI Responses API 直连边界；此时 capability 仍为 false，业务实现由后续独立 Task 交付。
+TASK-0035 已锁定协议 1.14 的预览/生成类型、index-bound 确认、本地 Ollama 与可选 OpenAI Responses API 直连边界。TASK-0036 已在 Core 交付 staged input builder、敏感/二进制排除、两种 Provider adapter、严格结构化输出和稳定错误；Desktop 交互由最后一个独立 Task 交付。
 
 产品目标见[愿景](VISION.md)，技术选择见[技术栈](TECH_STACK.md)，质量门槛见[非功能需求](NON_FUNCTIONAL.md)。
 

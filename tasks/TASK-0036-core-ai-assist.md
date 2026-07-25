@@ -1,6 +1,6 @@
 # TASK-0036: Core AI Assist
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P2
 - **Owner:** Codex
 - **Branch:** `feature/036-core-ai-assist`
@@ -27,20 +27,19 @@
 
 ## Deliverables
 
-- [ ] deterministic staged input builder and disclosure preview
-- [ ] Ollama/OpenAI Provider adapters and strict output validation
-- [ ] JSON-RPC dispatch, capability and stable errors
-- [ ] unit/contract tests and synchronized documentation
+- [x] deterministic staged input builder and disclosure preview
+- [x] Ollama/OpenAI Provider adapters and strict output validation
+- [x] JSON-RPC dispatch, capability and stable errors
+- [x] unit/contract tests and synchronized documentation
 
 ## Review Checklist
 
-- [ ] 预览不联网，生成显式触发，外部确认与当前 index/provider/model/exclusions 绑定。
-- [ ] endpoint、路径、payload 与响应均有 fail-closed 校验和硬上限。
-- [ ] 凭据不会进入参数、日志、错误或存储；测试不访问真实 Provider。
-- [ ] AI 结果无可执行命令或 mutation 字段。
-- [ ] Rust tests、contract、fmt 与 clippy 通过。
+- [x] 预览不联网，生成显式触发，外部确认与当前 index/provider/model/exclusions 绑定。
+- [x] endpoint、路径、payload 与响应均有 fail-closed 校验和硬上限。
+- [x] 凭据不会进入参数、日志、错误或存储；测试不访问真实 Provider。
+- [x] AI 结果无可执行命令或 mutation 字段。
+- [x] Rust tests、contract、fmt 与 clippy 通过。
 
 ## Done Definition
 
-- [ ] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。
-
+- [x] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。

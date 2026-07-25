@@ -1,6 +1,6 @@
 # AI Assist Contract
 
-AI Assist 是 Core-owned、显式触发的草稿能力。它不会提交代码、修改 index、运行 shell、调用任意工具或在后台发送仓库数据。首批协议版本是 1.14；TASK-0035 只发布类型与安全契约，Core 在 capability `aiAssist: false` 时必须拒绝业务方法。
+AI Assist 是 Core-owned、显式触发的草稿能力。它不会提交代码、修改 index、运行 shell、调用任意工具或在后台发送仓库数据。协议 1.14 的 Core 通过 capability `aiAssist: true` 提供预览与生成方法。
 
 ## Provider boundary
 
@@ -10,6 +10,8 @@ AI Assist 是 Core-owned、显式触发的草稿能力。它不会提交代码�
 | OpenAI | 固定 `https://api.openai.com/v1/responses` | Core 从 `OPENAI_API_KEY` 读取 | 离开仓库环境，生成前必须逐次确认 |
 
 两种 Provider 的 `model` 都由用户显式配置；协议不定义会过时的默认模型。OpenAI adapter 必须使用 Responses API、`store: false`、无工具和严格 JSON Schema 输出。API key 不得出现在 Host、JSON-RPC、SQLite、错误或日志中。
+
+两种 adapter 均由 Core 通过仓库环境的 System `curl` 发起 POST；`curl` 参数只包含固定控制项，endpoint、JSON body 和 authorization header 通过 stdin config 传入，避免凭据或 diff 出现在进程参数。Core 限制连接/总超时与最大 response，并丢弃 stderr/非 2xx body。
 
 ## Input preview
 
@@ -23,6 +25,8 @@ AI Assist 是 Core-owned、显式触发的草稿能力。它不会提交代码�
 - staged diff/prompt 总字节数，以及是否发生截断。
 
 常见敏感文件（例如 `.env`、private key、registry credential 文件）默认排除；用户排除项是规范化、无 `..` 的仓库相对路径。二进制永不发送。实现必须设置每文件、总 payload 和文件数上限；无法解析、超限且无法安全截断、路径不安全或 staged 内容为空时 fail closed。
+
+首个实现最多接受 200 个 staged paths、每文件 64 KiB patch、总 prompt 256 KiB；Provider response 最多 128 KiB。超长单文件 patch 可在 UTF-8 边界截断并在预览标记，其余无法安全容纳的总输入直接拒绝。
 
 ## Generate contract
 
@@ -38,7 +42,6 @@ Core 必须验证模型 JSON 和字段长度，拒绝未知 suggestion kind，�
 
 ## Stable errors
 
-实现阶段保留以下稳定错误族：`ai.nothing_staged`、`ai.invalid_provider`、`ai.preview_stale`、`ai.external_confirmation_required`、`ai.credential_missing`、`ai.provider_unavailable`、`ai.request_failed`、`ai.response_invalid`、`ai.input_limit_exceeded`。错误不得携带 diff、prompt、response 或凭据。
+实现提供以下稳定错误族：`ai.nothing_staged`、`ai.invalid_provider`、`ai.preview_stale`、`ai.external_confirmation_required`、`ai.credential_missing`、`ai.provider_unavailable`、`ai.request_failed`、`ai.response_invalid`、`ai.input_limit_exceeded`。错误不得携带 diff、prompt、response 或凭据。
 
 安全决策见 [ADR-0008](../adr/ADR-0008-AI-Assist-Providers.md)，通用 framing 与错误模型见[协议](PROTOCOL.md)。
-

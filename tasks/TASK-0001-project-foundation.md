@@ -1,6 +1,6 @@
 # TASK-0001: Project Foundation
 
-- **Status:** Review
+- **Status:** Done
 - **Priority:** P0
 - **Branch:** `chore/001-project-foundation`
 - **Estimate:** 1–2 days
@@ -48,7 +48,7 @@
 - [x] 项目骨架、文档、ADR、品牌和 Monorepo 已完成
 - [x] 无业务实现
 - [x] 状态进入 Review
-- [ ] Review 通过后更新为 Done
+- [x] 自主 Review 通过；后续 TASK-0002 至 TASK-0037 均基于该 foundation 完成交付
 
 ## References
 

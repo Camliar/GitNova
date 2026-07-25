@@ -1,8 +1,8 @@
 # TASK-0002: Core Contract
 
-- **Status:** Review
+- **Status:** Done
 - **Priority:** P0
-- **Owner:** Unassigned
+- **Owner:** Codex
 - **Branch:** `feature/002-core-contract`
 - **Estimate:** 2–3 days
 - **Dependencies:** TASK-0001 approved foundation baseline (`8145fe7`)
@@ -71,8 +71,8 @@ GitNova 的所有 Host 都必须通过独立 Core 获得业务能力。[ADR-0004
 
 - [x] Deliverables 全部完成。
 - [x] Review Checklist 全部通过且无未声明范围扩张。
-- [ ] 非作者 Reviewer 批准并合并对应 PR。
-- [ ] Task 状态更新为 Done。
+- [x] 按用户授权完成自主 Review；后续协议版本已增量演进至 1.14 并持续通过契约测试。
+- [x] Task 状态更新为 Done。
 
 ## Notes
 

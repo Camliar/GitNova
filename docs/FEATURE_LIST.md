@@ -37,8 +37,8 @@
 - WSL、Remote SSH 与 Dev Container 结构化 Core launcher（已实现）
 - VS Code Host 的 workspace 与 Squash Trace vertical slice（已实现）
 - JetBrains Host 的 project 与 Squash Trace vertical slice（已实现）
-- Visual Studio Host
-- GitLab 等其他托管平台 Provider
+- Visual Studio Host 的进程外 Squash Trace vertical slice（已实现）
+- GitLab.com/Self-Managed Provider 的 MR original commits、per-commit diff 与 Squash Trace（已实现）
 - 超出 MVP 主路径的 PR 操作与协作工作流
 - 基础主路径之外的搜索、筛选与历史洞察
 - 高级可视化、扩展协议与企业策略适配

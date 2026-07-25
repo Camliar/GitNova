@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitnova.dev/schema/protocol/1.12/gitnova-protocol.schema.json",
-  "title": "GitNova Core Protocol 1.12",
+  "$id": "https://gitnova.dev/schema/protocol/1.13/gitnova-protocol.schema.json",
+  "title": "GitNova Core Protocol 1.13",
   "type": "object",
-  "properties": { "protocolVersion": { "const": "1.12" } },
+  "properties": { "protocolVersion": { "const": "1.13" } },
   "required": ["protocolVersion"],
   "$defs": {
     "RequestId": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
@@ -34,9 +34,13 @@
         "githubPullRequest": { "type": "boolean" },
         "githubPullRequestCommitDiff": { "type": "boolean" },
         "githubSquashTrace": { "type": "boolean" },
+        "gitlabProject": { "type": "boolean" },
+        "gitlabMergeRequest": { "type": "boolean" },
+        "gitlabMergeRequestCommitDiff": { "type": "boolean" },
+        "gitlabSquashTrace": { "type": "boolean" },
         "repositoryMutations": { "type": "boolean" }
       },
-      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff", "repositoryReferences", "commitGraphProjection", "githubRepository", "githubPullRequest", "githubPullRequestCommitDiff", "githubSquashTrace", "repositoryMutations"]
+      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff", "repositoryReferences", "commitGraphProjection", "githubRepository", "githubPullRequest", "githubPullRequestCommitDiff", "githubSquashTrace", "gitlabProject", "gitlabMergeRequest", "gitlabMergeRequestCommitDiff", "gitlabSquashTrace", "repositoryMutations"]
     },
     "InitializeParams": {
       "type": "object",
@@ -443,7 +447,7 @@
     "SquashTraceClassification": { "enum": ["notMerged", "originalCommit", "mergeCommit", "squashCandidate", "unresolved"] },
     "SquashTraceConfidence": { "enum": ["none", "medium", "high"] },
     "SquashTraceLocalAvailability": { "enum": ["notInspected", "available", "missing"] },
-    "SquashTraceEvidence": { "enum": ["providerNotMerged", "providerMergeOidMissing", "mergeOidMatchesOriginalCommit", "mergeOidDistinctFromOriginalCommits", "localCommitAvailable", "localCommitMissing", "localCommitHasAtMostOneParent", "localCommitHasMultipleParents", "providerMergeStrategyUnavailable"] },
+    "SquashTraceEvidence": { "enum": ["providerNotMerged", "providerMergeOidMissing", "mergeOidMatchesOriginalCommit", "mergeOidDistinctFromOriginalCommits", "localCommitAvailable", "localCommitMissing", "localCommitHasAtMostOneParent", "localCommitHasMultipleParents", "providerMergeStrategyUnavailable", "providerSquashCommitReported"] },
     "SquashTraceRelationship": {
       "type": "object", "additionalProperties": false,
       "properties": {
@@ -461,6 +465,87 @@
         "pullRequest": { "$ref": "#/$defs/GitHubPullRequest" },
         "relationship": { "$ref": "#/$defs/SquashTraceRelationship" }
       }, "required": ["pullRequest", "relationship"]
+    },
+    "GitLabProjectParams": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "remote": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "pathWithNamespace": { "type": "string", "minLength": 3, "maxLength": 512 }
+      }
+    },
+    "GitLabProject": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "host": { "type": "string" }, "namespace": { "type": "string" }, "name": { "type": "string" },
+        "pathWithNamespace": { "type": "string" }, "url": { "type": "string" }, "defaultBranch": { "type": "string" }, "visibility": { "type": "string" }
+      }, "required": ["host", "namespace", "name", "pathWithNamespace", "url", "defaultBranch", "visibility"]
+    },
+    "GitLabMergeRequestParams": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "iid": { "type": "integer", "minimum": 1 }, "remote": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "pathWithNamespace": { "type": "string", "minLength": 3, "maxLength": 512 }
+      }, "required": ["iid"]
+    },
+    "GitLabMergeRequestState": { "enum": ["open", "closed", "merged"] },
+    "GitLabCommitIdentity": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "name": { "type": "string" }, "email": { "type": "string" }, "timestamp": { "type": "string", "format": "date-time" }, "username": { "type": ["string", "null"] } },
+      "required": ["name", "email", "timestamp", "username"]
+    },
+    "GitLabMergeRequestCommit": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "oid": { "type": "string" }, "parents": { "type": "array", "items": { "type": "string" } },
+        "author": { "$ref": "#/$defs/GitLabCommitIdentity" }, "committer": { "$ref": "#/$defs/GitLabCommitIdentity" },
+        "summary": { "type": "string" }, "message": { "type": "string" }, "url": { "type": "string" }
+      }, "required": ["oid", "parents", "author", "committer", "summary", "message", "url"]
+    },
+    "GitLabMergeRequestRef": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "name": { "type": "string" }, "oid": { "type": "string" }, "project": { "type": ["string", "null"] } },
+      "required": ["name", "oid", "project"]
+    },
+    "GitLabMergeRequest": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "host": { "type": "string" }, "pathWithNamespace": { "type": "string" }, "iid": { "type": "integer", "minimum": 1 },
+        "title": { "type": "string" }, "description": { "type": ["string", "null"] }, "state": { "$ref": "#/$defs/GitLabMergeRequestState" },
+        "isDraft": { "type": "boolean" }, "authorUsername": { "type": ["string", "null"] }, "url": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }, "updatedAt": { "type": "string", "format": "date-time" },
+        "closedAt": { "type": ["string", "null"], "format": "date-time" }, "mergedAt": { "type": ["string", "null"], "format": "date-time" },
+        "target": { "$ref": "#/$defs/GitLabMergeRequestRef" }, "source": { "$ref": "#/$defs/GitLabMergeRequestRef" },
+        "mergeCommitOid": { "type": ["string", "null"] }, "squashCommitOid": { "type": ["string", "null"] }, "squashOnMerge": { "type": "boolean" },
+        "commits": { "type": "array", "items": { "$ref": "#/$defs/GitLabMergeRequestCommit" } }
+      }, "required": ["host", "pathWithNamespace", "iid", "title", "description", "state", "isDraft", "authorUsername", "url", "createdAt", "updatedAt", "closedAt", "mergedAt", "target", "source", "mergeCommitOid", "squashCommitOid", "squashOnMerge", "commits"]
+    },
+    "GitLabMergeRequestCommitDiffParams": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "iid": { "type": "integer", "minimum": 1 }, "oid": { "type": "string", "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$" },
+        "remote": { "type": "string", "minLength": 1, "maxLength": 255 }, "pathWithNamespace": { "type": "string", "minLength": 3, "maxLength": 512 }
+      }, "required": ["iid", "oid"]
+    },
+    "GitLabFileStatus": { "enum": ["added", "removed", "modified", "renamed"] },
+    "GitLabCommitFileDiff": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "oldPath": { "type": "string" }, "newPath": { "type": "string" }, "status": { "$ref": "#/$defs/GitLabFileStatus" },
+        "additions": { "type": "integer", "minimum": 0 }, "deletions": { "type": "integer", "minimum": 0 }, "changes": { "type": "integer", "minimum": 0 },
+        "patchState": { "$ref": "#/$defs/GitHubPatchState" }, "hunks": { "type": "array", "items": { "$ref": "#/$defs/DiffHunk" } }
+      }, "required": ["oldPath", "newPath", "status", "additions", "deletions", "changes", "patchState", "hunks"]
+    },
+    "GitLabMergeRequestCommitDiff": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "host": { "type": "string" }, "pathWithNamespace": { "type": "string" }, "mergeRequestIid": { "type": "integer", "minimum": 1 },
+        "commit": { "$ref": "#/$defs/GitLabMergeRequestCommit" }, "files": { "type": "array", "items": { "$ref": "#/$defs/GitLabCommitFileDiff" } }
+      }, "required": ["host", "pathWithNamespace", "mergeRequestIid", "commit", "files"]
+    },
+    "GitLabSquashTrace": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "mergeRequest": { "$ref": "#/$defs/GitLabMergeRequest" }, "relationship": { "$ref": "#/$defs/SquashTraceRelationship" } },
+      "required": ["mergeRequest", "relationship"]
     }
   }
 }

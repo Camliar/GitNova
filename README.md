@@ -5,7 +5,7 @@
 
 GitNova 是一个本地优先、面向多种开发工具宿主的现代 Git 客户端。它将本地 Git 历史与托管平台 PR 数据关联：即使 PR 已经 Squash Merge，用户仍能查看原始 commit 列表、每个 commit 修改的文件和行级 diff，以及它们与最终 squash commit 的关系。
 
-桌面端与 IDE 扩展只负责交互和宿主集成；独立的 `gitnova-core` 进程承载全部 Git、GitHub、PR 与 Squash Trace 领域能力，并通过 stdio 上的 JSON-RPC 与 Host 通信。
+桌面端与 IDE 扩展只负责交互和宿主集成；独立的 `gitnova-core` 进程承载全部 Git、GitHub/GitLab、PR/MR 与 Squash Trace 领域能力，并通过 stdio 上的 JSON-RPC 与 Host 通信。
 
 > 当前仓库已包含可执行的 Core 协议、本地 Git 读模型与安全 mutation、Core-owned GitHub/Squash Trace 能力，以及可构建的 Tauri 2 + React 19 Desktop Host。Desktop 可查看 status、commit graph 与 diff，经两步确认执行 staged commit/local branch 操作，显式连接 GitHub 查看 PR original commits、远程 patch 与最终 commit 关系证据，并可把 Core 启动到 WSL、Remote SSH 或 Dev Container 的仓库环境。
 
@@ -18,7 +18,7 @@ Desktop · VS Code · JetBrains · Visual Studio
                     ▼
       gitnova-core（本地独立进程）
                     │
-          System Git · gh · SQLite
+       System Git · gh · glab · SQLite
 ```
 
 Host 是展示和适配层，不承载业务逻辑。Core 在用户设备上独立运行；产品没有中心服务器，也不要求云端运行时。详见[架构说明](docs/ARCHITECTURE.md)和[架构决策](adr/ADR-0001-Architecture.md)。
@@ -55,6 +55,8 @@ Desktop 前端可单独使用 `pnpm --filter @gitnova/desktop check` 验证；�
 VS Code Host 已提供 workspace 与 Squash Trace vertical slice；使用与边界见 [`apps/vscode/README.md`](apps/vscode/README.md)。
 
 JetBrains Host 已提供 IntelliJ Platform plugin project 与 Squash Trace action；构建和远端 backend 约束见 [`apps/idea/README.md`](apps/idea/README.md)。
+
+Visual Studio Host 已提供进程外扩展工程与 Squash Trace command；GitLab.com/Self-Managed MR Provider 位于 Core，使用与边界分别见 [`apps/visualstudio/README.md`](apps/visualstudio/README.md)和 [ADR-0007](adr/ADR-0007-GitLab-Provider.md)。
 
 ## MVP Roadmap
 

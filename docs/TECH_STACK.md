@@ -10,6 +10,7 @@
 | Storage | SQLite | 本地设置、索引与可重建派生数据 |
 | Git | System Git | 唯一 Git 执行实现 |
 | GitHub | `gh`、REST、GraphQL | MVP Provider 的可选适配路径 |
+| GitLab | `glab api` | GitLab.com/Self-Managed Provider adapter |
 | Protocol | JSON-RPC 2.0 over stdio、`Content-Length` framing | Host/Core 通信 |
 | Workspace | Cargo workspace、pnpm workspace | Rust 与 TypeScript Monorepo |
 
@@ -19,6 +20,7 @@
 - Core 必须是独立 Rust 进程，不能变成 Tauri command 集合，见 [ADR-0004](../adr/ADR-0004-Core-Process.md)。
 - GitNova 不内嵌 Git 实现，不绕过 System Git。
 - `gh`、REST 与 GraphQL 是 MVP GitHub Provider 的互补适配路径，不属于 Foundation Task 实现范围。
+- `glab api` 复用用户在仓库环境中的 GitLab authentication，不向 Host 暴露 token。
 - 依赖需锁定、审计许可证和安全公告；新增跨层框架需要 ADR。
 
 架构映射见[架构说明](ARCHITECTURE.md)，协议细节见[Core 协议](PROTOCOL.md)，编码约束见[编码规范](CODING_STANDARD.md)。Rust 依赖版本由 `Cargo.lock` 锁定。

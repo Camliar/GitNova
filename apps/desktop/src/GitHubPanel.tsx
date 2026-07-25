@@ -116,6 +116,7 @@ const evidenceLabels: Record<SquashTraceEvidence, string> = {
   localCommitHasAtMostOneParent: "Final commit has at most one local parent",
   localCommitHasMultipleParents: "Final commit has multiple local parents",
   providerMergeStrategyUnavailable: "GitHub merge-strategy metadata is unavailable",
+  providerSquashCommitReported: "Provider explicitly reported a squash commit",
 };
 
 function SquashTraceView({ trace }: { trace: GitHubSquashTrace }) {

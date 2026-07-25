@@ -28,7 +28,7 @@ spawn → gitnova/initialize → requests and notifications → gitnova/shutdown
 
 ## Initialize
 
-`gitnova/initialize` 参数包含 `clientInfo`、`protocolVersion` 和 Host capabilities。结果包含 `coreInfo`、协商后的协议版本和 Core capabilities。初始协议版本为 `1.0`，当前版本为 `1.12`；主版本不同即不兼容，次版本能力通过 capability 字段协商。
+`gitnova/initialize` 参数包含 `clientInfo`、`protocolVersion` 和 Host capabilities。结果包含 `coreInfo`、协商后的协议版本和 Core capabilities。初始协议版本为 `1.0`，当前版本为 `1.13`；主版本不同即不兼容，次版本能力通过 capability 字段协商。
 
 Core 当前另声明 `repositoryMutations` capability；完整 capability 由 Schema 定义。仓库方法及路径语义见[仓库发现](REPOSITORIES.md)，写操作安全契约见[Repository Mutations](MUTATIONS.md)，其余读模型与 Provider 文档保持各自事实来源。
 
@@ -85,7 +85,19 @@ JSON-RPC error 使用标准数值 `code`，同时在 `data.stableCode` 提供稳
 | `-32135` | `branch.not_found` | local branch 不存在 |
 | `-32136` | `branch.unborn_head` | HEAD 尚无首个 commit |
 | `-32137` | `git.mutation_failed` | hook、checkout safety 或 System Git 拒绝 mutation |
+| `-32138` | `gitlab.invalid_remote` | remote name 无效 |
+| `-32139` | `gitlab.remote_not_found` | 未配置指定 GitLab remote |
+| `-32140` | `gitlab.unsupported_remote` | remote/project identity 不受支持 |
+| `-32141` | `gitlab.glab_unavailable` | 仓库环境未提供 GitLab CLI |
+| `-32142` | `gitlab.authentication_required` | GitLab CLI 需要认证 |
+| `-32143` | `gitlab.request_failed` | GitLab 请求失败 |
+| `-32144` | `gitlab.response_parse_failed` | GitLab 响应无效 |
+| `-32145` | `gitlab.mr_commit_limit_exceeded` | MR original commits 超出支持上限 |
+| `-32146` | `gitlab.commit_not_in_merge_request` | commit 不是指定 MR 的 original commit |
+| `-32147` | `gitlab.commit_file_limit_exceeded` | commit 文件超出支持上限 |
 | `-32800` | `request.cancelled` | 请求已取消 |
+
+GitLab Provider 方法为 `gitlab/project`、`gitlab/mergeRequest`、`gitlab/mergeRequestCommitDiff` 和 `gitlab/squashTrace`。`pathWithNamespace` 可覆盖 remote path，但 hostname 始终来自已验证 remote；任何网络动作仍必须由 Host 显式触发。
 
 ## Cancellation and timeouts
 

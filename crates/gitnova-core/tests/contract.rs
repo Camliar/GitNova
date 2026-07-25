@@ -216,7 +216,7 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let responses = responses(&output.stdout);
     assert_eq!(responses.len(), 2);
     assert_eq!(responses[0]["id"], "init-1");
-    assert_eq!(responses[0]["result"]["protocolVersion"], "1.12");
+    assert_eq!(responses[0]["result"]["protocolVersion"], "1.13");
     assert_eq!(responses[0]["result"]["capabilities"]["cancellation"], true);
     assert_eq!(
         responses[0]["result"]["capabilities"]["workingTreeStatus"],
@@ -256,6 +256,22 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     );
     assert_eq!(
         responses[0]["result"]["capabilities"]["githubSquashTrace"],
+        true
+    );
+    assert_eq!(
+        responses[0]["result"]["capabilities"]["gitlabProject"],
+        true
+    );
+    assert_eq!(
+        responses[0]["result"]["capabilities"]["gitlabMergeRequest"],
+        true
+    );
+    assert_eq!(
+        responses[0]["result"]["capabilities"]["gitlabMergeRequestCommitDiff"],
+        true
+    );
+    assert_eq!(
+        responses[0]["result"]["capabilities"]["gitlabSquashTrace"],
         true
     );
     assert_eq!(
@@ -1021,6 +1037,41 @@ fn github_squash_trace_requires_repository_and_positive_number() {
     let values = responses(&output.stdout);
     assert_eq!(values[2]["error"]["code"], -32602);
     assert_eq!(values[3]["error"]["code"], -32602);
+}
+
+#[test]
+fn gitlab_methods_require_repository_and_validate_iid_and_oid() {
+    let oid = "a".repeat(40);
+    let without_repository = run(&[
+        initialize(json!(1)),
+        json!({"jsonrpc":"2.0","id":2,"method":"gitlab/project","params":{"pathWithNamespace":"team/project"}}),
+        json!({"jsonrpc":"2.0","id":3,"method":"gitlab/mergeRequest","params":{"iid":1}}),
+    ]);
+    let values = responses(&without_repository.stdout);
+    assert_eq!(
+        values[1]["error"]["data"]["stableCode"],
+        "repository.not_open"
+    );
+    assert_eq!(
+        values[2]["error"]["data"]["stableCode"],
+        "repository.not_open"
+    );
+
+    let directory = TestDirectory::new("gitlab-params");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &repository),
+        json!({"jsonrpc":"2.0","id":3,"method":"gitlab/mergeRequest","params":{"iid":0}}),
+        json!({"jsonrpc":"2.0","id":4,"method":"gitlab/mergeRequestCommitDiff","params":{"iid":1,"oid":"abc"}}),
+        json!({"jsonrpc":"2.0","id":5,"method":"gitlab/mergeRequestCommitDiff","params":{"iid":1,"oid":oid,"unexpected":true}}),
+        json!({"jsonrpc":"2.0","id":6,"method":"gitlab/squashTrace","params":{"iid":0}}),
+    ]);
+    let values = responses(&output.stdout);
+    for value in &values[2..] {
+        assert_eq!(value["error"]["code"], -32602);
+    }
 }
 
 #[test]

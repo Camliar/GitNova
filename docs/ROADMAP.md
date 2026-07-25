@@ -36,6 +36,8 @@ TASK-0031 已交付 VS Code Extension Host：Core 在当前 Extension Host（含
 
 TASK-0032 已交付 IntelliJ Platform Host 项目、project-scoped Core lifecycle、Tools action 与 Squash Trace/original commit diff 交互；Gradle wrapper 与 CI `buildPlugin` 固化真实平台编译门。
 
+TASK-0033 已交付 VisualStudio.Extensibility 进程外 Host、Solution 环境 Core lifecycle、显式 PR/commit 输入与 Windows CI 构建门。TASK-0034 已在 Core 中通过非交互 `glab api` 交付 GitLab.com/Self-Managed project、MR original commits、per-commit diff 与 Provider-confirmed Squash Trace。
+
 ## Phase 6 — AI Assist（最终阶段）
 
 在 Squash Trace MVP、Desktop 交付质量和 Post-MVP Host/Provider 全部完成后，再以独立 Task 引入 AI Assist。候选能力包括根据 staged diff 生成 commit message 草稿，以及根据仓库状态给出拆分 commit、测试、冲突处理等操作建议。

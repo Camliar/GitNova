@@ -1,6 +1,6 @@
 # Rust crates
 
-- `gitnova-core`：独立 Core 二进制，当前只实现 JSON-RPC/stdio 生命周期。
+- `gitnova-core`：独立 Core 二进制，承载 JSON-RPC/stdio 生命周期、本地 Git 与 GitHub/GitLab Squash Trace 能力。
 - `gitnova-protocol`：跨 Core 契约测试共享的版本化协议类型。
 
-Git、GitHub、PR 与 Squash Trace 业务能力将由后续独立 Task 增量加入 Core。
+Host 只能通过版本化协议使用这些能力，不得复制 Git 或 Provider 业务逻辑。

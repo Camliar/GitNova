@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: &str = "1.12";
+pub const PROTOCOL_VERSION: &str = "1.13";
 
 pub const ERROR_PARSE: i64 = -32700;
 pub const ERROR_INVALID_REQUEST: i64 = -32600;
@@ -54,6 +54,16 @@ pub const ERROR_BRANCH_ALREADY_EXISTS: i64 = -32134;
 pub const ERROR_BRANCH_NOT_FOUND: i64 = -32135;
 pub const ERROR_UNBORN_HEAD: i64 = -32136;
 pub const ERROR_MUTATION_FAILED: i64 = -32137;
+pub const ERROR_GITLAB_INVALID_REMOTE: i64 = -32138;
+pub const ERROR_GITLAB_REMOTE_NOT_FOUND: i64 = -32139;
+pub const ERROR_GITLAB_UNSUPPORTED_REMOTE: i64 = -32140;
+pub const ERROR_GLAB_UNAVAILABLE: i64 = -32141;
+pub const ERROR_GITLAB_AUTH_REQUIRED: i64 = -32142;
+pub const ERROR_GITLAB_REQUEST_FAILED: i64 = -32143;
+pub const ERROR_GITLAB_RESPONSE_PARSE: i64 = -32144;
+pub const ERROR_GITLAB_MR_COMMIT_LIMIT: i64 = -32145;
+pub const ERROR_GITLAB_COMMIT_NOT_IN_MR: i64 = -32146;
+pub const ERROR_GITLAB_COMMIT_FILE_LIMIT: i64 = -32147;
 pub const ERROR_REQUEST_CANCELLED: i64 = -32800;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -185,6 +195,10 @@ pub struct ServerCapabilities {
     pub github_pull_request: bool,
     pub github_pull_request_commit_diff: bool,
     pub github_squash_trace: bool,
+    pub gitlab_project: bool,
+    pub gitlab_merge_request: bool,
+    pub gitlab_merge_request_commit_diff: bool,
+    pub gitlab_squash_trace: bool,
     pub repository_mutations: bool,
 }
 
@@ -631,6 +645,7 @@ pub enum SquashTraceEvidence {
     LocalCommitHasAtMostOneParent,
     LocalCommitHasMultipleParents,
     ProviderMergeStrategyUnavailable,
+    ProviderSquashCommitReported,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -648,6 +663,146 @@ pub struct SquashTraceRelationship {
 #[serde(rename_all = "camelCase")]
 pub struct GitHubSquashTrace {
     pub pull_request: GitHubPullRequest,
+    pub relationship: SquashTraceRelationship,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitLabProjectParams {
+    #[serde(default)]
+    pub remote: Option<String>,
+    #[serde(default)]
+    pub path_with_namespace: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitLabProject {
+    pub host: String,
+    pub namespace: String,
+    pub name: String,
+    pub path_with_namespace: String,
+    pub url: String,
+    pub default_branch: String,
+    pub visibility: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitLabMergeRequestParams {
+    pub iid: u64,
+    #[serde(default)]
+    pub remote: Option<String>,
+    #[serde(default)]
+    pub path_with_namespace: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GitLabMergeRequestState {
+    Open,
+    Closed,
+    Merged,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct GitLabCommitIdentity {
+    pub name: String,
+    pub email: String,
+    pub timestamp: String,
+    pub username: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct GitLabMergeRequestCommit {
+    pub oid: String,
+    pub parents: Vec<String>,
+    pub author: GitLabCommitIdentity,
+    pub committer: GitLabCommitIdentity,
+    pub summary: String,
+    pub message: String,
+    pub url: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitLabMergeRequestRef {
+    pub name: String,
+    pub oid: String,
+    pub project: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitLabMergeRequest {
+    pub host: String,
+    pub path_with_namespace: String,
+    pub iid: u64,
+    pub title: String,
+    pub description: Option<String>,
+    pub state: GitLabMergeRequestState,
+    pub is_draft: bool,
+    pub author_username: Option<String>,
+    pub url: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub closed_at: Option<String>,
+    pub merged_at: Option<String>,
+    pub target: GitLabMergeRequestRef,
+    pub source: GitLabMergeRequestRef,
+    pub merge_commit_oid: Option<String>,
+    pub squash_commit_oid: Option<String>,
+    pub squash_on_merge: bool,
+    pub commits: Vec<GitLabMergeRequestCommit>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitLabMergeRequestCommitDiffParams {
+    pub iid: u64,
+    pub oid: String,
+    #[serde(default)]
+    pub remote: Option<String>,
+    #[serde(default)]
+    pub path_with_namespace: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GitLabFileStatus {
+    Added,
+    Removed,
+    Modified,
+    Renamed,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitLabCommitFileDiff {
+    pub old_path: String,
+    pub new_path: String,
+    pub status: GitLabFileStatus,
+    pub additions: u64,
+    pub deletions: u64,
+    pub changes: u64,
+    pub patch_state: GitHubPatchState,
+    pub hunks: Vec<DiffHunk>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitLabMergeRequestCommitDiff {
+    pub host: String,
+    pub path_with_namespace: String,
+    pub merge_request_iid: u64,
+    pub commit: GitLabMergeRequestCommit,
+    pub files: Vec<GitLabCommitFileDiff>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitLabSquashTrace {
+    pub merge_request: GitLabMergeRequest,
     pub relationship: SquashTraceRelationship,
 }
 
@@ -751,6 +906,19 @@ mod tests {
             "GitHubCommitIdentity",
             "GitHubPullRequestCommit",
             "GitHubPullRequest",
+            "GitLabProjectParams",
+            "GitLabProject",
+            "GitLabMergeRequestParams",
+            "GitLabMergeRequestState",
+            "GitLabCommitIdentity",
+            "GitLabMergeRequestCommit",
+            "GitLabMergeRequestRef",
+            "GitLabMergeRequest",
+            "GitLabMergeRequestCommitDiffParams",
+            "GitLabFileStatus",
+            "GitLabCommitFileDiff",
+            "GitLabMergeRequestCommitDiff",
+            "GitLabSquashTrace",
         ] {
             assert!(schema["$defs"].get(definition).is_some());
         }

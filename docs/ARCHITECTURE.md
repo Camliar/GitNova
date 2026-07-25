@@ -16,7 +16,7 @@
 └───────────────┬───────────────────────┬─────────────────┘
                 │                       │
                 ▼                       ▼
-        System Git / gh           Local SQLite
+      System Git / gh / glab      Local SQLite
         REST / GraphQL（可选）     （本地派生状态）
 ```
 
@@ -50,9 +50,9 @@ Host 可以做平台特有的输入映射和呈现，但不能解释领域结果
 
 - 仓库是事实源，System Git 是 Git 操作边界。
 - SQLite 只保存本地数据，并应支持迁移、备份和安全重建。
-- GitHub Provider 是 MVP Squash Trace 主路径的一部分，由 Core 通过 `gh`、REST 或 GraphQL 接入；首个 adapter 遵循 [ADR-0005](../adr/ADR-0005-GitHub-Provider.md)，网络集成必须显式、透明且可禁用。
+- GitHub Provider 是 MVP Squash Trace 主路径的一部分，由 Core 通过 `gh`、REST 或 GraphQL 接入；首个 adapter 遵循 [ADR-0005](../adr/ADR-0005-GitHub-Provider.md)。Post-MVP GitLab Provider 通过 Core-owned `glab api` 支持 GitLab.com 与 Self-Managed，遵循 [ADR-0007](../adr/ADR-0007-GitLab-Provider.md)。所有网络集成都必须显式、透明且可禁用。
 - 最终阶段的 AI Assist 同样遵循 Host → Core 边界：prompt/data selection、Provider adapter、建议约束和 Git mutation gating 属于 Core；Host 只负责输入预览、草稿编辑和用户确认。AI Provider 不得成为中心服务器，也不得绕过 Core 直接执行 Git。
-- Core 负责获取并关联 PR、原始 commits、per-commit diff 与最终 squash commit；Host 只呈现 Core 返回的领域结果。
+- Core 负责获取并关联 PR/MR、原始 commits、per-commit diff 与最终 squash commit；Host 只呈现 Core 返回的领域结果。
 - 仓库在哪个环境，Core 就运行在哪个环境；Desktop 已通过结构化 launcher 支持 WSL、Remote SSH 和 Dev Container，且仍保持 stdio 协议与唯一业务层。
 - Core 不把仓库、历史、凭据或遥测发送到 GitNova 中心服务，因为不存在这样的服务。
 

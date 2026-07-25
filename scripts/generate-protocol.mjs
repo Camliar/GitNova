@@ -4,7 +4,7 @@ import process from "node:process";
 const schemaUrl = new URL("../sdk/protocol/gitnova-protocol.schema.json", import.meta.url);
 const outputUrl = new URL("../packages/protocol/src/generated.ts", import.meta.url);
 const schema = JSON.parse(await readFile(schemaUrl, "utf8"));
-const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage", "CommitDiffParams", "CommitDiff", "ReferenceKind", "RepositoryHead", "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage", "CommitParams", "BranchParams", "RepositoryMutationSnapshot", "CommitResult", "GitHubRepositoryParams", "GitHubRepository", "GitHubPullRequestParams", "GitHubPullRequestState", "GitHubPullRequestRef", "GitHubCommitIdentity", "GitHubPullRequestCommit", "GitHubPullRequest", "GitHubPullRequestCommitDiffParams", "GitHubFileStatus", "GitHubPatchState", "GitHubCommitFileDiff", "GitHubPullRequestCommitDiff", "SquashTraceClassification", "SquashTraceConfidence", "SquashTraceLocalAvailability", "SquashTraceEvidence", "SquashTraceRelationship", "GitHubSquashTrace"];
+const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage", "CommitDiffParams", "CommitDiff", "ReferenceKind", "RepositoryHead", "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage", "CommitParams", "BranchParams", "RepositoryMutationSnapshot", "CommitResult", "GitHubRepositoryParams", "GitHubRepository", "GitHubPullRequestParams", "GitHubPullRequestState", "GitHubPullRequestRef", "GitHubCommitIdentity", "GitHubPullRequestCommit", "GitHubPullRequest", "GitHubPullRequestCommitDiffParams", "GitHubFileStatus", "GitHubPatchState", "GitHubCommitFileDiff", "GitHubPullRequestCommitDiff", "SquashTraceClassification", "SquashTraceConfidence", "SquashTraceLocalAvailability", "SquashTraceEvidence", "SquashTraceRelationship", "GitHubSquashTrace", "GitLabProjectParams", "GitLabProject", "GitLabMergeRequestParams", "GitLabMergeRequestState", "GitLabCommitIdentity", "GitLabMergeRequestCommit", "GitLabMergeRequestRef", "GitLabMergeRequest", "GitLabMergeRequestCommitDiffParams", "GitLabFileStatus", "GitLabCommitFileDiff", "GitLabMergeRequestCommitDiff", "GitLabSquashTrace"];
 for (const name of requiredDefinitions) {
   if (!schema.$defs?.[name]) throw new Error(`Protocol schema is missing $defs.${name}`);
 }
@@ -39,6 +39,10 @@ export interface ServerCapabilities {
   githubPullRequest: boolean;
   githubPullRequestCommitDiff: boolean;
   githubSquashTrace: boolean;
+  gitlabProject: boolean;
+  gitlabMergeRequest: boolean;
+  gitlabMergeRequestCommitDiff: boolean;
+  gitlabSquashTrace: boolean;
   repositoryMutations: boolean;
 }
 
@@ -322,7 +326,7 @@ export interface GitHubPullRequestCommitDiff {
 export type SquashTraceClassification = "notMerged" | "originalCommit" | "mergeCommit" | "squashCandidate" | "unresolved";
 export type SquashTraceConfidence = "none" | "medium" | "high";
 export type SquashTraceLocalAvailability = "notInspected" | "available" | "missing";
-export type SquashTraceEvidence = "providerNotMerged" | "providerMergeOidMissing" | "mergeOidMatchesOriginalCommit" | "mergeOidDistinctFromOriginalCommits" | "localCommitAvailable" | "localCommitMissing" | "localCommitHasAtMostOneParent" | "localCommitHasMultipleParents" | "providerMergeStrategyUnavailable";
+export type SquashTraceEvidence = "providerNotMerged" | "providerMergeOidMissing" | "mergeOidMatchesOriginalCommit" | "mergeOidDistinctFromOriginalCommits" | "localCommitAvailable" | "localCommitMissing" | "localCommitHasAtMostOneParent" | "localCommitHasMultipleParents" | "providerMergeStrategyUnavailable" | "providerSquashCommitReported";
 
 export interface SquashTraceRelationship {
   classification: SquashTraceClassification;
@@ -335,6 +339,107 @@ export interface SquashTraceRelationship {
 
 export interface GitHubSquashTrace {
   pullRequest: GitHubPullRequest;
+  relationship: SquashTraceRelationship;
+}
+
+export interface GitLabProjectParams {
+  remote?: string;
+  pathWithNamespace?: string;
+}
+
+export interface GitLabProject {
+  host: string;
+  namespace: string;
+  name: string;
+  pathWithNamespace: string;
+  url: string;
+  defaultBranch: string;
+  visibility: string;
+}
+
+export interface GitLabMergeRequestParams {
+  iid: number;
+  remote?: string;
+  pathWithNamespace?: string;
+}
+
+export type GitLabMergeRequestState = "open" | "closed" | "merged";
+
+export interface GitLabCommitIdentity {
+  name: string;
+  email: string;
+  timestamp: string;
+  username: string | null;
+}
+
+export interface GitLabMergeRequestCommit {
+  oid: string;
+  parents: string[];
+  author: GitLabCommitIdentity;
+  committer: GitLabCommitIdentity;
+  summary: string;
+  message: string;
+  url: string;
+}
+
+export interface GitLabMergeRequestRef {
+  name: string;
+  oid: string;
+  project: string | null;
+}
+
+export interface GitLabMergeRequest {
+  host: string;
+  pathWithNamespace: string;
+  iid: number;
+  title: string;
+  description: string | null;
+  state: GitLabMergeRequestState;
+  isDraft: boolean;
+  authorUsername: string | null;
+  url: string;
+  createdAt: string;
+  updatedAt: string;
+  closedAt: string | null;
+  mergedAt: string | null;
+  target: GitLabMergeRequestRef;
+  source: GitLabMergeRequestRef;
+  mergeCommitOid: string | null;
+  squashCommitOid: string | null;
+  squashOnMerge: boolean;
+  commits: GitLabMergeRequestCommit[];
+}
+
+export interface GitLabMergeRequestCommitDiffParams {
+  iid: number;
+  oid: string;
+  remote?: string;
+  pathWithNamespace?: string;
+}
+
+export type GitLabFileStatus = "added" | "removed" | "modified" | "renamed";
+
+export interface GitLabCommitFileDiff {
+  oldPath: string;
+  newPath: string;
+  status: GitLabFileStatus;
+  additions: number;
+  deletions: number;
+  changes: number;
+  patchState: GitHubPatchState;
+  hunks: DiffHunk[];
+}
+
+export interface GitLabMergeRequestCommitDiff {
+  host: string;
+  pathWithNamespace: string;
+  mergeRequestIid: number;
+  commit: GitLabMergeRequestCommit;
+  files: GitLabCommitFileDiff[];
+}
+
+export interface GitLabSquashTrace {
+  mergeRequest: GitLabMergeRequest;
   relationship: SquashTraceRelationship;
 }
 `;

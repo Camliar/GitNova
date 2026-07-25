@@ -1,5 +1,6 @@
 mod framing;
 mod github;
+mod gitlab;
 mod repository;
 
 use gitnova_protocol::{
@@ -11,14 +12,19 @@ use gitnova_protocol::{
     ERROR_GIT_UNAVAILABLE, ERROR_GITHUB_AUTH_REQUIRED, ERROR_GITHUB_COMMIT_FILE_LIMIT,
     ERROR_GITHUB_COMMIT_NOT_IN_PR, ERROR_GITHUB_INVALID_REMOTE, ERROR_GITHUB_PR_COMMIT_LIMIT,
     ERROR_GITHUB_REMOTE_NOT_FOUND, ERROR_GITHUB_REQUEST_FAILED, ERROR_GITHUB_RESPONSE_PARSE,
-    ERROR_GITHUB_UNSUPPORTED_REMOTE, ERROR_HISTORY_ENCODING, ERROR_INCOMPATIBLE_PROTOCOL,
-    ERROR_INVALID_BRANCH_NAME, ERROR_INVALID_COMMIT_PARENT, ERROR_INVALID_HISTORY_CURSOR,
-    ERROR_INVALID_PARAMS, ERROR_INVALID_PATH, ERROR_INVALID_REPOSITORY_PATH, ERROR_INVALID_REQUEST,
-    ERROR_METHOD_NOT_FOUND, ERROR_MUTATION_FAILED, ERROR_NOT_INITIALIZED, ERROR_NOTHING_STAGED,
-    ERROR_PARSE, ERROR_REFERENCE_ENCODING, ERROR_REFERENCE_PARSE, ERROR_REPOSITORY_NOT_FOUND,
+    ERROR_GITHUB_UNSUPPORTED_REMOTE, ERROR_GITLAB_AUTH_REQUIRED, ERROR_GITLAB_COMMIT_FILE_LIMIT,
+    ERROR_GITLAB_COMMIT_NOT_IN_MR, ERROR_GITLAB_INVALID_REMOTE, ERROR_GITLAB_MR_COMMIT_LIMIT,
+    ERROR_GITLAB_REMOTE_NOT_FOUND, ERROR_GITLAB_REQUEST_FAILED, ERROR_GITLAB_RESPONSE_PARSE,
+    ERROR_GITLAB_UNSUPPORTED_REMOTE, ERROR_GLAB_UNAVAILABLE, ERROR_HISTORY_ENCODING,
+    ERROR_INCOMPATIBLE_PROTOCOL, ERROR_INVALID_BRANCH_NAME, ERROR_INVALID_COMMIT_PARENT,
+    ERROR_INVALID_HISTORY_CURSOR, ERROR_INVALID_PARAMS, ERROR_INVALID_PATH,
+    ERROR_INVALID_REPOSITORY_PATH, ERROR_INVALID_REQUEST, ERROR_METHOD_NOT_FOUND,
+    ERROR_MUTATION_FAILED, ERROR_NOT_INITIALIZED, ERROR_NOTHING_STAGED, ERROR_PARSE,
+    ERROR_REFERENCE_ENCODING, ERROR_REFERENCE_PARSE, ERROR_REPOSITORY_NOT_FOUND,
     ERROR_REPOSITORY_NOT_OPEN, ERROR_REQUEST_CANCELLED, ERROR_STATUS_PARSE, ERROR_UNBORN_HEAD,
     ERROR_UNRESOLVED_CONFLICTS, ERROR_UNSAFE_REPOSITORY, ERROR_WORKTREE_REQUIRED,
     GitHubPullRequestCommitDiffParams, GitHubPullRequestParams, GitHubRepositoryParams,
+    GitLabMergeRequestCommitDiffParams, GitLabMergeRequestParams, GitLabProjectParams,
     HistoryParams, ImplementationInfo, InitializeParams, InitializeResult, JSON_RPC_VERSION,
     Notification, PROTOCOL_VERSION, RepositoryDescriptor, RepositoryPathParams, Request, Response,
     ResponseError, ServerCapabilities,
@@ -163,6 +169,10 @@ fn dispatch_request(
         "github/pullRequest" => github_pull_request_request(request, state),
         "github/pullRequestCommitDiff" => github_pull_request_commit_diff_request(request, state),
         "github/squashTrace" => github_squash_trace_request(request, state),
+        "gitlab/project" => gitlab_project_request(request, state),
+        "gitlab/mergeRequest" => gitlab_merge_request_request(request, state),
+        "gitlab/mergeRequestCommitDiff" => gitlab_merge_request_commit_diff_request(request, state),
+        "gitlab/squashTrace" => gitlab_squash_trace_request(request, state),
         _ => Response::error(
             Some(request.id),
             ResponseError::new(
@@ -235,6 +245,10 @@ fn initialize(request: Request, state: &mut CoreState) -> Response {
             github_pull_request: true,
             github_pull_request_commit_diff: true,
             github_squash_trace: true,
+            gitlab_project: true,
+            gitlab_merge_request: true,
+            gitlab_merge_request_commit_diff: true,
+            gitlab_squash_trace: true,
             repository_mutations: true,
         },
     };
@@ -551,6 +565,78 @@ fn squash_trace_error(error: github::SquashTraceError) -> ResponseError {
     match error {
         github::SquashTraceError::GitHub(error) => github_error(error),
         github::SquashTraceError::Repository(error) => repository_error(error),
+    }
+}
+
+fn gitlab_error(error: gitlab::GitLabError) -> ResponseError {
+    match error {
+        gitlab::GitLabError::InvalidRemote => ResponseError::new(
+            ERROR_GITLAB_INVALID_REMOTE,
+            "gitlab.invalid_remote",
+            "Remote name is invalid",
+            false,
+        ),
+        gitlab::GitLabError::RemoteNotFound => ResponseError::new(
+            ERROR_GITLAB_REMOTE_NOT_FOUND,
+            "gitlab.remote_not_found",
+            "GitLab remote was not found",
+            false,
+        ),
+        gitlab::GitLabError::UnsupportedRemote => ResponseError::new(
+            ERROR_GITLAB_UNSUPPORTED_REMOTE,
+            "gitlab.unsupported_remote",
+            "Remote is not a supported GitLab repository",
+            false,
+        ),
+        gitlab::GitLabError::GlabUnavailable => ResponseError::new(
+            ERROR_GLAB_UNAVAILABLE,
+            "gitlab.glab_unavailable",
+            "GitLab CLI is unavailable in the repository environment",
+            true,
+        ),
+        gitlab::GitLabError::AuthenticationRequired => ResponseError::new(
+            ERROR_GITLAB_AUTH_REQUIRED,
+            "gitlab.authentication_required",
+            "GitLab CLI authentication is required",
+            true,
+        ),
+        gitlab::GitLabError::RequestFailed => ResponseError::new(
+            ERROR_GITLAB_REQUEST_FAILED,
+            "gitlab.request_failed",
+            "GitLab request failed",
+            true,
+        ),
+        gitlab::GitLabError::ResponseParse => ResponseError::new(
+            ERROR_GITLAB_RESPONSE_PARSE,
+            "gitlab.response_parse_failed",
+            "GitLab returned an invalid response",
+            false,
+        ),
+        gitlab::GitLabError::MergeRequestCommitLimit => ResponseError::new(
+            ERROR_GITLAB_MR_COMMIT_LIMIT,
+            "gitlab.mr_commit_limit_exceeded",
+            "Merge request exceeds the supported original commit limit",
+            false,
+        ),
+        gitlab::GitLabError::CommitNotInMergeRequest => ResponseError::new(
+            ERROR_GITLAB_COMMIT_NOT_IN_MR,
+            "gitlab.commit_not_in_merge_request",
+            "Commit is not an original commit of the merge request",
+            false,
+        ),
+        gitlab::GitLabError::CommitFileLimit => ResponseError::new(
+            ERROR_GITLAB_COMMIT_FILE_LIMIT,
+            "gitlab.commit_file_limit_exceeded",
+            "Commit reaches the supported GitLab file limit",
+            false,
+        ),
+    }
+}
+
+fn gitlab_squash_trace_error(error: gitlab::SquashTraceError) -> ResponseError {
+    match error {
+        gitlab::SquashTraceError::GitLab(error) => gitlab_error(error),
+        gitlab::SquashTraceError::Repository(error) => repository_error(error),
     }
 }
 
@@ -1062,6 +1148,108 @@ fn github_squash_trace_request(request: Request, state: &CoreState) -> Response 
         ),
         Err(error) => Response::error(Some(request.id), squash_trace_error(error)),
     }
+}
+
+fn gitlab_project_request(request: Request, state: &CoreState) -> Response {
+    let params = if request.params.is_null() {
+        GitLabProjectParams::default()
+    } else {
+        match serde_json::from_value::<GitLabProjectParams>(request.params) {
+            Ok(params) => params,
+            Err(_) => return invalid_params(request.id, "Invalid GitLab project parameters"),
+        }
+    };
+    let Some(descriptor) = &state.active_repository else {
+        return repository_not_open(request.id, "requesting GitLab metadata");
+    };
+    match gitlab::project(descriptor, &params) {
+        Ok(project) => Response::success(
+            request.id,
+            serde_json::to_value(project).expect("serializable GitLab project"),
+        ),
+        Err(error) => Response::error(Some(request.id), gitlab_error(error)),
+    }
+}
+
+fn gitlab_merge_request_request(request: Request, state: &CoreState) -> Response {
+    let params = match serde_json::from_value::<GitLabMergeRequestParams>(request.params) {
+        Ok(params) if params.iid > 0 => params,
+        _ => return invalid_params(request.id, "Invalid GitLab merge request parameters"),
+    };
+    let Some(descriptor) = &state.active_repository else {
+        return repository_not_open(request.id, "requesting a GitLab merge request");
+    };
+    match gitlab::merge_request(descriptor, &params) {
+        Ok(merge_request) => Response::success(
+            request.id,
+            serde_json::to_value(merge_request).expect("serializable GitLab merge request"),
+        ),
+        Err(error) => Response::error(Some(request.id), gitlab_error(error)),
+    }
+}
+
+fn gitlab_merge_request_commit_diff_request(request: Request, state: &CoreState) -> Response {
+    let params = match serde_json::from_value::<GitLabMergeRequestCommitDiffParams>(request.params)
+    {
+        Ok(params) if params.iid > 0 && valid_full_oid(&params.oid) => params,
+        _ => {
+            return invalid_params(
+                request.id,
+                "Invalid GitLab merge request commit diff parameters",
+            );
+        }
+    };
+    let Some(descriptor) = &state.active_repository else {
+        return repository_not_open(request.id, "requesting a GitLab merge request commit diff");
+    };
+    match gitlab::merge_request_commit_diff(descriptor, &params) {
+        Ok(diff) => Response::success(
+            request.id,
+            serde_json::to_value(diff).expect("serializable GitLab merge request commit diff"),
+        ),
+        Err(error) => Response::error(Some(request.id), gitlab_error(error)),
+    }
+}
+
+fn gitlab_squash_trace_request(request: Request, state: &CoreState) -> Response {
+    let params = match serde_json::from_value::<GitLabMergeRequestParams>(request.params) {
+        Ok(params) if params.iid > 0 => params,
+        _ => return invalid_params(request.id, "Invalid GitLab Squash Trace parameters"),
+    };
+    let Some(descriptor) = &state.active_repository else {
+        return repository_not_open(request.id, "requesting a GitLab Squash Trace");
+    };
+    match gitlab::squash_trace(descriptor, &params) {
+        Ok(trace) => Response::success(
+            request.id,
+            serde_json::to_value(trace).expect("serializable GitLab Squash Trace"),
+        ),
+        Err(error) => Response::error(Some(request.id), gitlab_squash_trace_error(error)),
+    }
+}
+
+fn invalid_params(id: gitnova_protocol::RequestId, message: &str) -> Response {
+    Response::error(
+        Some(id),
+        ResponseError::new(
+            ERROR_INVALID_PARAMS,
+            "protocol.invalid_params",
+            message,
+            false,
+        ),
+    )
+}
+
+fn repository_not_open(id: gitnova_protocol::RequestId, operation: &str) -> Response {
+    Response::error(
+        Some(id),
+        ResponseError::new(
+            ERROR_REPOSITORY_NOT_OPEN,
+            "repository.not_open",
+            &format!("Open a repository before {operation}"),
+            true,
+        ),
+    )
 }
 
 fn valid_full_oid(value: &str) -> bool {

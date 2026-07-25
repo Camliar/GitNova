@@ -30,6 +30,7 @@
 - Squash Trace Desktop 关联展示（已实现）
 - Desktop Host 的 Squash Trace 端到端关键工作流（已实现）
 - MVP 本地质量门、冷启动性能基线与网络透明性（已实现）
+- Desktop Core sidecar 打包、跨平台 CI 与受控 draft release（已实现；正式签名凭据由发布者配置）
 
 ## Post-MVP 候选
 

@@ -1,6 +1,6 @@
 # TASK-0029: Desktop Packaging, Signing and CI/CD Release
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `feature/029-desktop-packaging-release`
@@ -26,17 +26,17 @@
 
 ## Deliverables
 
-- [ ] active Tauri bundle configuration and package metadata
-- [ ] cross-platform CI and tag-gated release workflows
-- [ ] release/signing runbook and validation
+- [x] active Tauri bundle configuration and package metadata
+- [x] cross-platform CI and tag-gated release workflows
+- [x] release/signing runbook and validation
 
 ## Review Checklist
 
-- [ ] 普通 CI 无发布权限且不读取签名 secrets。
-- [ ] release 只接受 `v*` tag，并使用最小 `contents: write` 权限。
-- [ ] 三平台命令、产物和签名状态诚实记录。
-- [ ] 本地质量门与 macOS bundle 构建通过。
+- [x] 普通 CI 无发布权限且不读取签名 secrets。
+- [x] release 只接受 `v*` tag，并使用最小 `contents: write` 权限。
+- [x] 三平台命令、产物和签名状态诚实记录。
+- [x] 本地质量门与 macOS `.app`/`.dmg` bundle 构建通过。
 
 ## Done Definition
 
-- [ ] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。
+- [x] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。

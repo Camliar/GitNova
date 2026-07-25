@@ -1,0 +1,96 @@
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Bundle (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            label: linux-x64
+            target: x86_64-unknown-linux-gnu
+            args: --config src-tauri/tauri.bundle.conf.json --target x86_64-unknown-linux-gnu --bundles deb,appimage
+          - os: windows-latest
+            label: windows-x64
+            target: x86_64-pc-windows-msvc
+            args: --config src-tauri/tauri.bundle.conf.json --target x86_64-pc-windows-msvc --bundles nsis,msi
+          - os: macos-latest
+            label: macos-universal
+            target: universal-apple-darwin
+            args: --config src-tauri/tauri.bundle.conf.json --target universal-apple-darwin --bundles app,dmg
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target == 'universal-apple-darwin' && 'aarch64-apple-darwin,x86_64-apple-darwin' || matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Linux native dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/check-release-tag.mjs "${{ github.ref_name }}"
+      - name: Build Core sidecar
+        shell: bash
+        run: |
+          if [ "${{ matrix.target }}" = "universal-apple-darwin" ]; then
+            cargo build --release -p gitnova-core --target aarch64-apple-darwin
+            cargo build --release -p gitnova-core --target x86_64-apple-darwin
+            mkdir -p target/universal-apple-darwin/release
+            lipo -create target/aarch64-apple-darwin/release/gitnova-core target/x86_64-apple-darwin/release/gitnova-core -output target/universal-apple-darwin/release/gitnova-core
+          else
+            cargo build --release -p gitnova-core --target "${{ matrix.target }}"
+          fi
+          node scripts/prepare-sidecar.mjs "${{ matrix.target }}"
+      - name: Import optional Windows signing certificate
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrEmpty($env:WINDOWS_CERTIFICATE)) {
+            Write-Output 'No Windows signing certificate configured; draft will be unsigned.'
+            exit 0
+          }
+          $bytes = [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
+          $path = Join-Path $env:RUNNER_TEMP 'gitnova-signing.pfx'
+          [IO.File]::WriteAllBytes($path, $bytes)
+          $certificate = Import-PfxCertificate -FilePath $path -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force)
+          $override = @{ bundle = @{ windows = @{ certificateThumbprint = $certificate.Thumbprint; digestAlgorithm = 'sha256'; timestampUrl = 'http://timestamp.digicert.com' } } } | ConvertTo-Json -Compress -Depth 4
+          "TAURI_CONFIG=$override" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: ${{ secrets.APPLE_API_KEY_PATH }}
+        with:
+          projectPath: apps/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: GitNova ${{ github.ref_name }}
+          releaseBody: Platform bundles built from the immutable release tag. Signing status is recorded in the workflow run.
+          releaseDraft: true
+          generateReleaseNotes: true
+          args: ${{ matrix.args }}

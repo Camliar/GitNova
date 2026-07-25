@@ -26,6 +26,19 @@
     ]
   },
   "bundle": {
-    "active": false
+    "active": true,
+    "category": "DeveloperTool",
+    "copyright": "Copyright © 2026 GitNova contributors",
+    "shortDescription": "Local-first Git client with Squash Trace",
+    "longDescription": "GitNova connects local Git history with pull request commits and squash merge evidence without a central service.",
+    "icon": ["icons/icon.png"],
+    "targets": "all",
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "signingIdentity": "-"
+    },
+    "windows": {
+      "digestAlgorithm": "sha256"
+    }
   }
 }

@@ -1,3 +1,5 @@
-# CI placeholder
+# Automation
 
-`ci-placeholder.yml` 只声明手动触发且永不运行的占位 job，不包含检出、构建、测试或发布逻辑。完整 CI/CD 按[路线图 Phase 4](../../docs/ROADMAP.md#phase-4--mvp-quality--delivery)在后续 Task 中实现。
+`ci.yml` runs the complete quality gate on Windows, macOS and Linux with read-only repository permission. It never references repository signing secrets.
+
+`release.yml` accepts only `v*` tags, validates that the tag exactly matches `apps/desktop/src-tauri/tauri.conf.json`, builds the matching Core sidecar and creates a draft GitHub Release. It is the only workflow with `contents: write` and signing-secret access. See [Desktop Release](../../docs/DESKTOP_RELEASE.md).

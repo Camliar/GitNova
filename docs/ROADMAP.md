@@ -34,6 +34,8 @@ TASK-0030 已为 Desktop 建立本机、WSL、Remote SSH 与 Dev Container 的�
 
 TASK-0031 已交付 VS Code Extension Host：Core 在当前 Extension Host（含 Remote SSH/WSL/Container）环境运行，提供 workspace repository、PR original commits、per-commit diff 与 Squash Trace 只读入口。
 
+TASK-0032 已交付 IntelliJ Platform Host 项目、project-scoped Core lifecycle、Tools action 与 Squash Trace/original commit diff 交互；Gradle wrapper 与 CI `buildPlugin` 固化真实平台编译门。
+
 ## Phase 6 — AI Assist（最终阶段）
 
 在 Squash Trace MVP、Desktop 交付质量和 Post-MVP Host/Provider 全部完成后，再以独立 Task 引入 AI Assist。候选能力包括根据 staged diff 生成 commit message 草稿，以及根据仓库状态给出拆分 commit、测试、冲突处理等操作建议。

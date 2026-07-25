@@ -1,0 +1,15 @@
+<idea-plugin>
+    <id>dev.gitnova.idea</id>
+    <name>GitNova</name>
+    <vendor>GitNova contributors</vendor>
+    <description>Local-first Git insights and Squash Trace powered by gitnova-core.</description>
+    <depends>com.intellij.modules.platform</depends>
+    <actions>
+        <action id="dev.gitnova.idea.InspectPullRequest"
+                class="dev.gitnova.idea.InspectPullRequestAction"
+                text="GitNova: Inspect Pull Request / Squash Trace"
+                description="Inspect original commits and squash relationship through GitNova Core">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>

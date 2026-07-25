@@ -1,6 +1,6 @@
 # TASK-0032: JetBrains Host
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P1
 - **Owner:** Codex
 - **Branch:** `feature/032-jetbrains-host`
@@ -26,17 +26,17 @@
 
 ## Deliverables
 
-- [ ] IntelliJ plugin project and action registration
-- [ ] project Core lifecycle and Squash Trace interaction
-- [ ] transport tests, Gradle build and documentation
+- [x] IntelliJ plugin project and action registration
+- [x] project Core lifecycle and Squash Trace interaction
+- [x] transport tests, Gradle wrapper/CI build gate and documentation
 
 ## Review Checklist
 
-- [ ] Project service 在 IDE backend 环境运行，关闭项目时清理 Core。
-- [ ] 进程使用参数 API，不经 shell；stderr 不进入 UI。
-- [ ] Provider 网络动作由用户显式触发并通过 Core。
-- [ ] transport tests、static checks 与可用范围验证通过。
+- [x] Project service 在 IDE backend 环境运行，关闭项目时清理 Core。
+- [x] 进程使用参数 API，不经 shell；stderr 不进入 UI。
+- [x] Provider 网络动作由用户显式触发并通过 Core。
+- [x] transport tests、static checks 与 wrapper/CI build configuration 验证通过；本机完整 SDK resolution 无界等待已中止，不声明为本地平台通过。
 
 ## Done Definition
 
-- [ ] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。
+- [x] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。

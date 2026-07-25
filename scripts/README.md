@@ -5,5 +5,6 @@
 - `check-delivery.mjs`：检查 bundle、Core sidecar、CI 和 release 权限边界。
 - `prepare-sidecar.mjs`：把 release Core 复制到 Tauri target-qualified external binary 位置。
 - `check-release-tag.mjs`：阻止 tag 与 Desktop 版本不一致的发布。
+- `check-idea.mjs`：使用纯 JDK 编译/运行 JetBrains framing tests，并检查 launcher、协议版本与 plugin registration 边界。
 
 脚本必须可复现、非交互且有文档，不得承载业务逻辑。

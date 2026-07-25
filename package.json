@@ -12,10 +12,11 @@
     "generate:protocol": "node scripts/generate-protocol.mjs",
     "check:protocol": "node scripts/generate-protocol.mjs --check",
     "check:desktop": "pnpm --filter @gitnova/desktop check",
+    "check:vscode": "pnpm --filter @gitnova/vscode check",
     "check:quality": "node scripts/check-quality.mjs",
     "check:delivery": "node scripts/check-delivery.mjs",
     "prepare:sidecar": "node scripts/prepare-sidecar.mjs",
     "bundle:desktop": "cargo build --release -p gitnova-core && npm run prepare:sidecar && pnpm --filter @gitnova/desktop tauri build --config src-tauri/tauri.bundle.conf.json",
-    "check": "npm run check:protocol && npm run check:quality && npm run check:delivery && npm run check:desktop"
+    "check": "npm run check:protocol && npm run check:quality && npm run check:delivery && npm run check:desktop && npm run check:vscode"
   }
 }

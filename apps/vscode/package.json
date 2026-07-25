@@ -1,0 +1,39 @@
+{
+  "name": "@gitnova/vscode",
+  "displayName": "GitNova",
+  "description": "Local-first Git insights and Squash Trace powered by gitnova-core",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "gitnova",
+  "license": "MIT",
+  "engines": { "vscode": "^1.95.0" },
+  "categories": ["SCM Providers", "Other"],
+  "main": "./src/extension.js",
+  "activationEvents": [
+    "onCommand:gitnova.connect",
+    "onCommand:gitnova.openRepository",
+    "onCommand:gitnova.inspectPullRequest"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "gitnova.connect", "title": "GitNova: Connect Core" },
+      { "command": "gitnova.openRepository", "title": "GitNova: Open Workspace Repository" },
+      { "command": "gitnova.inspectPullRequest", "title": "GitNova: Inspect Pull Request / Squash Trace" }
+    ],
+    "configuration": {
+      "title": "GitNova",
+      "properties": {
+        "gitnova.core.path": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute development override for gitnova-core. Packaged local and remote PATH discovery are preferred."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test src/*.test.js",
+    "build": "node --check src/coreClient.js && node --check src/render.js && node --check src/extension.js",
+    "check": "pnpm test && pnpm build"
+  }
+}

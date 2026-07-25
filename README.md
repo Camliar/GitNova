@@ -52,6 +52,8 @@ Desktop 前端可单独使用 `pnpm --filter @gitnova/desktop check` 验证；�
 
 完整说明见[目录结构](docs/PROJECT_STRUCTURE.md)。
 
+VS Code Host 已提供 workspace 与 Squash Trace vertical slice；使用与边界见 [`apps/vscode/README.md`](apps/vscode/README.md)。
+
 ## MVP Roadmap
 
 MVP 将按“基础设施 → Core 协议 → 本地 Git 基础 → Desktop Squash Trace 端到端体验 → 发布质量”的顺序推进。GitHub Provider、PR original commits、per-commit diff 和 squash relationship 都是 MVP 必备能力。范围和阶段见[路线图](docs/ROADMAP.md)与[功能清单](docs/FEATURE_LIST.md)。

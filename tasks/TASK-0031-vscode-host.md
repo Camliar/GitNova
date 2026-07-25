@@ -1,6 +1,6 @@
 # TASK-0031: VS Code Host
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P1
 - **Owner:** Codex
 - **Branch:** `feature/031-vscode-host`
@@ -26,17 +26,17 @@
 
 ## Deliverables
 
-- [ ] VS Code extension package, lifecycle and commands
-- [ ] PR/original-commit/diff/Squash Trace presentation slice
-- [ ] tests, build scripts and host documentation
+- [x] VS Code extension package, lifecycle and commands
+- [x] PR/original-commit/diff/Squash Trace presentation slice
+- [x] tests, build scripts and host documentation
 
 ## Review Checklist
 
-- [ ] Extension Host 只启动/传输/呈现，业务请求全部进入 Core。
-- [ ] workspace path 不跨 Remote Extension Host 边界。
-- [ ] webview 内容转义，CSP 禁止脚本和远程资源。
-- [ ] workspace checks、extension tests/build 通过。
+- [x] Extension Host 只启动/传输/呈现，业务请求全部进入 Core。
+- [x] workspace path 不跨 Remote Extension Host 边界。
+- [x] webview 内容转义，CSP 禁止脚本和远程资源。
+- [x] workspace checks、extension tests/build 通过。
 
 ## Done Definition
 
-- [ ] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。
+- [x] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。

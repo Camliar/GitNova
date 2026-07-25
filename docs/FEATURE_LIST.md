@@ -35,7 +35,8 @@
 ## Post-MVP 候选
 
 - WSL、Remote SSH 与 Dev Container 结构化 Core launcher（已实现）
-- VS Code、JetBrains、Visual Studio Host
+- VS Code Host 的 workspace 与 Squash Trace vertical slice（已实现）
+- JetBrains、Visual Studio Host
 - GitLab 等其他托管平台 Provider
 - 超出 MVP 主路径的 PR 操作与协作工作流
 - 基础主路径之外的搜索、筛选与历史洞察

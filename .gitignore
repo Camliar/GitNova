@@ -5,6 +5,8 @@ dist/
 build/
 .turbo/
 .gradle/
+**/bin/
+**/obj/
 apps/desktop/src-tauri/bin/
 
 # IDE and operating system

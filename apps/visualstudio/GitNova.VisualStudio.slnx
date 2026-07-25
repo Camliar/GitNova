@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="GitNova.VisualStudio.Transport/GitNova.VisualStudio.Transport.csproj" />
+  <Project Path="GitNova.VisualStudio.Transport.Tests/GitNova.VisualStudio.Transport.Tests.csproj" />
+  <Project Path="GitNova.VisualStudio/GitNova.VisualStudio.csproj" />
+</Solution>

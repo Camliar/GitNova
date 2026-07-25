@@ -1,5 +1,7 @@
 # Scripts
 
+`check-visualstudio.mjs` 在所有开发平台验证 .NET transport/framing、安全进程启动和协议版本；Windows CI 另外构建完整 VisualStudio.Extensibility 工程。
+
 - `generate-protocol.mjs`：从协议 JSON Schema 生成或检查 TypeScript 类型。
 - `check-quality.mjs`：检查 Desktop 无直连网络/调试输出、Core stderr 固定化和 Tauri CSP 本地优先边界。
 - `check-delivery.mjs`：检查 bundle、Core sidecar、CI 和 release 权限边界。

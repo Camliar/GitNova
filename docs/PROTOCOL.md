@@ -28,7 +28,7 @@ spawn → gitnova/initialize → requests and notifications → gitnova/shutdown
 
 ## Initialize
 
-`gitnova/initialize` 参数包含 `clientInfo`、`protocolVersion` 和 Host capabilities。结果包含 `coreInfo`、协商后的协议版本和 Core capabilities。初始协议版本为 `1.0`，当前版本为 `1.13`；主版本不同即不兼容，次版本能力通过 capability 字段协商。
+`gitnova/initialize` 参数包含 `clientInfo`、`protocolVersion` 和 Host capabilities。结果包含 `coreInfo`、协商后的协议版本和 Core capabilities。初始协议版本为 `1.0`，当前版本为 `1.14`；主版本不同即不兼容，次版本能力通过 capability 字段协商。
 
 Core 当前另声明 `repositoryMutations` capability；完整 capability 由 Schema 定义。仓库方法及路径语义见[仓库发现](REPOSITORIES.md)，写操作安全契约见[Repository Mutations](MUTATIONS.md)，其余读模型与 Provider 文档保持各自事实来源。
 
@@ -98,6 +98,8 @@ JSON-RPC error 使用标准数值 `code`，同时在 `data.stableCode` 提供稳
 | `-32800` | `request.cancelled` | 请求已取消 |
 
 GitLab Provider 方法为 `gitlab/project`、`gitlab/mergeRequest`、`gitlab/mergeRequestCommitDiff` 和 `gitlab/squashTrace`。`pathWithNamespace` 可覆盖 remote path，但 hostname 始终来自已验证 remote；任何网络动作仍必须由 Host 显式触发。
+
+AI Assist 预留 `ai/inputPreview` 与 `ai/generateCommitDraft`。1.14 定义其类型和 `aiAssist` capability；capability 为 false 时 Host 不得调用。输入披露、预览绑定与 Provider 凭据规则见 [AI Assist Contract](AI_ASSIST.md)。
 
 ## Cancellation and timeouts
 

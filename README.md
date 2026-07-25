@@ -18,7 +18,7 @@ Desktop · VS Code · JetBrains · Visual Studio
                     ▼
       gitnova-core（本地独立进程）
                     │
-       System Git · gh · glab · SQLite
+ System Git · gh · glab · AI Provider · SQLite
 ```
 
 Host 是展示和适配层，不承载业务逻辑。Core 在用户设备上独立运行；产品没有中心服务器，也不要求云端运行时。详见[架构说明](docs/ARCHITECTURE.md)和[架构决策](adr/ADR-0001-Architecture.md)。
@@ -57,6 +57,8 @@ VS Code Host 已提供 workspace 与 Squash Trace vertical slice；使用与边�
 JetBrains Host 已提供 IntelliJ Platform plugin project 与 Squash Trace action；构建和远端 backend 约束见 [`apps/idea/README.md`](apps/idea/README.md)。
 
 Visual Studio Host 已提供进程外扩展工程与 Squash Trace command；GitLab.com/Self-Managed MR Provider 位于 Core，使用与边界分别见 [`apps/visualstudio/README.md`](apps/visualstudio/README.md)和 [ADR-0007](adr/ADR-0007-GitLab-Provider.md)。
+
+最终阶段 AI Assist 已锁定安全契约：Core 可使用本地 Ollama 或用户配置的 OpenAI 直连，但生成前必须预览输入范围，AI 只返回可编辑草稿与建议。详见 [AI Assist Contract](docs/AI_ASSIST.md)。
 
 ## MVP Roadmap
 

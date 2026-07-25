@@ -4,7 +4,7 @@ import process from "node:process";
 const schemaUrl = new URL("../sdk/protocol/gitnova-protocol.schema.json", import.meta.url);
 const outputUrl = new URL("../packages/protocol/src/generated.ts", import.meta.url);
 const schema = JSON.parse(await readFile(schemaUrl, "utf8"));
-const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage", "CommitDiffParams", "CommitDiff", "ReferenceKind", "RepositoryHead", "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage", "CommitParams", "BranchParams", "RepositoryMutationSnapshot", "CommitResult", "GitHubRepositoryParams", "GitHubRepository", "GitHubPullRequestParams", "GitHubPullRequestState", "GitHubPullRequestRef", "GitHubCommitIdentity", "GitHubPullRequestCommit", "GitHubPullRequest", "GitHubPullRequestCommitDiffParams", "GitHubFileStatus", "GitHubPatchState", "GitHubCommitFileDiff", "GitHubPullRequestCommitDiff", "SquashTraceClassification", "SquashTraceConfidence", "SquashTraceLocalAvailability", "SquashTraceEvidence", "SquashTraceRelationship", "GitHubSquashTrace", "GitLabProjectParams", "GitLabProject", "GitLabMergeRequestParams", "GitLabMergeRequestState", "GitLabCommitIdentity", "GitLabMergeRequestCommit", "GitLabMergeRequestRef", "GitLabMergeRequest", "GitLabMergeRequestCommitDiffParams", "GitLabFileStatus", "GitLabCommitFileDiff", "GitLabMergeRequestCommitDiff", "GitLabSquashTrace"];
+const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage", "CommitDiffParams", "CommitDiff", "ReferenceKind", "RepositoryHead", "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage", "CommitParams", "BranchParams", "RepositoryMutationSnapshot", "CommitResult", "GitHubRepositoryParams", "GitHubRepository", "GitHubPullRequestParams", "GitHubPullRequestState", "GitHubPullRequestRef", "GitHubCommitIdentity", "GitHubPullRequestCommit", "GitHubPullRequest", "GitHubPullRequestCommitDiffParams", "GitHubFileStatus", "GitHubPatchState", "GitHubCommitFileDiff", "GitHubPullRequestCommitDiff", "SquashTraceClassification", "SquashTraceConfidence", "SquashTraceLocalAvailability", "SquashTraceEvidence", "SquashTraceRelationship", "GitHubSquashTrace", "GitLabProjectParams", "GitLabProject", "GitLabMergeRequestParams", "GitLabMergeRequestState", "GitLabCommitIdentity", "GitLabMergeRequestCommit", "GitLabMergeRequestRef", "GitLabMergeRequest", "GitLabMergeRequestCommitDiffParams", "GitLabFileStatus", "GitLabCommitFileDiff", "GitLabMergeRequestCommitDiff", "GitLabSquashTrace", "AiProviderKind", "AiProviderConfig", "AiInputPreviewParams", "AiDisclosureDestination", "AiDisclosureFileState", "AiDisclosureFile", "AiInputPreview", "AiGenerateCommitDraftParams", "AiOperationSuggestionKind", "AiOperationSuggestion", "AiCommitDraft"];
 for (const name of requiredDefinitions) {
   if (!schema.$defs?.[name]) throw new Error(`Protocol schema is missing $defs.${name}`);
 }
@@ -43,6 +43,7 @@ export interface ServerCapabilities {
   gitlabMergeRequest: boolean;
   gitlabMergeRequestCommitDiff: boolean;
   gitlabSquashTrace: boolean;
+  aiAssist: boolean;
   repositoryMutations: boolean;
 }
 
@@ -441,6 +442,67 @@ export interface GitLabMergeRequestCommitDiff {
 export interface GitLabSquashTrace {
   mergeRequest: GitLabMergeRequest;
   relationship: SquashTraceRelationship;
+}
+
+export type AiProviderKind = "ollama" | "openAi";
+export type AiProviderConfig =
+  | { kind: "ollama"; model: string; baseUrl?: string }
+  | { kind: "openAi"; model: string };
+
+export interface AiInputPreviewParams {
+  provider: AiProviderConfig;
+  excludedPaths?: string[];
+}
+
+export type AiDisclosureDestination = "local" | "external";
+export type AiDisclosureFileState = "included" | "excluded" | "binary" | "truncated";
+
+export interface AiDisclosureFile {
+  path: string;
+  additions: number;
+  deletions: number;
+  patchBytes: number;
+  state: AiDisclosureFileState;
+  reason: string | null;
+}
+
+export interface AiInputPreview {
+  previewId: string;
+  indexFingerprint: string;
+  providerKind: AiProviderKind;
+  model: string;
+  destination: AiDisclosureDestination;
+  endpoint: string;
+  files: AiDisclosureFile[];
+  stagedDiffBytes: number;
+  promptBytes: number;
+  truncated: boolean;
+  externalConfirmationRequired: boolean;
+}
+
+export interface AiGenerateCommitDraftParams {
+  previewId: string;
+  provider: AiProviderConfig;
+  excludedPaths?: string[];
+  externalDisclosureConfirmed: boolean;
+}
+
+export type AiOperationSuggestionKind = "splitCommit" | "runTests" | "resolveConflicts" | "reviewSensitiveData" | "reviewLargeChange";
+
+export interface AiOperationSuggestion {
+  kind: AiOperationSuggestionKind;
+  title: string;
+  detail: string;
+  affectedPaths: string[];
+}
+
+export interface AiCommitDraft {
+  previewId: string;
+  providerKind: AiProviderKind;
+  model: string;
+  commitMessage: string;
+  suggestions: AiOperationSuggestion[];
+  warnings: string[];
 }
 `;
 

@@ -14,6 +14,7 @@ GitNova 文档以本页为入口。术语以[词汇表](GLOSSARY.md)为准，已
 | [UI GUIDELINE](UI_GUIDELINE.md) | 界面设计原则与可访问性 |
 | [PRODUCT REQUIREMENTS](PRODUCT_REQUIREMENTS.md) | 产品需求和非目标 |
 | [PROTOCOL](PROTOCOL.md) | Core JSON-RPC/stdio 契约与生命周期 |
+| [AI ASSIST](AI_ASSIST.md) | AI 输入预览、Provider、隐私确认与安全输出契约 |
 | [REPOSITORIES](REPOSITORIES.md) | System Git 仓库发现、路径与会话语义 |
 | [STATUS](STATUS.md) | 工作区与分支状态契约 |
 | [DIFF](DIFF.md) | 单文件结构化行级 diff 契约 |

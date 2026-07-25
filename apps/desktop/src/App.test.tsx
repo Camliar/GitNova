@@ -34,9 +34,9 @@ const descriptor = {
 describe("Desktop repository open", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.13", capabilities: { repositoryMutations: true } });
+    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.14", capabilities: { repositoryMutations: true } });
     core.configureCore.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
-    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.13", capabilities: { repositoryMutations: true } });
+    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.14", capabilities: { repositoryMutations: true } });
     repository.selectRepositoryDirectory.mockResolvedValue("/work/project");
     repository.openRepository.mockResolvedValue(descriptor);
     status.getWorkingTreeStatus.mockResolvedValue({
@@ -54,7 +54,7 @@ describe("Desktop repository open", () => {
 
   it("launches Core in an explicit SSH environment and opens only its remote path", async () => {
     core.getCoreStatus.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
-    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.13", capabilities: { repositoryMutations: true }, environment: "ssh" });
+    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.14", capabilities: { repositoryMutations: true }, environment: "ssh" });
     render(<App />);
 
     fireEvent.change(await screen.findByLabelText("Core environment"), { target: { value: "ssh" } });

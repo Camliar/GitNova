@@ -50,6 +50,7 @@
 - 本地模型或用户配置的直连 AI Provider
 - 输入预览、敏感路径排除、最小披露与用户确认
 - AI 不自动执行 commit 或 reset/rebase/push 等高风险操作
+- AI Assist 协议、Ollama/OpenAI Provider 与隐私契约（已锁定；Core/UI 尚未实现）
 
 AI Assist 必须排在 Squash Trace MVP、交付质量及 Post-MVP Host/Provider 之后，不得反向阻塞这些阶段。
 

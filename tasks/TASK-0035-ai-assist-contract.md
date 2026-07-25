@@ -1,6 +1,6 @@
 # TASK-0035: AI Assist Contract
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P2
 - **Owner:** Codex
 - **Branch:** `feature/035-ai-assist-contract`
@@ -29,20 +29,19 @@
 
 ## Deliverables
 
-- [ ] AI Assist protocol types and version update
-- [ ] disclosure, confirmation and stale-preview contract
-- [ ] Ollama/OpenAI Provider decision and ADR
-- [ ] generated types, contract tests and synchronized product docs
+- [x] AI Assist protocol types and version update
+- [x] disclosure, confirmation and stale-preview contract
+- [x] Ollama/OpenAI Provider decision and ADR
+- [x] generated types, contract tests and synchronized product docs
 
 ## Review Checklist
 
-- [ ] Host 不能读取或传递 Provider 凭据，Core 是唯一 AI 业务层。
-- [ ] 外部披露在生成前可见且需要显式确认；本地 Provider 也只能显式触发。
-- [ ] 排除、截断、二进制处理和输入上限是 fail-closed 且可解释的。
-- [ ] AI 输出不具备 mutation 权限，不返回可直接执行的任意命令。
-- [ ] 协议生成物、Rust tests、fmt 与 clippy 通过。
+- [x] Host 不能读取或传递 Provider 凭据，Core 是唯一 AI 业务层。
+- [x] 外部披露在生成前可见且需要显式确认；本地 Provider 也只能显式触发。
+- [x] 排除、截断、二进制处理和输入上限是 fail-closed 且可解释的。
+- [x] AI 输出不具备 mutation 权限，不返回可直接执行的任意命令。
+- [x] 协议生成物、Rust tests、fmt 与 clippy 通过。
 
 ## Done Definition
 
-- [ ] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。
-
+- [x] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。

@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitnova.dev/schema/protocol/1.13/gitnova-protocol.schema.json",
-  "title": "GitNova Core Protocol 1.13",
+  "$id": "https://gitnova.dev/schema/protocol/1.14/gitnova-protocol.schema.json",
+  "title": "GitNova Core Protocol 1.14",
   "type": "object",
-  "properties": { "protocolVersion": { "const": "1.13" } },
+  "properties": { "protocolVersion": { "const": "1.14" } },
   "required": ["protocolVersion"],
   "$defs": {
     "RequestId": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
@@ -38,9 +38,10 @@
         "gitlabMergeRequest": { "type": "boolean" },
         "gitlabMergeRequestCommitDiff": { "type": "boolean" },
         "gitlabSquashTrace": { "type": "boolean" },
+        "aiAssist": { "type": "boolean" },
         "repositoryMutations": { "type": "boolean" }
       },
-      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff", "repositoryReferences", "commitGraphProjection", "githubRepository", "githubPullRequest", "githubPullRequestCommitDiff", "githubSquashTrace", "gitlabProject", "gitlabMergeRequest", "gitlabMergeRequestCommitDiff", "gitlabSquashTrace", "repositoryMutations"]
+      "required": ["cancellation", "repositoryDiscovery", "workingTreeStatus", "structuredFileDiff", "paginatedCommitHistory", "structuredCommitDiff", "repositoryReferences", "commitGraphProjection", "githubRepository", "githubPullRequest", "githubPullRequestCommitDiff", "githubSquashTrace", "gitlabProject", "gitlabMergeRequest", "gitlabMergeRequestCommitDiff", "gitlabSquashTrace", "aiAssist", "repositoryMutations"]
     },
     "InitializeParams": {
       "type": "object",
@@ -546,6 +547,75 @@
       "type": "object", "additionalProperties": false,
       "properties": { "mergeRequest": { "$ref": "#/$defs/GitLabMergeRequest" }, "relationship": { "$ref": "#/$defs/SquashTraceRelationship" } },
       "required": ["mergeRequest", "relationship"]
+    },
+    "AiProviderKind": { "enum": ["ollama", "openAi"] },
+    "AiProviderConfig": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "ollama" }, "model": { "type": "string", "minLength": 1, "maxLength": 255 },
+            "baseUrl": { "type": "string", "minLength": 1, "maxLength": 512 }
+          }, "required": ["kind", "model"]
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "properties": { "kind": { "const": "openAi" }, "model": { "type": "string", "minLength": 1, "maxLength": 255 } },
+          "required": ["kind", "model"]
+        }
+      ]
+    },
+    "AiInputPreviewParams": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "provider": { "$ref": "#/$defs/AiProviderConfig" },
+        "excludedPaths": { "type": "array", "maxItems": 1000, "items": { "type": "string", "minLength": 1, "maxLength": 4096 }, "default": [] }
+      }, "required": ["provider"]
+    },
+    "AiDisclosureDestination": { "enum": ["local", "external"] },
+    "AiDisclosureFileState": { "enum": ["included", "excluded", "binary", "truncated"] },
+    "AiDisclosureFile": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string" }, "additions": { "type": "integer", "minimum": 0 }, "deletions": { "type": "integer", "minimum": 0 },
+        "patchBytes": { "type": "integer", "minimum": 0 }, "state": { "$ref": "#/$defs/AiDisclosureFileState" },
+        "reason": { "type": ["string", "null"] }
+      }, "required": ["path", "additions", "deletions", "patchBytes", "state", "reason"]
+    },
+    "AiInputPreview": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "previewId": { "type": "string", "minLength": 1 }, "indexFingerprint": { "type": "string", "minLength": 1 },
+        "providerKind": { "$ref": "#/$defs/AiProviderKind" }, "model": { "type": "string" },
+        "destination": { "$ref": "#/$defs/AiDisclosureDestination" }, "endpoint": { "type": "string" },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/AiDisclosureFile" } },
+        "stagedDiffBytes": { "type": "integer", "minimum": 0 }, "promptBytes": { "type": "integer", "minimum": 0 },
+        "truncated": { "type": "boolean" }, "externalConfirmationRequired": { "type": "boolean" }
+      }, "required": ["previewId", "indexFingerprint", "providerKind", "model", "destination", "endpoint", "files", "stagedDiffBytes", "promptBytes", "truncated", "externalConfirmationRequired"]
+    },
+    "AiGenerateCommitDraftParams": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "previewId": { "type": "string", "minLength": 1 }, "provider": { "$ref": "#/$defs/AiProviderConfig" },
+        "excludedPaths": { "type": "array", "maxItems": 1000, "items": { "type": "string", "minLength": 1, "maxLength": 4096 }, "default": [] },
+        "externalDisclosureConfirmed": { "type": "boolean", "default": false }
+      }, "required": ["previewId", "provider", "externalDisclosureConfirmed"]
+    },
+    "AiOperationSuggestionKind": { "enum": ["splitCommit", "runTests", "resolveConflicts", "reviewSensitiveData", "reviewLargeChange"] },
+    "AiOperationSuggestion": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "kind": { "$ref": "#/$defs/AiOperationSuggestionKind" }, "title": { "type": "string" }, "detail": { "type": "string" },
+        "affectedPaths": { "type": "array", "items": { "type": "string" } }
+      }, "required": ["kind", "title", "detail", "affectedPaths"]
+    },
+    "AiCommitDraft": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "previewId": { "type": "string" }, "providerKind": { "$ref": "#/$defs/AiProviderKind" }, "model": { "type": "string" },
+        "commitMessage": { "type": "string" }, "suggestions": { "type": "array", "items": { "$ref": "#/$defs/AiOperationSuggestion" } },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }, "required": ["previewId", "providerKind", "model", "commitMessage", "suggestions", "warnings"]
     }
   }
 }

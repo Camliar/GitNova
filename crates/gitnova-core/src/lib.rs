@@ -249,6 +249,7 @@ fn initialize(request: Request, state: &mut CoreState) -> Response {
             gitlab_merge_request: true,
             gitlab_merge_request_commit_diff: true,
             gitlab_squash_trace: true,
+            ai_assist: false,
             repository_mutations: true,
         },
     };

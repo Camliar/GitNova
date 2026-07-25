@@ -1,6 +1,6 @@
 # Repository Mutations
 
-Core protocol 1.13 exposes three explicit, worktree-only mutations. Hosts must show their own confirmation flow and call these methods only after direct user intent. Core never runs them during repository open, status refresh, history loading, Provider access, or Squash Trace.
+Core protocol 1.14 exposes three explicit, worktree-only mutations. Hosts must show their own confirmation flow and call these methods only after direct user intent. Core never runs them during repository open, status refresh, history loading, Provider access, Squash Trace, or AI Assist.
 
 ## Staged commit
 

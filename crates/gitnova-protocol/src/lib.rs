@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: &str = "1.13";
+pub const PROTOCOL_VERSION: &str = "1.14";
 
 pub const ERROR_PARSE: i64 = -32700;
 pub const ERROR_INVALID_REQUEST: i64 = -32600;
@@ -199,6 +199,7 @@ pub struct ServerCapabilities {
     pub gitlab_merge_request: bool,
     pub gitlab_merge_request_commit_diff: bool,
     pub gitlab_squash_trace: bool,
+    pub ai_assist: bool,
     pub repository_mutations: bool,
 }
 
@@ -806,6 +807,117 @@ pub struct GitLabSquashTrace {
     pub relationship: SquashTraceRelationship,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AiProviderKind {
+    Ollama,
+    OpenAi,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub enum AiProviderConfig {
+    Ollama {
+        model: String,
+        #[serde(default, rename = "baseUrl")]
+        base_url: Option<String>,
+    },
+    OpenAi {
+        model: String,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AiInputPreviewParams {
+    pub provider: AiProviderConfig,
+    #[serde(default)]
+    pub excluded_paths: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AiDisclosureDestination {
+    Local,
+    External,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AiDisclosureFileState {
+    Included,
+    Excluded,
+    Binary,
+    Truncated,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiDisclosureFile {
+    pub path: String,
+    pub additions: u64,
+    pub deletions: u64,
+    pub patch_bytes: u64,
+    pub state: AiDisclosureFileState,
+    pub reason: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiInputPreview {
+    pub preview_id: String,
+    pub index_fingerprint: String,
+    pub provider_kind: AiProviderKind,
+    pub model: String,
+    pub destination: AiDisclosureDestination,
+    pub endpoint: String,
+    pub files: Vec<AiDisclosureFile>,
+    pub staged_diff_bytes: u64,
+    pub prompt_bytes: u64,
+    pub truncated: bool,
+    pub external_confirmation_required: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AiGenerateCommitDraftParams {
+    pub preview_id: String,
+    pub provider: AiProviderConfig,
+    #[serde(default)]
+    pub excluded_paths: Vec<String>,
+    pub external_disclosure_confirmed: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AiOperationSuggestionKind {
+    SplitCommit,
+    RunTests,
+    ResolveConflicts,
+    ReviewSensitiveData,
+    ReviewLargeChange,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiOperationSuggestion {
+    pub kind: AiOperationSuggestionKind,
+    pub title: String,
+    pub detail: String,
+    pub affected_paths: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiCommitDraft {
+    pub preview_id: String,
+    pub provider_kind: AiProviderKind,
+    pub model: String,
+    pub commit_message: String,
+    pub suggestions: Vec<AiOperationSuggestion>,
+    pub warnings: Vec<String>,
+}
+
 #[derive(Clone, Default)]
 pub struct CancellationRegistry {
     cancelled: Arc<Mutex<HashSet<RequestId>>>,
@@ -847,6 +959,39 @@ mod tests {
         registry.cancel(id.clone());
         assert!(registry.take_cancelled(&id));
         assert!(!registry.take_cancelled(&id));
+    }
+
+    #[test]
+    fn ai_provider_contract_never_contains_credentials() {
+        let open_ai: AiProviderConfig = serde_json::from_value(serde_json::json!({
+            "kind": "openAi",
+            "model": "user-selected-model"
+        }))
+        .unwrap();
+        assert_eq!(
+            open_ai,
+            AiProviderConfig::OpenAi {
+                model: "user-selected-model".into()
+            }
+        );
+
+        let ollama = serde_json::to_value(AiProviderConfig::Ollama {
+            model: "local-model".into(),
+            base_url: Some("http://127.0.0.1:11434".into()),
+        })
+        .unwrap();
+        assert_eq!(ollama["kind"], "ollama");
+        assert_eq!(ollama["baseUrl"], "http://127.0.0.1:11434");
+        assert!(ollama.get("apiKey").is_none());
+
+        assert!(
+            serde_json::from_value::<AiProviderConfig>(serde_json::json!({
+                "kind": "openAi",
+                "model": "user-selected-model",
+                "apiKey": "must-not-cross-the-protocol"
+            }))
+            .is_err()
+        );
     }
 
     #[test]
@@ -919,6 +1064,17 @@ mod tests {
             "GitLabCommitFileDiff",
             "GitLabMergeRequestCommitDiff",
             "GitLabSquashTrace",
+            "AiProviderKind",
+            "AiProviderConfig",
+            "AiInputPreviewParams",
+            "AiDisclosureDestination",
+            "AiDisclosureFileState",
+            "AiDisclosureFile",
+            "AiInputPreview",
+            "AiGenerateCommitDraftParams",
+            "AiOperationSuggestionKind",
+            "AiOperationSuggestion",
+            "AiCommitDraft",
         ] {
             assert!(schema["$defs"].get(definition).is_some());
         }

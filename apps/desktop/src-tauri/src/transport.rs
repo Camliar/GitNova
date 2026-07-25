@@ -16,7 +16,25 @@ use std::time::{Duration, Instant};
 
 const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(15);
+const AI_RESPONSE_TIMEOUT: Duration = Duration::from_secs(75);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
+const HOST_CORE_METHODS: &[&str] = &[
+    "repository/open",
+    "repository/status",
+    "repository/diff",
+    "repository/graph",
+    "repository/commitDiff",
+    "repository/references",
+    "repository/commit",
+    "repository/createBranch",
+    "repository/switchBranch",
+    "github/repository",
+    "github/pullRequest",
+    "github/pullRequestCommitDiff",
+    "github/squashTrace",
+    "ai/inputPreview",
+    "ai/generateCommitDraft",
+];
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -258,9 +276,7 @@ impl CoreSupervisor {
     }
 
     pub fn request(&self, method: &str, params: Value) -> Result<Value, DesktopError> {
-        if !valid_method(method)
-            || matches!(method, "gitnova/initialize" | "gitnova/shutdown" | "exit")
-        {
+        if !allowed_host_method(method) {
             return Err(DesktopError::new(
                 "desktop.invalid_core_method",
                 "Core method is invalid",
@@ -335,9 +351,14 @@ impl CoreProcess {
             &serde_json::to_vec(&request).map_err(|_| DesktopError::protocol())?,
         )
         .map_err(|_| DesktopError::transport())?;
+        let timeout = if method == "ai/generateCommitDraft" {
+            AI_RESPONSE_TIMEOUT
+        } else {
+            RESPONSE_TIMEOUT
+        };
         let received = self
             .responses
-            .recv_timeout(RESPONSE_TIMEOUT)
+            .recv_timeout(timeout)
             .map_err(|_| DesktopError::transport())??;
         if received.response.jsonrpc != "2.0"
             || received.response.id != Some(RequestId::Number(id))
@@ -573,6 +594,10 @@ fn valid_method(method: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'_' | b'$'))
 }
 
+fn allowed_host_method(method: &str) -> bool {
+    valid_method(method) && HOST_CORE_METHODS.contains(&method)
+}
+
 fn write_frame(writer: &mut impl Write, body: &[u8]) -> io::Result<()> {
     if body.len() > MAX_FRAME_BYTES {
         return Err(io::Error::new(
@@ -666,7 +691,7 @@ function drain() {
           structuredFileDiff:true, paginatedCommitHistory:true, structuredCommitDiff:true,
           repositoryReferences:true, commitGraphProjection:true, githubRepository:true,
           githubPullRequest:true, githubPullRequestCommitDiff:true, githubSquashTrace:true,
-          gitlabProject:true, gitlabMergeRequest:true, gitlabMergeRequestCommitDiff:true, gitlabSquashTrace:true, aiAssist:false,
+          gitlabProject:true, gitlabMergeRequest:true, gitlabMergeRequestCommitDiff:true, gitlabSquashTrace:true, aiAssist:true,
           repositoryMutations:true
         }
       }});
@@ -707,6 +732,9 @@ function drain() {
     fn validates_method_and_protocol_requirements() {
         assert!(valid_method("repository/open"));
         assert!(!valid_method("repository/open?path=secret"));
+        assert!(allowed_host_method("ai/inputPreview"));
+        assert!(allowed_host_method("ai/generateCommitDraft"));
+        assert!(!allowed_host_method("test/echo"));
         assert_eq!(major_version("1.11"), Some("1"));
         assert_eq!(major_version("invalid"), None);
     }
@@ -724,9 +752,9 @@ function drain() {
         assert!(status.capabilities.unwrap().github_squash_trace);
 
         let response = supervisor
-            .request("test/echo", serde_json::json!({"safe": true}))
+            .request("repository/open", serde_json::json!({"safe": true}))
             .unwrap();
-        assert_eq!(response["result"]["method"], "test/echo");
+        assert_eq!(response["result"]["method"], "repository/open");
         assert!(!supervisor.shutdown().unwrap().connected);
     }
 

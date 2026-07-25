@@ -9,6 +9,7 @@ const diff = vi.hoisted(() => ({ getFileDiff: vi.fn() }));
 const history = vi.hoisted(() => ({ getCommitGraph: vi.fn() }));
 const commitDiff = vi.hoisted(() => ({ getCommitDiff: vi.fn() }));
 const mutations = vi.hoisted(() => ({ getRepositoryReferences: vi.fn(), commitStaged: vi.fn(), createLocalBranch: vi.fn(), switchLocalBranch: vi.fn() }));
+const ai = vi.hoisted(() => ({ previewAiInput: vi.fn(), generateAiCommitDraft: vi.fn() }));
 
 vi.mock("./core", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./core")>()),
@@ -22,6 +23,7 @@ vi.mock("./diff", () => diff);
 vi.mock("./history", () => history);
 vi.mock("./commitDiff", () => commitDiff);
 vi.mock("./mutations", () => mutations);
+vi.mock("./ai", () => ai);
 
 const descriptor = {
   worktreeRoot: "/work/project",
@@ -86,6 +88,37 @@ describe("Desktop repository open", () => {
     expect(await screen.findByText("Working tree clean")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Commit & branches" })).not.toBeInTheDocument();
     expect(mutations.getRepositoryReferences).not.toHaveBeenCalled();
+  });
+
+  it("hands an AI draft to the existing independent commit confirmation", async () => {
+    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.14", capabilities: { repositoryMutations: true, aiAssist: true } });
+    status.getWorkingTreeStatus.mockResolvedValue({
+      branch: { head: "main", oid: "a".repeat(40), upstream: null, ahead: 0, behind: 0 },
+      entries: [{ path: "src/app.ts", originalPath: null, kind: "ordinary", indexStatus: "modified", worktreeStatus: "unmodified" }],
+    });
+    ai.previewAiInput.mockResolvedValue({
+      previewId: "preview-1", indexFingerprint: "a".repeat(64), providerKind: "ollama", model: "local-model",
+      destination: "local", endpoint: "http://127.0.0.1:11434/api/generate",
+      files: [{ path: "src/app.ts", additions: 1, deletions: 0, patchBytes: 100, state: "included", reason: null }],
+      stagedDiffBytes: 100, promptBytes: 200, truncated: false, externalConfirmationRequired: false,
+    });
+    ai.generateAiCommitDraft.mockResolvedValue({ previewId: "preview-1", providerKind: "ollama", model: "local-model", commitMessage: "feat: generated draft", suggestions: [], warnings: [] });
+    const snapshot = { status: { branch: { head: "main", oid: "b".repeat(40), upstream: null, ahead: 0, behind: 0 }, entries: [] }, references: { head: { oid: "b".repeat(40), symbolicRef: "refs/heads/main" }, references: [] } };
+    mutations.commitStaged.mockResolvedValue({ commit: { oid: "b".repeat(40) }, snapshot });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    const aiPanel = await screen.findByRole("region", { name: "AI commit draft" });
+    fireEvent.change(within(aiPanel).getByLabelText("Model"), { target: { value: "local-model" } });
+    fireEvent.click(within(aiPanel).getByRole("button", { name: "Preview input" }));
+    fireEvent.click(await within(aiPanel).findByRole("button", { name: "Generate draft" }));
+    fireEvent.click(await within(aiPanel).findByRole("button", { name: "Use in commit" }));
+
+    const mutationPanel = screen.getByRole("region", { name: "Commit & branches" });
+    expect(within(mutationPanel).getByLabelText("Commit message")).toHaveValue("feat: generated draft");
+    fireEvent.click(within(mutationPanel).getByRole("button", { name: "Review commit" }));
+    expect(mutations.commitStaged).not.toHaveBeenCalled();
+    fireEvent.click(within(mutationPanel).getByRole("button", { name: "Confirm action" }));
+    expect(mutations.commitStaged).toHaveBeenCalledWith("feat: generated draft");
   });
 
   it("renders Core-projected commit order, HEAD, refs, and merge parents", async () => {

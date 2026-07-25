@@ -20,6 +20,10 @@ GitHub access remains off after repository open. The user must explicitly choose
 
 An original commit row can explicitly request its Core-validated `github/pullRequestCommitDiff`. Desktop renders Provider file statistics and structured patches; unavailable patches remain unknown rather than being labeled binary. The request cannot be used for an OID outside the displayed PR membership.
 
+When Core advertises `aiAssist`, a non-bare worktree also exposes an explicit AI commit draft panel. Desktop collects only Provider/model and repository-relative exclusions, then renders Core's offline disclosure preview; it never receives an API key, prompt, or raw patch. External OpenAI generation requires a preview-specific checkbox, while local Ollama still requires a button click. Configuration changes invalidate all prior consent and results. The editable draft can be copied into the existing commit form, but `repository/commit` remains behind its separate Review/Confirm flow.
+
+Native `core_request` accepts an explicit Host method allowlist. The AI methods are included, while lifecycle calls and arbitrary method strings cannot cross the Tauri bridge. AI generation receives a longer bounded transport timeout than local read requests.
+
 Run `pnpm --filter @gitnova/desktop check`, `test`, or `build` from the repository root. Debug and test builds may select an absolute Core executable with `GITNOVA_CORE_BINARY`; release builds resolve the bundled Core sidecar beside the Desktop executable. `npm run bundle:desktop` prepares that target-qualified sidecar before invoking Tauri bundling.
 
 Native configuration lives in `src-tauri`. Its default capability grants only Tauri core window/event functionality; no shell, network, filesystem, or process plugin is enabled.

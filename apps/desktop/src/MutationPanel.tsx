@@ -6,7 +6,7 @@ import { commitStaged, createLocalBranch, getRepositoryReferences, switchLocalBr
 type Pending = { kind: "commit"; message: string } | { kind: "create"; name: string } | { kind: "switch"; name: string };
 type Operation = { kind: "idle" } | { kind: "confirm"; pending: Pending } | { kind: "loading"; pending: Pending } | { kind: "error"; pending: Pending; error: DesktopError } | { kind: "success"; message: string };
 
-export function MutationPanel({ status, onApplied }: { status: WorkingTreeStatus; onApplied: (snapshot: RepositoryMutationSnapshot) => void }) {
+export function MutationPanel({ status, suggestedCommit, onApplied }: { status: WorkingTreeStatus; suggestedCommit: { id: number; message: string } | null; onApplied: (snapshot: RepositoryMutationSnapshot) => void }) {
   const [message, setMessage] = useState("");
   const [branchName, setBranchName] = useState("");
   const [switchName, setSwitchName] = useState("");
@@ -14,7 +14,14 @@ export function MutationPanel({ status, onApplied }: { status: WorkingTreeStatus
   const [operation, setOperation] = useState<Operation>({ kind: "idle" });
   const serial = useRef(0);
   const active = useRef(true);
+  const messageInput = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { const current = ++serial.current; void getRepositoryReferences().then((value) => { if (active.current && current === serial.current) setReferences({ kind: "ready", value }); }).catch((error) => { if (active.current && current === serial.current) setReferences({ kind: "error", error: asDesktopError(error) }); }); return () => { active.current = false; serial.current += 1; }; }, []);
+  useEffect(() => {
+    if (!suggestedCommit) return;
+    setMessage(suggestedCommit.message);
+    setOperation({ kind: "idle" });
+    messageInput.current?.focus();
+  }, [suggestedCommit]);
 
   const stagedCount = status.entries.filter((entry) => entry.indexStatus !== "unmodified").length;
   const localBranches = references.kind === "ready" ? references.value.references.filter((reference) => reference.kind === "localBranch") : [];
@@ -52,7 +59,7 @@ export function MutationPanel({ status, onApplied }: { status: WorkingTreeStatus
     <div className="mutation-grid">
       <form onSubmit={(event) => { event.preventDefault(); if (message.trim()) review({ kind: "commit", message }); }}>
         <h3>Commit staged changes</h3><p>{stagedCount} staged path{stagedCount === 1 ? "" : "s"}. Unstaged and untracked files will not be added.</p>
-        <label htmlFor="commit-message">Commit message</label><textarea id="commit-message" value={message} onChange={(event) => setMessage(event.target.value)} disabled={busy} />
+        <label htmlFor="commit-message">Commit message</label><textarea ref={messageInput} id="commit-message" value={message} onChange={(event) => setMessage(event.target.value)} disabled={busy} />
         <button type="submit" disabled={busy || !message.trim()}>Review commit</button>
       </form>
       <form onSubmit={(event) => { event.preventDefault(); if (branchName) review({ kind: "create", name: branchName }); }}>

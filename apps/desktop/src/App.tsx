@@ -13,11 +13,12 @@ import { getCommitDiff } from "./commitDiff";
 import { CommitDetailPanel, type CommitDetailState, type CommitSelection } from "./CommitDetailPanel";
 import { GitHubPanel } from "./GitHubPanel";
 import { MutationPanel } from "./MutationPanel";
+import { AiAssistPanel } from "./AiAssistPanel";
 
 type Connection =
   | { kind: "checking" }
   | { kind: "stopped" }
-  | { kind: "connected"; version: string; mutations: boolean }
+  | { kind: "connected"; version: string; mutations: boolean; aiAssist: boolean }
   | { kind: "error"; error: DesktopError };
 
 type RepositoryState =
@@ -45,6 +46,8 @@ export function App() {
   const historyRequest = useRef(0);
   const [commitDetail, setCommitDetail] = useState<CommitDetailState>({ kind: "idle" });
   const commitRequest = useRef(0);
+  const [aiCommitDraft, setAiCommitDraft] = useState<{ id: number; message: string } | null>(null);
+  const aiDraftSequence = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -54,7 +57,7 @@ export function App() {
         setEnvironment(status.environment ?? "local");
         setConnection(
           status.connected
-            ? { kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true }
+            ? { kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true, aiAssist: status.capabilities?.aiAssist === true }
             : { kind: "stopped" },
         );
       })
@@ -77,7 +80,7 @@ export function App() {
       await configureCore(target);
       const status = await startCore();
       setEnvironment(status.environment ?? environment);
-      setConnection({ kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true });
+      setConnection({ kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true, aiAssist: status.capabilities?.aiAssist === true });
     } catch (error) {
       setConnection({ kind: "error", error: asDesktopError(error) });
     }
@@ -96,6 +99,7 @@ export function App() {
       }
       const opened = await openRepository(path);
       setRepository({ kind: "open", repository: opened });
+      setAiCommitDraft(null);
       diffRequest.current += 1;
       setFileDiff({ kind: "idle" });
       if (opened.kind === "bare") setWorkingTree({ kind: "idle" });
@@ -114,6 +118,7 @@ export function App() {
     try {
       const opened = await openRepository(path);
       setRepository({ kind: "open", repository: opened });
+      setAiCommitDraft(null);
       diffRequest.current += 1;
       setFileDiff({ kind: "idle" });
       if (opened.kind === "bare") setWorkingTree({ kind: "idle" });
@@ -299,8 +304,11 @@ export function App() {
               onDiff={(path: string, scope: DiffScope) => void loadFileDiff({ path, scope })}
             />
           )}
+          {connection.kind === "connected" && connection.aiAssist && repository.kind === "open" && repository.repository.kind !== "bare" && workingTree.kind === "ready" && (
+            <AiAssistPanel key={`ai:${repository.repository.gitDirectory}`} onUseCommitMessage={(message) => setAiCommitDraft({ id: ++aiDraftSequence.current, message })} />
+          )}
           {connection.kind === "connected" && connection.mutations && repository.kind === "open" && repository.repository.kind !== "bare" && workingTree.kind === "ready" && (
-            <MutationPanel key={`mutations:${repository.repository.gitDirectory}`} status={workingTree.status} onApplied={applyMutation} />
+            <MutationPanel key={`mutations:${repository.repository.gitDirectory}`} status={workingTree.status} suggestedCommit={aiCommitDraft} onApplied={applyMutation} />
           )}
           {fileDiff.kind !== "idle" && (
             <DiffPanel

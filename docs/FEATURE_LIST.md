@@ -52,7 +52,7 @@
 - AI 不自动执行 commit 或 reset/rebase/push 等高风险操作
 - AI Assist 协议、Ollama/OpenAI Provider 与隐私契约（已实现）
 - Core staged input preview、commit draft 与结构化操作建议（已实现）
-- Desktop 输入披露、生成、草稿编辑与 commit 二次确认（后续 Task）
+- Desktop 输入披露、生成、草稿编辑与 commit 二次确认（已实现）
 
 AI Assist 必须排在 Squash Trace MVP、交付质量及 Post-MVP Host/Provider 之后，不得反向阻塞这些阶段。
 

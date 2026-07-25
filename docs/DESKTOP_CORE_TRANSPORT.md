@@ -14,7 +14,9 @@ Immediately after spawn, the Host sends `gitnova/initialize`. It accepts only th
 
 Requests are serialized through one supervisor. IDs are monotonically increasing integers. Both directions use the protocol `Content-Length` framing with a 16 MiB maximum. The Host validates JSON-RPC version, response ID, and the exclusive presence of `result` or `error`; malformed frames, unexpected EOF, timeouts, and mismatched responses fail closed and terminate the child.
 
-The Tauri boundary exposes only structured environment configuration, status, start, generic request transport, and shutdown commands. Environment changes are rejected while Core runs. Lifecycle methods cannot be sent through the generic command. Domain payloads remain opaque to the Host and are typed for UI consumers from the shared protocol package.
+The Tauri boundary exposes only structured environment configuration, status, start, allowlisted request transport, and shutdown commands. Environment changes are rejected while Core runs. Lifecycle and arbitrary methods cannot be sent through the generic command; the closed Desktop allowlist contains only methods used by its current Repository/GitHub/mutation/AI views. Domain payloads remain opaque to the Host and are typed for UI consumers from the shared protocol package.
+
+Local read and mutation requests retain the 15-second transport timeout. Explicit `ai/generateCommitDraft` receives a separate 75-second ceiling so Core's bounded 60-second Provider request can finish; timeout still fails closed and terminates the child. `ai/inputPreview` remains a normal local request and never receives the extended network budget.
 
 ## Shutdown and errors
 

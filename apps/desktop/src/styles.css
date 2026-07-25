@@ -127,6 +127,45 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
 .mutation-confirm--error { border-color: #9d5660; background: rgb(91 35 43 / 28%); }
 .mutation-success { color: #a9f5db; }
 .mutation-error, .mutation-confirm--error p { color: #ffc8c8; }
+.ai-panel { display: grid; gap: 18px; margin-top: 18px; padding: 22px; border: 1px solid #7655b4; border-radius: 18px; background: rgb(20 14 36 / 92%); }
+.ai-panel h2, .ai-panel h3, .ai-panel h4 { margin: 0; }
+.ai-panel > header, .ai-disclosure > header { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+.ai-intro, .ai-provider-note { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.ai-config { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.ai-config label, .ai-result > label { display: grid; align-content: start; gap: 7px; color: #d7c3ff; font-size: 11px; font-weight: 800; }
+.ai-config label span { color: var(--muted); font-size: 9px; font-weight: 600; }
+.ai-config input, .ai-config select, .ai-config textarea, .ai-result textarea { width: 100%; box-sizing: border-box; border: 1px solid #5e477e; border-radius: 9px; background: #0d0917; color: var(--text); font: inherit; }
+.ai-config input, .ai-config select { min-height: 40px; padding: 0 10px; }
+.ai-config textarea, .ai-result textarea { min-height: 90px; padding: 10px; resize: vertical; }
+.ai-config .ai-exclusions { grid-column: 1 / -1; }
+.ai-primary, .ai-error button { justify-self: start; min-height: 40px; padding: 0 15px; border: 1px solid #8466bd; border-radius: 10px; background: #8466bd; color: #0c0714; cursor: pointer; font-weight: 850; }
+.ai-primary:disabled { cursor: wait; opacity: .55; }
+.ai-error { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px; border: 1px solid #9d5660; border-radius: 10px; background: rgb(91 35 43 / 28%); }
+.ai-error p, .ai-warning, .ai-success { margin: 0; font-size: 12px; line-height: 1.5; }
+.ai-error p, .ai-warning { color: #ffc8c8; }
+.ai-success { color: #a9f5db; }
+.ai-disclosure, .ai-result { display: grid; gap: 15px; padding-top: 17px; border-top: 1px solid #49355f; }
+.ai-disclosure > header > strong { color: #d7c3ff; font-size: 11px; }
+.ai-disclosure dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.ai-disclosure dl div { display: grid; gap: 4px; }
+.ai-disclosure dt { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.ai-disclosure dd { margin: 0; font-size: 11px; overflow-wrap: anywhere; }
+.ai-files, .ai-result ul { display: grid; margin: 0; padding: 0; list-style: none; }
+.ai-files li { display: flex; align-items: start; justify-content: space-between; gap: 16px; padding: 10px 0; border-top: 1px solid #49355f; }
+.ai-files li > span { display: grid; justify-items: start; gap: 4px; min-width: 0; }
+.ai-files li > span:last-child { justify-items: end; text-align: right; }
+.ai-files strong, .ai-files small { overflow-wrap: anywhere; }
+.ai-files strong { font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ai-files small, .ai-result small { color: var(--muted); font-size: 9px; }
+.ai-file-state { padding: 3px 7px; border: 1px solid #5e477e; border-radius: 999px; color: #d7c3ff; font-size: 9px; text-transform: uppercase; }
+.ai-file-state--excluded, .ai-file-state--binary { border-color: #8d7542; color: #ffe0a3; }
+.ai-file-state--truncated { border-color: #9d5660; color: #ffc8c8; }
+.ai-confirm { display: flex; align-items: start; gap: 9px; padding: 12px; border: 1px solid #8d7542; border-radius: 10px; color: #ffe0a3; font-size: 11px; line-height: 1.5; }
+.ai-confirm input { flex: 0 0 auto; margin-top: 2px; }
+.ai-result > div { display: grid; gap: 8px; }
+.ai-result > div > ul { gap: 8px; }
+.ai-result > div > ul li { display: grid; gap: 4px; padding: 10px; border: 1px solid #49355f; border-radius: 9px; color: #dfe2ee; font-size: 11px; }
+.ai-result p { margin: 0; color: var(--muted); line-height: 1.5; }
 .commit-view { justify-self: start; min-height: 30px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text); cursor: pointer; font-size: 10px; font-weight: 800; }
 .commit-view:hover { background: var(--surface-raised); }
 .commit-view:disabled { cursor: wait; opacity: .6; }
@@ -242,6 +281,8 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
   .commit-graph { max-width: 36px; overflow: hidden; }
   .commit-detail__header { align-items: stretch; flex-direction: column; }
   .mutation-grid { grid-template-columns: 1fr; }
+  .ai-config, .ai-disclosure dl { grid-template-columns: 1fr; }
+  .ai-panel > header, .ai-disclosure > header, .ai-error { align-items: stretch; flex-direction: column; }
   .mutation-confirm { align-items: stretch; flex-direction: column; }
   .github-error { align-items: stretch; flex-direction: column; }
   .github-panel > header { align-items: start; flex-direction: column; }

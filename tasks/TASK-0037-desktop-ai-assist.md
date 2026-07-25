@@ -1,6 +1,6 @@
 # TASK-0037: Desktop AI Assist
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P2
 - **Owner:** Codex
 - **Branch:** `feature/037-desktop-ai-assist`
@@ -28,20 +28,19 @@
 
 ## Deliverables
 
-- [ ] Desktop AI Assist input preview and disclosure confirmation
-- [ ] editable commit draft, suggestions and warnings
-- [ ] explicit handoff into existing two-step commit workflow
-- [ ] bridge allowlist, tests, build and synchronized docs
+- [x] Desktop AI Assist input preview and disclosure confirmation
+- [x] editable commit draft, suggestions and warnings
+- [x] explicit handoff into existing two-step commit workflow
+- [x] bridge allowlist, tests, build and synchronized docs
 
 ## Review Checklist
 
-- [ ] 配置变化清除 preview、确认和旧 draft；stale preview 可安全重试。
-- [ ] OpenAI 未确认不能生成，Ollama 仍不会后台触发。
-- [ ] API key、prompt 和 raw diff 不进入 Host；UI 只显示 Core disclosure/result。
-- [ ] AI 不能直接调用 mutation，commit 保持独立用户确认。
-- [ ] Desktop typecheck、tests、production build 与 Rust transport tests 通过。
+- [x] 配置变化清除 preview、确认和旧 draft；stale preview 可安全重试。
+- [x] OpenAI 未确认不能生成，Ollama 仍不会后台触发。
+- [x] API key、prompt 和 raw diff 不进入 Host；UI 只显示 Core disclosure/result。
+- [x] AI 不能直接调用 mutation，commit 保持独立用户确认。
+- [x] Desktop typecheck、tests、production build 与 Rust transport tests 通过。
 
 ## Done Definition
 
-- [ ] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。
-
+- [x] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。

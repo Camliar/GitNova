@@ -40,6 +40,12 @@ AI Assist 是 Core-owned、显式触发的草稿能力。它不会提交代码�
 
 Core 必须验证模型 JSON 和字段长度，拒绝未知 suggestion kind，不回显原始响应。建议的 title/detail 仅是文本，不能包含可自动执行字段。生成完成不会调用 `repository/commit`；Host 必须让用户编辑草稿，并通过既有 mutation 二次确认。
 
+## Desktop workflow
+
+Desktop 只在 Core 声明 `aiAssist` 且已打开非 bare worktree 时显示 AI panel。Provider、model、loopback URL 或排除路径任一变化都会立即丢弃旧 preview、外部确认和 draft。Host 先显示 Core 返回的 endpoint、字节数、index binding 与逐文件状态；OpenAI 只有在用户勾选当前 preview 的披露确认后才可生成，Ollama 也只能由按钮显式触发。
+
+生成结果在 Host 中可编辑；“Use in commit”仅把文本送入现有 Commit & branches 表单并聚焦输入框。它不会调用 mutation。用户仍需点击“Review commit”，查看当前 staged index 的确认描述，再点击“Confirm action”才会调用 `repository/commit`。
+
 ## Stable errors
 
 实现提供以下稳定错误族：`ai.nothing_staged`、`ai.invalid_provider`、`ai.preview_stale`、`ai.external_confirmation_required`、`ai.credential_missing`、`ai.provider_unavailable`、`ai.request_failed`、`ai.response_invalid`、`ai.input_limit_exceeded`。错误不得携带 diff、prompt、response 或凭据。

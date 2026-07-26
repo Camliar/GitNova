@@ -365,6 +365,77 @@ fn repository_sync_requires_an_open_worktree_and_safe_current_context() {
 }
 
 #[test]
+fn checks_out_only_a_verified_remote_branch_and_creates_direct_tracking() {
+    let directory = TestDirectory::new("remote-branch-checkout");
+    git(&["init", "--bare", "remote.git"], &directory.0);
+    git(&["init", "seed"], &directory.0);
+    let seed = directory.0.join("seed");
+    git(&["symbolic-ref", "HEAD", "refs/heads/main"], &seed);
+    git(&["config", "user.name", "Ada"], &seed);
+    git(&["config", "user.email", "ada@example.com"], &seed);
+    fs::write(seed.join("tracked.txt"), "one\n").unwrap();
+    git(&["add", "tracked.txt"], &seed);
+    git(&["commit", "-qm", "initial"], &seed);
+    git(&["branch", "feature/nested"], &seed);
+    git(&["branch", "collision"], &seed);
+    let remote = directory.0.join("remote.git");
+    git(
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+        &seed,
+    );
+    git(
+        &["push", "origin", "main", "feature/nested", "collision"],
+        &seed,
+    );
+    git(&["symbolic-ref", "HEAD", "refs/heads/main"], &remote);
+    git(&["clone", remote.to_str().unwrap(), "local"], &directory.0);
+    let local = directory.0.join("local");
+    git(&["branch", "collision"], &local);
+    let head = head_oid(&local);
+
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &local),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/checkoutRemoteBranch","params":{"fullName":"refs/remotes/origin/feature/nested","expectedHeadOid":head}}),
+    ]);
+    let values = responses(&output.stdout);
+    assert_eq!(
+        values[2]["result"]["status"]["branch"]["head"], "feature/nested",
+        "{}",
+        values[2]
+    );
+    assert_eq!(
+        values[2]["result"]["status"]["branch"]["upstream"],
+        "origin/feature/nested"
+    );
+
+    git(&["switch", "main"], &local);
+    let current = head_oid(&local);
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &local),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/checkoutRemoteBranch","params":{"fullName":"refs/remotes/origin/HEAD","expectedHeadOid":current}}),
+        json!({"jsonrpc":"2.0","id":4,"method":"repository/checkoutRemoteBranch","params":{"fullName":"refs/remotes/origin/collision","expectedHeadOid":current}}),
+        json!({"jsonrpc":"2.0","id":5,"method":"repository/checkoutRemoteBranch","params":{"fullName":"refs/remotes/origin/feature/nested","expectedHeadOid":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}),
+        json!({"jsonrpc":"2.0","id":6,"method":"repository/checkoutRemoteBranch","params":{"fullName":"refs/heads/main","expectedHeadOid":current}}),
+    ]);
+    let values = responses(&output.stdout);
+    assert_eq!(values[2]["error"]["data"]["stableCode"], "branch.not_found");
+    assert_eq!(
+        values[3]["error"]["data"]["stableCode"],
+        "branch.already_exists"
+    );
+    assert_eq!(
+        values[4]["error"]["data"]["stableCode"],
+        "branch.stale_head"
+    );
+    assert_eq!(
+        values[5]["error"]["data"]["stableCode"],
+        "protocol.invalid_params"
+    );
+}
+
+#[test]
 fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let output = run(&[
         initialize(json!("init-1")),
@@ -376,7 +447,7 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let responses = responses(&output.stdout);
     assert_eq!(responses.len(), 2);
     assert_eq!(responses[0]["id"], "init-1");
-    assert_eq!(responses[0]["result"]["protocolVersion"], "1.18");
+    assert_eq!(responses[0]["result"]["protocolVersion"], "1.19");
     assert_eq!(responses[0]["result"]["capabilities"]["cancellation"], true);
     assert_eq!(
         responses[0]["result"]["capabilities"]["workingTreeStatus"],
@@ -396,6 +467,10 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     );
     assert_eq!(
         responses[0]["result"]["capabilities"]["repositorySync"],
+        true
+    );
+    assert_eq!(
+        responses[0]["result"]["capabilities"]["remoteBranchCheckout"],
         true
     );
     assert_eq!(

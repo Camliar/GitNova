@@ -1,6 +1,6 @@
 # AI Assist Contract
 
-AI Assist 是 Core-owned、显式触发的草稿能力。它不会提交代码、修改 index、运行 shell、调用任意工具或在后台发送仓库数据。当前协议 1.18 的 Core 通过 capability `aiAssist: true` 提供预览与生成方法。
+AI Assist 是 Core-owned、显式触发的草稿能力。它不会提交代码、修改 index、运行 shell、调用任意工具或在后台发送仓库数据。当前协议 1.19 的 Core 通过 capability `aiAssist: true` 提供预览与生成方法。
 
 ## Provider boundary
 

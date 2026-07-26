@@ -11,9 +11,9 @@ use gitnova_protocol::{
     ERROR_AI_INPUT_LIMIT, ERROR_AI_INVALID_PROVIDER, ERROR_AI_NOTHING_STAGED,
     ERROR_AI_PREVIEW_STALE, ERROR_AI_PROVIDER_UNAVAILABLE, ERROR_AI_REQUEST_FAILED,
     ERROR_AI_RESPONSE_INVALID, ERROR_ALREADY_INITIALIZED, ERROR_BRANCH_ALREADY_EXISTS,
-    ERROR_BRANCH_NOT_FOUND, ERROR_COMMIT_DIFF_PARSE, ERROR_COMMIT_FILE_DIFF_LIMIT,
-    ERROR_COMMIT_FILE_LIMIT, ERROR_COMMIT_MESSAGE_REQUIRED, ERROR_COMMIT_NOT_FOUND,
-    ERROR_COMMIT_PARENT_REQUIRED, ERROR_COMMIT_PARSE, ERROR_DIFF_PARSE,
+    ERROR_BRANCH_NOT_FOUND, ERROR_BRANCH_STALE_HEAD, ERROR_COMMIT_DIFF_PARSE,
+    ERROR_COMMIT_FILE_DIFF_LIMIT, ERROR_COMMIT_FILE_LIMIT, ERROR_COMMIT_MESSAGE_REQUIRED,
+    ERROR_COMMIT_NOT_FOUND, ERROR_COMMIT_PARENT_REQUIRED, ERROR_COMMIT_PARSE, ERROR_DIFF_PARSE,
     ERROR_DIFFERENT_REPOSITORY_OPEN, ERROR_GH_UNAVAILABLE, ERROR_GIT_COMMAND_FAILED,
     ERROR_GIT_UNAVAILABLE, ERROR_GITHUB_AUTH_REQUIRED, ERROR_GITHUB_COMMIT_ASSOCIATION_AMBIGUOUS,
     ERROR_GITHUB_COMMIT_FILE_LIMIT, ERROR_GITHUB_COMMIT_NOT_IN_PR, ERROR_GITHUB_INVALID_REMOTE,
@@ -37,9 +37,9 @@ use gitnova_protocol::{
     GitHubPullRequestCommitFilesParams, GitHubPullRequestParams, GitHubRepositoryParams,
     GitLabMergeRequestCommitDiffParams, GitLabMergeRequestParams, GitLabProjectParams,
     HistoryParams, ImplementationInfo, InitializeParams, InitializeResult, JSON_RPC_VERSION,
-    Notification, PROTOCOL_VERSION, RepositoryDescriptor, RepositoryFetchParams,
-    RepositoryPathParams, RepositorySyncOperation, RepositorySyncParams, Request, Response,
-    ResponseError, ServerCapabilities,
+    Notification, PROTOCOL_VERSION, RemoteBranchCheckoutParams, RepositoryDescriptor,
+    RepositoryFetchParams, RepositoryPathParams, RepositorySyncOperation, RepositorySyncParams,
+    Request, Response, ResponseError, ServerCapabilities,
 };
 use serde_json::Value;
 use std::io::{self, BufRead, Write};
@@ -187,6 +187,7 @@ fn dispatch_request(
         "repository/commit" => commit_request(request, state),
         "repository/createBranch" => branch_request(request, state, false),
         "repository/switchBranch" => branch_request(request, state, true),
+        "repository/checkoutRemoteBranch" => checkout_remote_branch_request(request, state),
         "repository/fetch" => repository_fetch_request(request, state),
         "repository/pull" => repository_sync_request(request, state, RepositorySyncOperation::Pull),
         "repository/push" => repository_sync_request(request, state, RepositorySyncOperation::Push),
@@ -274,6 +275,7 @@ fn initialize(request: Request, state: &mut CoreState) -> Response {
             lazy_commit_diff: true,
             history_squash_trace: true,
             repository_sync: true,
+            remote_branch_checkout: true,
             repository_references: true,
             commit_graph_projection: true,
             github_repository: true,
@@ -528,6 +530,12 @@ fn repository_error(error: repository::RepositoryError) -> ResponseError {
             "branch.not_found",
             "Local branch was not found",
             false,
+        ),
+        repository::RepositoryError::BranchStaleHead => ResponseError::new(
+            ERROR_BRANCH_STALE_HEAD,
+            "branch.stale_head",
+            "HEAD changed after the remote branch checkout was confirmed",
+            true,
         ),
         repository::RepositoryError::UnbornHead => ResponseError::new(
             ERROR_UNBORN_HEAD,
@@ -1174,6 +1182,33 @@ fn branch_request(request: Request, state: &CoreState, switch: bool) -> Response
         Ok(snapshot) => Response::success(
             request.id,
             serde_json::to_value(snapshot).expect("serializable mutation snapshot"),
+        ),
+        Err(error) => Response::error(Some(request.id), repository_error(error)),
+    }
+}
+
+fn checkout_remote_branch_request(request: Request, state: &CoreState) -> Response {
+    let params = match serde_json::from_value::<RemoteBranchCheckoutParams>(request.params) {
+        Ok(params)
+            if params.full_name.starts_with("refs/remotes/")
+                && params.full_name.len() <= 4096
+                && valid_full_oid(&params.expected_head_oid) =>
+        {
+            params
+        }
+        _ => return invalid_params(request.id, "Invalid remote branch checkout parameters"),
+    };
+    let Some(descriptor) = &state.active_repository else {
+        return repository_not_open(request.id, "checking out a remote branch");
+    };
+    match repository::checkout_remote_branch(
+        descriptor,
+        &params.full_name,
+        &params.expected_head_oid,
+    ) {
+        Ok(snapshot) => Response::success(
+            request.id,
+            serde_json::to_value(snapshot).expect("serializable remote branch checkout snapshot"),
         ),
         Err(error) => Response::error(Some(request.id), repository_error(error)),
     }

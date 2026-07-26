@@ -28,9 +28,9 @@ spawn → gitnova/initialize → requests and notifications → gitnova/shutdown
 
 ## Initialize
 
-`gitnova/initialize` 参数包含 `clientInfo`、`protocolVersion` 和 Host capabilities。结果包含 `coreInfo`、协商后的协议版本和 Core capabilities。初始协议版本为 `1.0`，当前版本为 `1.18`；主版本不同即不兼容，次版本能力通过 capability 字段协商。
+`gitnova/initialize` 参数包含 `clientInfo`、`protocolVersion` 和 Host capabilities。结果包含 `coreInfo`、协商后的协议版本和 Core capabilities。初始协议版本为 `1.0`，当前版本为 `1.19`；主版本不同即不兼容，次版本能力通过 capability 字段协商。
 
-Core 当前另声明 `repositoryMutations`、optional `lazyCommitDiff`、optional `historySquashTrace` 与 optional `repositorySync` capability；完整 capability 由 Schema 定义。支持 `lazyCommitDiff` 的 Host 应先调用 `repository/commitFiles` 获取有界文件 metadata，只在用户选择文件后调用 `repository/commitFileDiff`。支持 `historySquashTrace` 的 Host 可在用户显式触发后调用 `github/commitSquashTrace`，再通过 `github/pullRequestCommitFiles` 与 `github/pullRequestCommitFileDiff` 按需查看 original commit。支持 `repositorySync` 的 Host 可显式调用 `repository/fetch`，并在二次确认后调用绑定 branch/HEAD 的 `repository/pull` 与 `repository/push`。仓库方法及路径语义见[仓库发现](REPOSITORIES.md)，写操作安全契约见[Repository Mutations](MUTATIONS.md)，其余读模型与 Provider 文档保持各自事实来源。
+Core 当前另声明 `repositoryMutations`、optional `lazyCommitDiff`、optional `historySquashTrace`、optional `repositorySync` 与 optional `remoteBranchCheckout` capability；完整 capability 由 Schema 定义。支持 `lazyCommitDiff` 的 Host 应先调用 `repository/commitFiles` 获取有界文件 metadata，只在用户选择文件后调用 `repository/commitFileDiff`。支持 `historySquashTrace` 的 Host 可在用户显式触发后调用 `github/commitSquashTrace`，再通过 `github/pullRequestCommitFiles` 与 `github/pullRequestCommitFileDiff` 按需查看 original commit。支持 `repositorySync` 的 Host 可显式调用 `repository/fetch`，并在二次确认后调用绑定 branch/HEAD 的 `repository/pull` 与 `repository/push`。支持 `remoteBranchCheckout` 的 Host 可把 Core 返回的完整 remote ref 与确认时 HEAD OID 原样传给 `repository/checkoutRemoteBranch`；remote/local branch 名的解析仍由 Core 完成。仓库方法及路径语义见[仓库发现](REPOSITORIES.md)，写操作安全契约见[Repository Mutations](MUTATIONS.md)，其余读模型与 Provider 文档保持各自事实来源。
 
 请求 id 可以是 JSON string 或 integer，Core 必须在响应中保持其类型和值。
 
@@ -116,6 +116,7 @@ JSON-RPC error 使用标准数值 `code`，同时在 `data.stableCode` 提供稳
 | `-32166` | `sync.fetch_failed` | Fetch 失败 |
 | `-32167` | `sync.pull_failed` | fast-forward 更新工作树失败 |
 | `-32168` | `sync.push_failed` | non-force Push 被拒绝或不可达 |
+| `-32169` | `branch.stale_head` | remote checkout 确认后的 current HEAD 已变化 |
 | `-32800` | `request.cancelled` | 请求已取消 |
 
 GitLab Provider 方法为 `gitlab/project`、`gitlab/mergeRequest`、`gitlab/mergeRequestCommitDiff` 和 `gitlab/squashTrace`。`pathWithNamespace` 可覆盖 remote path，但 hostname 始终来自已验证 remote；任何网络动作仍必须由 Host 显式触发。

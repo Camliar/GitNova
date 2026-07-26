@@ -5,7 +5,7 @@ namespace GitNova.VisualStudio.Transport;
 
 public sealed class GitNovaCoreService : IAsyncDisposable
 {
-    public const string ProtocolVersion = "1.18";
+    public const string ProtocolVersion = "1.19";
     private readonly SemaphoreSlim startup = new(1, 1);
     private CoreProtocolClient? client;
 

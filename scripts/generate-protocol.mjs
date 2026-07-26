@@ -9,7 +9,7 @@ const requiredDefinitions = [
   "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus",
   "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage",
   "CommitDiffParams", "CommitDiff", "CommitFilesParams", "CommitChangedFile", "CommitFiles", "CommitFileDiffParams", "ReferenceKind", "RepositoryHead",
-  "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage", "CommitParams", "BranchParams", "RepositoryFetchParams", "RepositorySyncParams", "RepositoryMutationSnapshot", "RepositorySyncOperation", "RepositorySyncResult", "CommitResult",
+  "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage", "CommitParams", "BranchParams", "RemoteBranchCheckoutParams", "RepositoryFetchParams", "RepositorySyncParams", "RepositoryMutationSnapshot", "RepositorySyncOperation", "RepositorySyncResult", "CommitResult",
   "GitHubRepositoryParams", "GitHubRepository", "GitHubPullRequestParams", "GitHubPullRequestState", "GitHubPullRequestRef", "GitHubCommitIdentity",
   "GitHubPullRequestCommit", "GitHubPullRequest", "GitHubPullRequestCommitDiffParams", "GitHubFileStatus", "GitHubPatchState", "GitHubCommitFileDiff",
   "GitHubPullRequestCommitDiff", "SquashTraceClassification", "SquashTraceConfidence", "SquashTraceLocalAvailability", "SquashTraceEvidence",
@@ -51,6 +51,7 @@ export interface ServerCapabilities {
   lazyCommitDiff?: boolean;
   historySquashTrace?: boolean;
   repositorySync?: boolean;
+  remoteBranchCheckout?: boolean;
   repositoryReferences: boolean;
   commitGraphProjection: boolean;
   githubRepository: boolean;
@@ -259,6 +260,11 @@ export interface CommitParams {
 
 export interface BranchParams {
   name: string;
+}
+
+export interface RemoteBranchCheckoutParams {
+  fullName: string;
+  expectedHeadOid: string;
 }
 
 export interface RepositoryFetchParams {

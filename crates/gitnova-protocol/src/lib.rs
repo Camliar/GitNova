@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: &str = "1.18";
+pub const PROTOCOL_VERSION: &str = "1.19";
 
 pub const ERROR_PARSE: i64 = -32700;
 pub const ERROR_INVALID_REQUEST: i64 = -32600;
@@ -85,6 +85,7 @@ pub const ERROR_SYNC_DIVERGED: i64 = -32165;
 pub const ERROR_SYNC_FETCH_FAILED: i64 = -32166;
 pub const ERROR_SYNC_PULL_FAILED: i64 = -32167;
 pub const ERROR_SYNC_PUSH_FAILED: i64 = -32168;
+pub const ERROR_BRANCH_STALE_HEAD: i64 = -32169;
 pub const ERROR_REQUEST_CANCELLED: i64 = -32800;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -216,6 +217,8 @@ pub struct ServerCapabilities {
     pub history_squash_trace: bool,
     #[serde(default)]
     pub repository_sync: bool,
+    #[serde(default)]
+    pub remote_branch_checkout: bool,
     pub repository_references: bool,
     pub commit_graph_projection: bool,
     pub github_repository: bool,
@@ -513,6 +516,13 @@ pub struct CommitParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BranchParams {
     pub name: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RemoteBranchCheckoutParams {
+    pub full_name: String,
+    pub expected_head_oid: String,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -1228,6 +1238,7 @@ mod tests {
             "CommitGraphPage",
             "CommitParams",
             "BranchParams",
+            "RemoteBranchCheckoutParams",
             "RepositoryFetchParams",
             "RepositorySyncParams",
             "RepositoryMutationSnapshot",

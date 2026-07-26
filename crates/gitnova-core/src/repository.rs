@@ -40,6 +40,7 @@ pub enum RepositoryError {
     InvalidBranchName,
     BranchAlreadyExists,
     BranchNotFound,
+    BranchStaleHead,
     UnbornHead,
     MutationFailed,
     SyncInvalidRemote,
@@ -259,6 +260,81 @@ pub fn switch_branch(
         return Err(RepositoryError::MutationFailed);
     }
     mutation_snapshot(descriptor)
+}
+
+pub fn checkout_remote_branch(
+    descriptor: &RepositoryDescriptor,
+    full_name: &str,
+    expected_head_oid: &str,
+) -> Result<gitnova_protocol::RepositoryMutationSnapshot, RepositoryError> {
+    let base = mutation_base(descriptor)?;
+    if full_name.len() > 4096
+        || !full_name.starts_with("refs/remotes/")
+        || full_name.chars().any(char::is_control)
+    {
+        return Err(RepositoryError::BranchNotFound);
+    }
+    ensure_head_oid(descriptor, expected_head_oid)?;
+    let target = references(descriptor)?
+        .references
+        .into_iter()
+        .find(|reference| {
+            reference.kind == ReferenceKind::RemoteBranch
+                && reference.full_name == full_name
+                && reference.symbolic_target.is_none()
+        })
+        .ok_or(RepositoryError::BranchNotFound)?;
+    let mut configured_remotes = remotes(base)?;
+    configured_remotes.sort_by_key(|remote| std::cmp::Reverse(remote.len()));
+    let local_name = configured_remotes
+        .iter()
+        .find_map(|remote| {
+            target
+                .full_name
+                .strip_prefix(&format!("refs/remotes/{remote}/"))
+        })
+        .filter(|name| !name.is_empty())
+        .ok_or(RepositoryError::BranchNotFound)?;
+    validate_branch(base, local_name)?;
+    if local_branch_exists(base, local_name)? {
+        return Err(RepositoryError::BranchAlreadyExists);
+    }
+    ensure_head_oid(descriptor, expected_head_oid)?;
+    let output = mutation_output(
+        base,
+        &[
+            "switch",
+            "--track",
+            "--no-guess",
+            "-c",
+            local_name,
+            &target.full_name,
+        ],
+        None,
+    )?;
+    if !output.success {
+        return Err(RepositoryError::MutationFailed);
+    }
+    mutation_snapshot(descriptor)
+}
+
+fn ensure_head_oid(
+    descriptor: &RepositoryDescriptor,
+    expected_head_oid: &str,
+) -> Result<(), RepositoryError> {
+    let current = status(descriptor)?.branch;
+    if current.head.is_none() {
+        return Err(RepositoryError::SyncBranchRequired);
+    }
+    if current
+        .oid
+        .as_deref()
+        .is_some_and(|oid| oid.eq_ignore_ascii_case(expected_head_oid))
+    {
+        Ok(())
+    } else {
+        Err(RepositoryError::BranchStaleHead)
+    }
 }
 
 #[derive(Debug)]

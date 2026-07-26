@@ -18,13 +18,13 @@ import { MutationPanel } from "./MutationPanel";
 import { AiAssistPanel } from "./AiAssistPanel";
 import { AiSettingsPanel, defaultAiAssistSettings } from "./AiSettingsPanel";
 import { RepositoryRefTree, type ReferencesState } from "./RepositoryRefTree";
-import { getRepositoryReferences, switchLocalBranch } from "./mutations";
+import { checkoutRemoteBranch, getRepositoryReferences, switchLocalBranch } from "./mutations";
 import { RepositorySyncControls } from "./RepositorySyncControls";
 
 type Connection =
   | { kind: "checking" }
   | { kind: "stopped" }
-  | { kind: "connected"; version: string; mutations: boolean; references: boolean; aiAssist: boolean; lazyCommitDiff: boolean; historySquashTrace: boolean; repositorySync: boolean }
+  | { kind: "connected"; version: string; mutations: boolean; references: boolean; aiAssist: boolean; lazyCommitDiff: boolean; historySquashTrace: boolean; repositorySync: boolean; remoteBranchCheckout: boolean }
   | { kind: "error"; error: DesktopError };
 
 type RepositoryState =
@@ -34,7 +34,10 @@ type RepositoryState =
   | { kind: "error"; error: DesktopError };
 
 type WorkspaceView = "changes" | "history" | "pullRequests" | "settings";
-type BranchOperation = { kind: "idle" } | { kind: "confirm"; name: string } | { kind: "loading"; name: string } | { kind: "error"; name: string; error: DesktopError };
+type BranchTarget =
+  | { kind: "local"; name: string }
+  | { kind: "remote"; fullName: string; displayName: string; expectedHeadOid: string };
+type BranchOperation = { kind: "idle" } | { kind: "confirm"; target: BranchTarget } | { kind: "loading"; target: BranchTarget } | { kind: "error"; target: BranchTarget; error: DesktopError };
 type HistorySquashState = { kind: "idle" } | { kind: "loading"; oid: string } | { kind: "ready"; trace: GitHubSquashTrace } | { kind: "none"; oid: string } | { kind: "error"; oid: string; error: DesktopError };
 
 const repositoryKindLabel: Record<RepositoryDescriptor["kind"], string> = {
@@ -197,7 +200,7 @@ export function App() {
       referencesRequest.current += 1;
       setReferences({ kind: "idle" });
     }
-    setConnection({ kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true, references: referencesCapability.current, aiAssist: status.capabilities?.aiAssist === true, lazyCommitDiff: status.capabilities?.lazyCommitDiff === true, historySquashTrace: status.capabilities?.historySquashTrace === true, repositorySync: status.capabilities?.repositorySync === true });
+    setConnection({ kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true, references: referencesCapability.current, aiAssist: status.capabilities?.aiAssist === true, lazyCommitDiff: status.capabilities?.lazyCommitDiff === true, historySquashTrace: status.capabilities?.historySquashTrace === true, repositorySync: status.capabilities?.repositorySync === true, remoteBranchCheckout: status.capabilities?.remoteBranchCheckout === true });
   }
 
   function rememberRepository(bookmark: RepositoryBookmark) {
@@ -337,18 +340,25 @@ export function App() {
   }
 
   function reviewBranchSwitch(name: string) {
-    setBranchOperation({ kind: "confirm", name });
+    setBranchOperation({ kind: "confirm", target: { kind: "local", name } });
   }
 
-  async function confirmBranchSwitch(name: string) {
-    setBranchOperation({ kind: "loading", name });
+  function reviewRemoteBranchCheckout(fullName: string, displayName: string) {
+    if (workingTree.kind !== "ready" || !workingTree.status.branch.oid) return;
+    setBranchOperation({ kind: "confirm", target: { kind: "remote", fullName, displayName, expectedHeadOid: workingTree.status.branch.oid } });
+  }
+
+  async function confirmBranchSwitch(target: BranchTarget) {
+    setBranchOperation({ kind: "loading", target });
     try {
-      const snapshot = await switchLocalBranch(name);
+      const snapshot = target.kind === "local"
+        ? await switchLocalBranch(target.name)
+        : await checkoutRemoteBranch(target.fullName, target.expectedHeadOid);
       setReferences({ kind: "ready", value: snapshot.references });
       applyMutation(snapshot);
       setBranchOperation({ kind: "idle" });
     } catch (error) {
-      setBranchOperation({ kind: "error", name, error: asDesktopError(error) });
+      setBranchOperation({ kind: "error", target, error: asDesktopError(error) });
     }
   }
 
@@ -575,9 +585,9 @@ export function App() {
       </header>
 
       {(branchOperation.kind === "confirm" || branchOperation.kind === "loading" || branchOperation.kind === "error") && <div className="branch-confirmation" role="group" aria-label="Confirm branch switch">
-        <span>Switch to <strong>{branchOperation.name}</strong>? Working changes will be kept; GitNova will not stash or discard them.</span>
+        <span>{branchOperation.target.kind === "local" ? <>Switch to <strong>{branchOperation.target.name}</strong>?</> : <>Create and switch to a local branch tracking <strong>{branchOperation.target.displayName}</strong>?</>} Working changes will be kept; GitNova will not stash or discard them.</span>
         {branchOperation.kind === "error" && <span role="alert">{branchOperation.error.message}</span>}
-        <div><button type="button" disabled={branchOperation.kind === "loading"} onClick={() => setBranchOperation({ kind: "idle" })}>Cancel</button><button type="button" disabled={branchOperation.kind === "loading"} onClick={() => void confirmBranchSwitch(branchOperation.name)}>{branchOperation.kind === "loading" ? "Switching…" : branchOperation.kind === "error" ? "Retry" : "Switch branch"}</button></div>
+        <div><button type="button" disabled={branchOperation.kind === "loading"} onClick={() => setBranchOperation({ kind: "idle" })}>Cancel</button><button type="button" disabled={branchOperation.kind === "loading"} onClick={() => void confirmBranchSwitch(branchOperation.target)}>{branchOperation.kind === "loading" ? "Switching…" : branchOperation.kind === "error" ? "Retry" : branchOperation.target.kind === "local" ? "Switch branch" : "Create and switch"}</button></div>
       </div>}
 
       {openedRepository ? (
@@ -589,7 +599,7 @@ export function App() {
               <button type="button" className={workspaceView === "pullRequests" ? "is-active" : ""} onClick={() => setWorkspaceView("pullRequests")}><span>Pull Requests</span></button>
               <button type="button" className={workspaceView === "settings" ? "is-active" : ""} onClick={() => setWorkspaceView("settings")}><span>Settings</span></button>
             </nav>
-            <RepositoryRefTree state={references} currentBranch={workingTree.kind === "ready" ? workingTree.status.branch.head : null} canSwitch={connection.kind === "connected" && connection.mutations} onSwitch={reviewBranchSwitch} />
+            <RepositoryRefTree state={references} currentBranch={workingTree.kind === "ready" ? workingTree.status.branch.head : null} canSwitch={connection.kind === "connected" && connection.mutations} canCheckoutRemote={connection.kind === "connected" && connection.remoteBranchCheckout && workingTree.kind === "ready" && workingTree.status.branch.oid !== null} onSwitch={reviewBranchSwitch} onCheckoutRemote={reviewRemoteBranchCheckout} />
             <dl className="repository-facts">
               <div><dt>Core</dt><dd>{coreDetail}</dd></div>
               <div><dt>System Git</dt><dd>{openedRepository.gitVersion}</dd></div>

@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitnova.dev/schema/protocol/1.18/gitnova-protocol.schema.json",
-  "title": "GitNova Core Protocol 1.18",
+  "$id": "https://gitnova.dev/schema/protocol/1.19/gitnova-protocol.schema.json",
+  "title": "GitNova Core Protocol 1.19",
   "type": "object",
-  "properties": { "protocolVersion": { "const": "1.18" } },
+  "properties": { "protocolVersion": { "const": "1.19" } },
   "required": ["protocolVersion"],
   "$defs": {
     "RequestId": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
@@ -31,6 +31,7 @@
         "lazyCommitDiff": { "type": "boolean" },
         "historySquashTrace": { "type": "boolean" },
         "repositorySync": { "type": "boolean" },
+        "remoteBranchCheckout": { "type": "boolean" },
         "repositoryReferences": { "type": "boolean" },
         "commitGraphProjection": { "type": "boolean" },
         "githubRepository": { "type": "boolean" },
@@ -341,6 +342,14 @@
       "type": "object", "additionalProperties": false,
       "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 255 } },
       "required": ["name"]
+    },
+    "RemoteBranchCheckoutParams": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "fullName": { "type": "string", "minLength": 14, "maxLength": 4096, "pattern": "^refs/remotes/" },
+        "expectedHeadOid": { "type": "string", "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$" }
+      },
+      "required": ["fullName", "expectedHeadOid"]
     },
     "RepositoryFetchParams": {
       "type": "object", "additionalProperties": false,

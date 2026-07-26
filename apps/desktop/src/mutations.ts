@@ -1,4 +1,4 @@
-import type { BranchParams, CommitParams, CommitResult, RepositoryMutationSnapshot, RepositoryReferences } from "@gitnova/protocol";
+import type { BranchParams, CommitParams, CommitResult, RemoteBranchCheckoutParams, RepositoryMutationSnapshot, RepositoryReferences } from "@gitnova/protocol";
 import { coreResult, requestCore } from "./core";
 
 export async function getRepositoryReferences(): Promise<RepositoryReferences> {
@@ -18,4 +18,9 @@ export async function createLocalBranch(name: string): Promise<RepositoryMutatio
 export async function switchLocalBranch(name: string): Promise<RepositoryMutationSnapshot> {
   const params: BranchParams = { name };
   return coreResult(await requestCore<RepositoryMutationSnapshot>("repository/switchBranch", params));
+}
+
+export async function checkoutRemoteBranch(fullName: string, expectedHeadOid: string): Promise<RepositoryMutationSnapshot> {
+  const params: RemoteBranchCheckoutParams = { fullName, expectedHeadOid };
+  return coreResult(await requestCore<RepositoryMutationSnapshot>("repository/checkoutRemoteBranch", params));
 }

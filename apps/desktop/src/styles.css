@@ -573,11 +573,20 @@ button, input, select, textarea { color: inherit; }
 .ref-group > summary:hover { background: #dcdee3; }
 .ref-group > summary span { color: #848a94; font-size: 9px; font-weight: 650; }
 .ref-group ul { display: grid; gap: 1px; margin: 0; padding: 1px 0 6px 15px; list-style: none; }
-.ref-group li > button, .ref-group li > span { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: center; width: 100%; min-height: 25px; padding: 2px 7px; border: 0; border-radius: 5px; background: transparent; color: #474e59; text-align: left; font-size: 10px; }
-.ref-group li > button { cursor: pointer; }
-.ref-group li > button:hover { background: #d9dbe0; }
-.ref-group li > .is-current { background: #dbeafe; color: #1558a6; font-weight: 850; }
+.ref-row { display: grid; grid-template-columns: minmax(0, 1fr) 25px; align-items: center; width: 100%; min-height: 25px; border-radius: 5px; }
+.ref-row:hover { background: #d9dbe0; }
+.ref-row__primary { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: center; min-width: 0; min-height: 25px; padding: 2px 3px 2px 7px; border: 0; border-radius: 5px; background: transparent; color: #474e59; text-align: left; font-size: 10px; }
+button.ref-row__primary { cursor: pointer; }
+.ref-row:has(.ref-row__primary.is-current) { background: #dbeafe; }
+.ref-row__primary.is-current { color: #1558a6; font-weight: 850; }
+.ref-row__actions { min-width: 25px; min-height: 23px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: #757c86; cursor: pointer; font-size: 9px; opacity: 0; }
+.ref-row:hover .ref-row__actions, .ref-row__actions:focus-visible { opacity: 1; }
+.ref-row__actions:hover { background: #c9ccd2; color: #252b34; }
 .ref-group li small { grid-column: 2; overflow: hidden; color: #858b94; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.ref-context-menu { position: fixed; z-index: 20; display: grid; min-width: 220px; padding: 4px; border: 1px solid #c5c8ce; border-radius: 7px; background: #fff; box-shadow: 0 8px 24px rgb(26 31 40 / 22%); }
+.ref-context-menu button { min-height: 29px; padding: 0 9px; border: 0; border-radius: 4px; background: transparent; color: #303640; cursor: pointer; text-align: left; font-size: 10px; }
+.ref-context-menu button:hover:not(:disabled) { background: #e8ebef; }
+.ref-context-menu button:disabled { color: #9298a1; cursor: default; }
 .repository-facts { gap: 5px; margin: auto 7px 7px; padding-top: 8px; }
 .repository-facts div:not(:last-child), .repository-sidebar .privacy-note { display: none; }
 

@@ -1,6 +1,6 @@
 # Repository Mutations
 
-Core protocol 1.18 exposes explicit, worktree-only local and remote mutations. Hosts must call them only after direct user intent; Pull and Push require a visible confirmation flow. Core never runs them during repository open, status refresh, history loading, Provider access, Squash Trace, or AI Assist.
+Core protocol 1.19 exposes explicit, worktree-only local and remote mutations. Hosts must call them only after direct user intent; branch checkout, Pull and Push require a visible confirmation flow. Core never runs them during repository open, status refresh, history loading, Provider access, Squash Trace, or AI Assist.
 
 ## Staged commit
 
@@ -17,6 +17,12 @@ Success returns `CommitResult`: the parsed new `CommitSummary` plus an authorita
 - Git checkout safety remains authoritative, so a conflicting working tree causes `git.mutation_failed` and stays available for retry after the user resolves the state.
 
 Both methods return the post-mutation status/reference snapshot. Bare repositories return `repository.worktree_required`.
+
+## Remote branch checkout
+
+Core advertises `repository/checkoutRemoteBranch` through optional `remoteBranchCheckout`. It accepts `{ "fullName", "expectedHeadOid" }`: `fullName` must be the opaque full ref previously returned by Core, and `expectedHeadOid` binds execution to the HEAD shown during confirmation.
+
+Before mutation, Core re-enumerates references and requires an exact, non-symbolic `remoteBranch` match. It resolves the configured remote with the longest matching name prefix, derives and validates the corresponding local branch inside Core, rejects any local-name collision, and rechecks current HEAD. It then uses System Git to create and switch to a direct tracking local branch from that explicit full ref. Core never guesses a remote, overwrites a local branch, detaches HEAD, forces checkout, stashes, resets, restores, or discards changes. Success returns the authoritative post-mutation snapshot; missing/symbolic refs use `branch.not_found`, collisions use `branch.already_exists`, and confirmation drift uses `branch.stale_head`.
 
 ## Fetch, Pull and Push
 
@@ -36,6 +42,6 @@ This contract does not stage paths, amend, override author, bypass hooks, config
 
 Desktop 只在 Core 声明 `repositoryMutations` capability、已打开非 bare worktree 且 status 可用时显示操作区。每项 mutation 都经过 Review 和 Confirm 两次明确操作；打开仓库、刷新 status/history 或读取 refs 不会触发 mutation。
 
-Commit 预览显示 Core status 中 index 非 `unmodified` 的 path 数量，但是否允许 commit 仍由 Core 决定。Branch switch 下拉只包含 Core `repository/references` 返回的 `localBranch`，不把 remote refs 猜测为可切换分支。成功后 Desktop 直接采用 Core 返回的 status/references snapshot、清除可能失效的 diff/detail 并刷新 graph；失败保留输入与 action，可 Retry 或 Cancel，且不显示成功状态。
+Commit 预览显示 Core status 中 index 非 `unmodified` 的 path 数量，但是否允许 commit 仍由 Core 决定。左侧分支树是唯一分支上下文入口：本地分支 Checkout 复用 `repository/switchBranch`；非 symbolic remote branch 的右键/actions 菜单调用 `repository/checkoutRemoteBranch`。Host 只回传完整 remote ref、显示名称和确认时 HEAD OID，不拆分 remote 名或构造 local branch。成功后 Desktop 直接采用 Core 返回的 status/references snapshot、清除可能失效的 diff/detail 并刷新 graph；失败保留 action，可 Retry 或 Cancel，且不显示成功状态。
 
 Desktop 顶部只在 capability、non-bare worktree 与 current branch/HEAD 同时可用时显示 Fetch/Pull/Push。Fetch 点击即执行并显示进度；Pull 在没有 upstream 时禁用；Pull/Push 的确认框固定显示 branch、短 OID 与禁止的 merge/rebase/stash/force/delete 语义。成功统一采用 Core snapshot 并刷新 history；网络失败保留仓库工作区和明确 Retry。

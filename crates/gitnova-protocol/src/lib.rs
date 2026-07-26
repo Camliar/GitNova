@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: &str = "1.15";
+pub const PROTOCOL_VERSION: &str = "1.16";
 
 pub const ERROR_PARSE: i64 = -32700;
 pub const ERROR_INVALID_REQUEST: i64 = -32600;
@@ -73,6 +73,8 @@ pub const ERROR_AI_PROVIDER_UNAVAILABLE: i64 = -32153;
 pub const ERROR_AI_REQUEST_FAILED: i64 = -32154;
 pub const ERROR_AI_RESPONSE_INVALID: i64 = -32155;
 pub const ERROR_AI_INPUT_LIMIT: i64 = -32156;
+pub const ERROR_COMMIT_FILE_LIMIT: i64 = -32157;
+pub const ERROR_COMMIT_FILE_DIFF_LIMIT: i64 = -32158;
 pub const ERROR_REQUEST_CANCELLED: i64 = -32800;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -198,6 +200,8 @@ pub struct ServerCapabilities {
     pub structured_file_diff: bool,
     pub paginated_commit_history: bool,
     pub structured_commit_diff: bool,
+    #[serde(default)]
+    pub lazy_commit_diff: bool,
     pub repository_references: bool,
     pub commit_graph_projection: bool,
     pub github_repository: bool,
@@ -400,6 +404,41 @@ pub struct CommitDiff {
     pub commit: CommitSummary,
     pub parent_oid: Option<String>,
     pub files: Vec<FileDiff>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CommitFilesParams {
+    pub oid: String,
+    #[serde(default)]
+    pub parent_oid: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitChangedFile {
+    pub old_path: String,
+    pub new_path: String,
+    pub status: FileStatus,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitFiles {
+    pub commit: CommitSummary,
+    pub parent_oid: Option<String>,
+    pub files: Vec<CommitChangedFile>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CommitFileDiffParams {
+    pub oid: String,
+    #[serde(default)]
+    pub parent_oid: Option<String>,
+    pub path: String,
+    #[serde(default)]
+    pub context_lines: Option<u8>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1069,6 +1108,10 @@ mod tests {
             "HistoryPage",
             "CommitDiffParams",
             "CommitDiff",
+            "CommitFilesParams",
+            "CommitChangedFile",
+            "CommitFiles",
+            "CommitFileDiffParams",
             "ReferenceKind",
             "RepositoryHead",
             "RepositoryReference",

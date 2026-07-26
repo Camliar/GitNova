@@ -216,7 +216,7 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let responses = responses(&output.stdout);
     assert_eq!(responses.len(), 2);
     assert_eq!(responses[0]["id"], "init-1");
-    assert_eq!(responses[0]["result"]["protocolVersion"], "1.15");
+    assert_eq!(responses[0]["result"]["protocolVersion"], "1.16");
     assert_eq!(responses[0]["result"]["capabilities"]["cancellation"], true);
     assert_eq!(
         responses[0]["result"]["capabilities"]["workingTreeStatus"],
@@ -398,6 +398,37 @@ fn commit_diff_response(repository: &Path, oid: &str, extra: Value) -> Value {
         initialize(json!(1)),
         repository_request(2, "repository/open", repository),
         json!({"jsonrpc":"2.0","id":3,"method":"repository/commitDiff","params":params}),
+    ]);
+    assert!(output.status.success());
+    responses(&output.stdout).remove(2)
+}
+
+fn commit_files_response(repository: &Path, oid: &str, extra: Value) -> Value {
+    let mut params = serde_json::Map::new();
+    params.insert("oid".into(), json!(oid));
+    if let Some(extra) = extra.as_object() {
+        params.extend(extra.clone());
+    }
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", repository),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/commitFiles","params":params}),
+    ]);
+    assert!(output.status.success());
+    responses(&output.stdout).remove(2)
+}
+
+fn commit_file_diff_response(repository: &Path, oid: &str, path: &str, extra: Value) -> Value {
+    let mut params = serde_json::Map::new();
+    params.insert("oid".into(), json!(oid));
+    params.insert("path".into(), json!(path));
+    if let Some(extra) = extra.as_object() {
+        params.extend(extra.clone());
+    }
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", repository),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/commitFileDiff","params":params}),
     ]);
     assert!(output.status.success());
     responses(&output.stdout).remove(2)
@@ -730,6 +761,68 @@ fn returns_structured_root_and_single_parent_commit_diffs() {
             .as_array()
             .unwrap()
             .is_empty()
+    );
+}
+
+#[test]
+fn lists_large_commit_metadata_then_loads_only_one_member_file_diff() {
+    let directory = TestDirectory::new("lazy-commit-diff");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    fs::write(repository.join("root.txt"), "root\n").unwrap();
+    git(&["add", "."], &repository);
+    git(
+        &[
+            "-c",
+            "user.name=GitNova Test",
+            "-c",
+            "user.email=test@gitnova.invalid",
+            "commit",
+            "-m",
+            "root",
+        ],
+        &repository,
+    );
+    for index in 0..3_000 {
+        fs::write(
+            repository.join(format!("file-{index:04}.txt")),
+            format!("line {index}\n"),
+        )
+        .unwrap();
+    }
+    git(&["add", "."], &repository);
+    git(
+        &[
+            "-c",
+            "user.name=GitNova Test",
+            "-c",
+            "user.email=test@gitnova.invalid",
+            "commit",
+            "-m",
+            "many files",
+        ],
+        &repository,
+    );
+    let oid = head_oid(&repository);
+    let files = commit_files_response(&repository, &oid, json!({}));
+    assert_eq!(files["result"]["files"].as_array().unwrap().len(), 3_000);
+    assert!(
+        !serde_json::to_string(&files["result"])
+            .unwrap()
+            .contains("hunks")
+    );
+    assert_eq!(files["result"]["files"][2042]["status"], "added");
+
+    let selected = commit_file_diff_response(&repository, &oid, "file-2042.txt", json!({}));
+    assert_eq!(selected["result"]["newPath"], "file-2042.txt");
+    assert_eq!(
+        selected["result"]["hunks"][0]["lines"][0]["content"],
+        "line 2042"
+    );
+    let non_member = commit_file_diff_response(&repository, &oid, "root.txt", json!({}));
+    assert_eq!(
+        non_member["error"]["data"]["stableCode"],
+        "path.invalid_repository_relative"
     );
 }
 

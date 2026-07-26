@@ -6,25 +6,27 @@ mod repository;
 
 use gitnova_protocol::{
     AiGenerateCommitDraftParams, AiInputPreviewParams, BranchParams, CancelParams,
-    CancellationRegistry, CommitDiffParams, CommitParams, DiffParams, ERROR_AI_CREDENTIAL_MISSING,
-    ERROR_AI_EXTERNAL_CONFIRMATION_REQUIRED, ERROR_AI_INPUT_LIMIT, ERROR_AI_INVALID_PROVIDER,
-    ERROR_AI_NOTHING_STAGED, ERROR_AI_PREVIEW_STALE, ERROR_AI_PROVIDER_UNAVAILABLE,
-    ERROR_AI_REQUEST_FAILED, ERROR_AI_RESPONSE_INVALID, ERROR_ALREADY_INITIALIZED,
-    ERROR_BRANCH_ALREADY_EXISTS, ERROR_BRANCH_NOT_FOUND, ERROR_COMMIT_DIFF_PARSE,
-    ERROR_COMMIT_MESSAGE_REQUIRED, ERROR_COMMIT_NOT_FOUND, ERROR_COMMIT_PARENT_REQUIRED,
-    ERROR_COMMIT_PARSE, ERROR_DIFF_PARSE, ERROR_DIFFERENT_REPOSITORY_OPEN, ERROR_GH_UNAVAILABLE,
-    ERROR_GIT_COMMAND_FAILED, ERROR_GIT_UNAVAILABLE, ERROR_GITHUB_AUTH_REQUIRED,
-    ERROR_GITHUB_COMMIT_FILE_LIMIT, ERROR_GITHUB_COMMIT_NOT_IN_PR, ERROR_GITHUB_INVALID_REMOTE,
-    ERROR_GITHUB_PR_COMMIT_LIMIT, ERROR_GITHUB_REMOTE_NOT_FOUND, ERROR_GITHUB_REQUEST_FAILED,
-    ERROR_GITHUB_RESPONSE_PARSE, ERROR_GITHUB_UNSUPPORTED_REMOTE, ERROR_GITLAB_AUTH_REQUIRED,
-    ERROR_GITLAB_COMMIT_FILE_LIMIT, ERROR_GITLAB_COMMIT_NOT_IN_MR, ERROR_GITLAB_INVALID_REMOTE,
-    ERROR_GITLAB_MR_COMMIT_LIMIT, ERROR_GITLAB_REMOTE_NOT_FOUND, ERROR_GITLAB_REQUEST_FAILED,
-    ERROR_GITLAB_RESPONSE_PARSE, ERROR_GITLAB_UNSUPPORTED_REMOTE, ERROR_GLAB_UNAVAILABLE,
-    ERROR_HISTORY_ENCODING, ERROR_INCOMPATIBLE_PROTOCOL, ERROR_INVALID_BRANCH_NAME,
-    ERROR_INVALID_COMMIT_PARENT, ERROR_INVALID_HISTORY_CURSOR, ERROR_INVALID_PARAMS,
-    ERROR_INVALID_PATH, ERROR_INVALID_REPOSITORY_PATH, ERROR_INVALID_REQUEST,
-    ERROR_METHOD_NOT_FOUND, ERROR_MUTATION_FAILED, ERROR_NOT_INITIALIZED, ERROR_NOTHING_STAGED,
-    ERROR_PARSE, ERROR_REFERENCE_ENCODING, ERROR_REFERENCE_PARSE, ERROR_REPOSITORY_NOT_FOUND,
+    CancellationRegistry, CommitDiffParams, CommitFileDiffParams, CommitFilesParams, CommitParams,
+    DiffParams, ERROR_AI_CREDENTIAL_MISSING, ERROR_AI_EXTERNAL_CONFIRMATION_REQUIRED,
+    ERROR_AI_INPUT_LIMIT, ERROR_AI_INVALID_PROVIDER, ERROR_AI_NOTHING_STAGED,
+    ERROR_AI_PREVIEW_STALE, ERROR_AI_PROVIDER_UNAVAILABLE, ERROR_AI_REQUEST_FAILED,
+    ERROR_AI_RESPONSE_INVALID, ERROR_ALREADY_INITIALIZED, ERROR_BRANCH_ALREADY_EXISTS,
+    ERROR_BRANCH_NOT_FOUND, ERROR_COMMIT_DIFF_PARSE, ERROR_COMMIT_FILE_DIFF_LIMIT,
+    ERROR_COMMIT_FILE_LIMIT, ERROR_COMMIT_MESSAGE_REQUIRED, ERROR_COMMIT_NOT_FOUND,
+    ERROR_COMMIT_PARENT_REQUIRED, ERROR_COMMIT_PARSE, ERROR_DIFF_PARSE,
+    ERROR_DIFFERENT_REPOSITORY_OPEN, ERROR_GH_UNAVAILABLE, ERROR_GIT_COMMAND_FAILED,
+    ERROR_GIT_UNAVAILABLE, ERROR_GITHUB_AUTH_REQUIRED, ERROR_GITHUB_COMMIT_FILE_LIMIT,
+    ERROR_GITHUB_COMMIT_NOT_IN_PR, ERROR_GITHUB_INVALID_REMOTE, ERROR_GITHUB_PR_COMMIT_LIMIT,
+    ERROR_GITHUB_REMOTE_NOT_FOUND, ERROR_GITHUB_REQUEST_FAILED, ERROR_GITHUB_RESPONSE_PARSE,
+    ERROR_GITHUB_UNSUPPORTED_REMOTE, ERROR_GITLAB_AUTH_REQUIRED, ERROR_GITLAB_COMMIT_FILE_LIMIT,
+    ERROR_GITLAB_COMMIT_NOT_IN_MR, ERROR_GITLAB_INVALID_REMOTE, ERROR_GITLAB_MR_COMMIT_LIMIT,
+    ERROR_GITLAB_REMOTE_NOT_FOUND, ERROR_GITLAB_REQUEST_FAILED, ERROR_GITLAB_RESPONSE_PARSE,
+    ERROR_GITLAB_UNSUPPORTED_REMOTE, ERROR_GLAB_UNAVAILABLE, ERROR_HISTORY_ENCODING,
+    ERROR_INCOMPATIBLE_PROTOCOL, ERROR_INVALID_BRANCH_NAME, ERROR_INVALID_COMMIT_PARENT,
+    ERROR_INVALID_HISTORY_CURSOR, ERROR_INVALID_PARAMS, ERROR_INVALID_PATH,
+    ERROR_INVALID_REPOSITORY_PATH, ERROR_INVALID_REQUEST, ERROR_METHOD_NOT_FOUND,
+    ERROR_MUTATION_FAILED, ERROR_NOT_INITIALIZED, ERROR_NOTHING_STAGED, ERROR_PARSE,
+    ERROR_REFERENCE_ENCODING, ERROR_REFERENCE_PARSE, ERROR_REPOSITORY_NOT_FOUND,
     ERROR_REPOSITORY_NOT_OPEN, ERROR_REQUEST_CANCELLED, ERROR_STATUS_PARSE, ERROR_UNBORN_HEAD,
     ERROR_UNRESOLVED_CONFLICTS, ERROR_UNSAFE_REPOSITORY, ERROR_WORKTREE_REQUIRED,
     GitHubPullRequestCommitDiffParams, GitHubPullRequestParams, GitHubRepositoryParams,
@@ -164,6 +166,8 @@ fn dispatch_request(
         "repository/diff" => diff_request(request, state),
         "repository/history" => history_request(request, state),
         "repository/commitDiff" => commit_diff_request(request, state),
+        "repository/commitFiles" => commit_files_request(request, state),
+        "repository/commitFileDiff" => commit_file_diff_request(request, state),
         "repository/references" => references_request(request, state),
         "repository/graph" => graph_request(request, state),
         "repository/commit" => commit_request(request, state),
@@ -245,6 +249,7 @@ fn initialize(request: Request, state: &mut CoreState) -> Response {
             structured_file_diff: true,
             paginated_commit_history: true,
             structured_commit_diff: true,
+            lazy_commit_diff: true,
             repository_references: true,
             commit_graph_projection: true,
             github_repository: true,
@@ -438,6 +443,18 @@ fn repository_error(error: repository::RepositoryError) -> ResponseError {
             ERROR_COMMIT_DIFF_PARSE,
             "git.commit_diff_parse_failed",
             "System Git returned an invalid commit diff payload",
+            false,
+        ),
+        repository::RepositoryError::CommitFileLimit => ResponseError::new(
+            ERROR_COMMIT_FILE_LIMIT,
+            "commit.file_limit",
+            "Commit changes exceed the safe file-list limit",
+            false,
+        ),
+        repository::RepositoryError::CommitFileDiffLimit => ResponseError::new(
+            ERROR_COMMIT_FILE_DIFF_LIMIT,
+            "commit.file_diff_limit",
+            "Selected file diff exceeds the safe response limit",
             false,
         ),
         repository::RepositoryError::ReferenceParse => ResponseError::new(
@@ -845,6 +862,71 @@ fn commit_diff_request(request: Request, state: &CoreState) -> Response {
         Ok(diff) => Response::success(
             request.id,
             serde_json::to_value(diff).expect("serializable commit diff"),
+        ),
+        Err(error) => Response::error(Some(request.id), repository_error(error)),
+    }
+}
+
+fn commit_files_request(request: Request, state: &CoreState) -> Response {
+    let params: CommitFilesParams = match serde_json::from_value(request.params) {
+        Ok(params) => params,
+        Err(_) => return invalid_params(request.id, "Invalid commit files parameters"),
+    };
+    if !repository::valid_oid(&params.oid)
+        || params
+            .parent_oid
+            .as_deref()
+            .is_some_and(|oid| !repository::valid_oid(oid))
+    {
+        return invalid_params(
+            request.id,
+            "oid and parentOid must be full hexadecimal object IDs",
+        );
+    }
+    let Some(descriptor) = &state.active_repository else {
+        return repository_not_open(request.id, "requesting commit files");
+    };
+    match repository::commit_files(descriptor, &params.oid, params.parent_oid.as_deref()) {
+        Ok(files) => Response::success(
+            request.id,
+            serde_json::to_value(files).expect("serializable commit files"),
+        ),
+        Err(error) => Response::error(Some(request.id), repository_error(error)),
+    }
+}
+
+fn commit_file_diff_request(request: Request, state: &CoreState) -> Response {
+    let params: CommitFileDiffParams = match serde_json::from_value(request.params) {
+        Ok(params) => params,
+        Err(_) => return invalid_params(request.id, "Invalid commit file diff parameters"),
+    };
+    if !repository::valid_oid(&params.oid)
+        || params
+            .parent_oid
+            .as_deref()
+            .is_some_and(|oid| !repository::valid_oid(oid))
+        || params.path.is_empty()
+        || params.path.len() > 4096
+    {
+        return invalid_params(request.id, "Invalid commit file diff parameters");
+    }
+    let context_lines = params.context_lines.unwrap_or(3);
+    if context_lines > 20 {
+        return invalid_params(request.id, "contextLines must be between 0 and 20");
+    }
+    let Some(descriptor) = &state.active_repository else {
+        return repository_not_open(request.id, "requesting a commit file diff");
+    };
+    match repository::commit_file_diff(
+        descriptor,
+        &params.oid,
+        params.parent_oid.as_deref(),
+        &params.path,
+        context_lines,
+    ) {
+        Ok(diff) => Response::success(
+            request.id,
+            serde_json::to_value(diff).expect("serializable commit file diff"),
         ),
         Err(error) => Response::error(Some(request.id), repository_error(error)),
     }

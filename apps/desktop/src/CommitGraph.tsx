@@ -40,7 +40,7 @@ export function projectGraphRows(nodes: CommitGraphNode[]): VisualGraphRow[] {
 }
 
 const LANE_WIDTH = 18;
-const NODE_Y = 18;
+const NODE_Y = 14;
 
 function laneX(lane: number) {
   return lane * LANE_WIDTH + 9;

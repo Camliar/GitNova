@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getCommitDiff } from "./commitDiff";
+import { getCommitDiff, getCommitFileDiff, getCommitFiles } from "./commitDiff";
 
 const mocks = vi.hoisted(() => ({ requestCore: vi.fn() }));
 vi.mock("./core", async (importOriginal) => ({
@@ -41,5 +41,15 @@ describe("structured commit diff boundary", () => {
       message: "Choose a merge parent",
       retryable: false,
     });
+  });
+
+  it("loads commit file metadata separately from one selected file diff", async () => {
+    mocks.requestCore
+      .mockResolvedValueOnce({ jsonrpc: "2.0", id: 7, result: { commit: {}, parentOid: "b".repeat(40), files: [] } })
+      .mockResolvedValueOnce({ jsonrpc: "2.0", id: 8, result: { oldPath: "old.ts", newPath: "new.ts", isBinary: false, hunks: [] } });
+    await getCommitFiles("a".repeat(40), "b".repeat(40));
+    expect(mocks.requestCore).toHaveBeenNthCalledWith(1, "repository/commitFiles", { oid: "a".repeat(40), parentOid: "b".repeat(40) });
+    await getCommitFileDiff("a".repeat(40), "new.ts", "b".repeat(40));
+    expect(mocks.requestCore).toHaveBeenNthCalledWith(2, "repository/commitFileDiff", { oid: "a".repeat(40), parentOid: "b".repeat(40), path: "new.ts", contextLines: 3 });
   });
 });

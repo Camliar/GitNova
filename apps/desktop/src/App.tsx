@@ -9,20 +9,19 @@ import { getFileDiff } from "./diff";
 import { DiffPanel, type DiffSelection, type DiffState } from "./DiffPanel";
 import { getCommitGraph } from "./history";
 import { HistoryPanel, type HistoryState } from "./HistoryPanel";
-import { getCommitDiff } from "./commitDiff";
-import { CommitDetailPanel, type CommitDetailState, type CommitSelection } from "./CommitDetailPanel";
+import { getCommitDiff, getCommitFileDiff, getCommitFiles } from "./commitDiff";
+import { CommitDetailPanel, type CommitDetailState, type CommitFileDiffState, type CommitSelection } from "./CommitDetailPanel";
 import { GitHubPanel } from "./GitHubPanel";
 import { MutationPanel } from "./MutationPanel";
 import { AiAssistPanel } from "./AiAssistPanel";
 import { AiSettingsPanel, defaultAiAssistSettings } from "./AiSettingsPanel";
-import { BranchSwitcher, type ReferencesState } from "./BranchSwitcher";
-import { RepositoryRefTree } from "./RepositoryRefTree";
+import { RepositoryRefTree, type ReferencesState } from "./RepositoryRefTree";
 import { getRepositoryReferences, switchLocalBranch } from "./mutations";
 
 type Connection =
   | { kind: "checking" }
   | { kind: "stopped" }
-  | { kind: "connected"; version: string; mutations: boolean; references: boolean; aiAssist: boolean }
+  | { kind: "connected"; version: string; mutations: boolean; references: boolean; aiAssist: boolean; lazyCommitDiff: boolean }
   | { kind: "error"; error: DesktopError };
 
 type RepositoryState =
@@ -131,8 +130,10 @@ export function App() {
   const [history, setHistory] = useState<HistoryState>({ kind: "idle" });
   const historyRequest = useRef(0);
   const [commitDetail, setCommitDetail] = useState<CommitDetailState>({ kind: "idle" });
+  const [commitFileDiff, setCommitFileDiff] = useState<CommitFileDiffState>({ kind: "idle" });
   const [historyDetailTab, setHistoryDetailTab] = useState<"commit" | "changes">("commit");
   const commitRequest = useRef(0);
+  const commitFileRequest = useRef(0);
   const [aiCommitDraft, setAiCommitDraft] = useState<{ id: number; message: string } | null>(null);
   const aiDraftSequence = useRef(0);
 
@@ -190,7 +191,7 @@ export function App() {
       referencesRequest.current += 1;
       setReferences({ kind: "idle" });
     }
-    setConnection({ kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true, references: referencesCapability.current, aiAssist: status.capabilities?.aiAssist === true });
+    setConnection({ kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true, references: referencesCapability.current, aiAssist: status.capabilities?.aiAssist === true, lazyCommitDiff: status.capabilities?.lazyCommitDiff === true });
   }
 
   function rememberRepository(bookmark: RepositoryBookmark) {
@@ -376,7 +377,9 @@ export function App() {
 
   async function refreshHistory() {
     commitRequest.current += 1;
+    commitFileRequest.current += 1;
     setCommitDetail({ kind: "idle" });
+    setCommitFileDiff({ kind: "idle" });
     const request = ++historyRequest.current;
     setHistory({ kind: "loading" });
     try {
@@ -391,34 +394,72 @@ export function App() {
 
   function selectCommit(commit: CommitSummary) {
     commitRequest.current += 1;
+    commitFileRequest.current += 1;
+    setCommitFileDiff({ kind: "idle" });
     setHistoryDetailTab("commit");
     if (commit.parents.length > 1) {
       setCommitDetail({ kind: "choosingParent", commit });
     } else {
-      void loadCommitDiff({ commit });
+      void loadCommitFiles({ commit });
     }
   }
 
-  async function loadCommitDiff(selection: CommitSelection) {
+  async function loadCommitFiles(selection: CommitSelection) {
     const request = ++commitRequest.current;
+    commitFileRequest.current += 1;
+    setCommitFileDiff({ kind: "idle" });
     setCommitDetail({ kind: "loading", selection });
     try {
-      const diff = await getCommitDiff(selection.commit.oid, selection.parentOid);
-      if (request === commitRequest.current) setCommitDetail({ kind: "ready", selection, diff });
+      if (connection.kind === "connected" && connection.lazyCommitDiff) {
+        const files = await getCommitFiles(selection.commit.oid, selection.parentOid);
+        if (request === commitRequest.current) setCommitDetail({ kind: "ready", selection, files });
+      } else {
+        const diff = await getCommitDiff(selection.commit.oid, selection.parentOid);
+        if (request === commitRequest.current) setCommitDetail({
+          kind: "ready",
+          selection,
+          files: {
+            commit: diff.commit,
+            parentOid: diff.parentOid,
+            files: diff.files.map((file) => ({ oldPath: file.oldPath, newPath: file.newPath, status: file.oldPath === file.newPath ? "unknown" : "renamed" })),
+          },
+          legacyDiffs: diff.files,
+        });
+      }
     } catch (error) {
       if (request === commitRequest.current) setCommitDetail({ kind: "error", selection, error: asDesktopError(error) });
     }
   }
 
+  async function loadCommitFileDiff(path: string) {
+    if (commitDetail.kind !== "ready") return;
+    const detail = commitDetail;
+    const legacy = detail.legacyDiffs?.find((file) => file.newPath === path);
+    const request = ++commitFileRequest.current;
+    if (legacy) {
+      setCommitFileDiff({ kind: "ready", path, diff: legacy });
+      return;
+    }
+    setCommitFileDiff({ kind: "loading", path });
+    try {
+      const diff = await getCommitFileDiff(detail.files.commit.oid, path, detail.files.parentOid ?? undefined);
+      if (request === commitFileRequest.current) setCommitFileDiff({ kind: "ready", path, diff });
+    } catch (error) {
+      if (request === commitFileRequest.current) setCommitFileDiff({ kind: "error", path, error: asDesktopError(error) });
+    }
+  }
+
   function chooseCommitParent(parentOid: string) {
     if (commitDetail.kind === "choosingParent" && commitDetail.commit.parents.includes(parentOid)) {
-      void loadCommitDiff({ commit: commitDetail.commit, parentOid });
+      void loadCommitFiles({ commit: commitDetail.commit, parentOid });
     }
   }
 
   function closeCommitDetail() {
     commitRequest.current += 1;
+    commitFileRequest.current += 1;
     setCommitDetail({ kind: "idle" });
+    setCommitFileDiff({ kind: "idle" });
   }
 
   async function loadMoreHistory() {
@@ -470,7 +511,6 @@ export function App() {
   const openedRepository = repository.kind === "open" ? repository.repository : null;
   const repositoryPath = openedRepository?.worktreeRoot ?? openedRepository?.gitDirectory ?? "";
   const changeCount = workingTree.kind === "ready" ? workingTree.status.entries.length : 0;
-  const branchName = workingTree.kind === "ready" ? workingTree.status.branch.head ?? "Detached HEAD" : "Reading branch…";
   const selectedCommitOid = commitDetail.kind === "idle" ? null : commitDetail.kind === "choosingParent" ? commitDetail.commit.oid : commitDetail.selection.commit.oid;
 
   return (
@@ -491,9 +531,6 @@ export function App() {
                 {recentRepositories.map((entry) => <option key={bookmarkKey(entry)} value={bookmarkKey(entry)}>{repositoryLabel(entry.path)} — {entry.path}</option>)}
               </select>
             </label>
-            {connection.kind === "connected" && (connection.references || connection.mutations) && openedRepository.kind !== "bare"
-              ? <BranchSwitcher currentBranch={workingTree.kind === "ready" ? workingTree.status.branch.head : null} references={references} canSwitch={connection.mutations} switching={branchOperation.kind === "loading"} onSelect={reviewBranchSwitch} />
-              : <span className="toolbar-branch-label">{branchName}</span>}
           </div>
         ) : <span className="toolbar-title">Local-first Git client</span>}
         <div className="toolbar-actions">
@@ -565,7 +602,7 @@ export function App() {
                     <button type="button" role="tab" aria-selected={historyDetailTab === "changes"} className={historyDetailTab === "changes" ? "is-active" : ""} onClick={() => setHistoryDetailTab("changes")}>Changes</button>
                   </div>
                   <div className="history-detail-content">
-                    {commitDetail.kind === "idle" ? <div className="pane-placeholder"><strong>Select a commit</strong><span>Commit metadata and line-level changes will appear here.</span></div> : <CommitDetailPanel key={`${commitDetail.kind === "choosingParent" ? commitDetail.commit.oid : commitDetail.selection.commit.oid}:${commitDetail.kind === "choosingParent" ? "" : commitDetail.selection.parentOid ?? ""}`} state={commitDetail} mode={historyDetailTab} onChooseParent={chooseCommitParent} onRetry={() => commitDetail.kind === "error" && void loadCommitDiff(commitDetail.selection)} onClose={closeCommitDetail} />}
+                    {commitDetail.kind === "idle" ? <div className="pane-placeholder"><strong>Select a commit</strong><span>Commit metadata and changed files will appear here.</span></div> : <CommitDetailPanel key={`${commitDetail.kind === "choosingParent" ? commitDetail.commit.oid : commitDetail.selection.commit.oid}:${commitDetail.kind === "choosingParent" ? "" : commitDetail.selection.parentOid ?? ""}`} state={commitDetail} fileDiff={commitFileDiff} mode={historyDetailTab} onChooseParent={chooseCommitParent} onSelectFile={(path) => void loadCommitFileDiff(path)} onRetry={() => commitDetail.kind === "error" && void loadCommitFiles(commitDetail.selection)} onRetryFile={() => commitFileDiff.kind === "error" && void loadCommitFileDiff(commitFileDiff.path)} onClose={closeCommitDetail} />}
                   </div>
                 </div>
               </div>

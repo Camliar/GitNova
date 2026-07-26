@@ -1,8 +1,8 @@
 use gitnova_protocol::{
-    BranchStatus, CommitDiff, CommitGraphNode, CommitGraphPage, CommitIdentity, CommitSummary,
-    DiffHunk, DiffLine, DiffLineKind, DiffScope, FileDiff, FileStatus, HistoryPage, ReferenceKind,
-    RepositoryDescriptor, RepositoryHead, RepositoryKind, RepositoryReference,
-    RepositoryReferences, StatusEntry, StatusEntryKind, WorkingTreeStatus,
+    BranchStatus, CommitChangedFile, CommitDiff, CommitFiles, CommitGraphNode, CommitGraphPage,
+    CommitIdentity, CommitSummary, DiffHunk, DiffLine, DiffLineKind, DiffScope, FileDiff,
+    FileStatus, HistoryPage, ReferenceKind, RepositoryDescriptor, RepositoryHead, RepositoryKind,
+    RepositoryReference, RepositoryReferences, StatusEntry, StatusEntryKind, WorkingTreeStatus,
 };
 use std::ffi::{OsStr, OsString};
 use std::fs;
@@ -30,6 +30,8 @@ pub enum RepositoryError {
     CommitParentRequired,
     InvalidCommitParent,
     CommitDiffParse,
+    CommitFileLimit,
+    CommitFileDiffLimit,
     ReferenceParse,
     ReferenceEncoding,
     CommitMessageRequired,
@@ -41,6 +43,10 @@ pub enum RepositoryError {
     UnbornHead,
     MutationFailed,
 }
+
+const MAX_COMMIT_FILES: usize = 20_000;
+const MAX_COMMIT_PATH_BYTES: usize = 4 * 1024 * 1024;
+const MAX_COMMIT_FILE_DIFF_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Debug)]
 struct CommandOutput {
@@ -357,73 +363,170 @@ pub fn commit_diff(
         .unwrap_or(&descriptor.git_directory);
     let oid = oid.to_ascii_lowercase();
     let commit = load_commit(base, &oid)?;
-    let selected_parent = match (commit.parents.as_slice(), parent_oid) {
-        ([], None) => None,
-        ([], Some(_)) => return Err(RepositoryError::InvalidCommitParent),
-        ([only], None) => Some(only.clone()),
-        ([_, _, ..], None) => return Err(RepositoryError::CommitParentRequired),
-        (parents, Some(parent)) => match parents
-            .iter()
-            .find(|candidate| candidate.eq_ignore_ascii_case(parent))
-        {
-            Some(parent) => Some(parent.clone()),
-            None => return Err(RepositoryError::InvalidCommitParent),
-        },
-    };
+    let selected_parent = select_commit_parent(&commit, parent_oid)?;
 
     let changed_paths = commit_changed_paths(base, &oid, selected_parent.as_deref())?;
     let mut files = Vec::with_capacity(changed_paths.len());
     for changed_path in changed_paths {
-        let mut arguments = vec![
-            OsString::from("--literal-pathspecs"),
-            OsString::from("-C"),
-            OsString::from(base),
-            OsString::from("-c"),
-            OsString::from("core.quotePath=false"),
-        ];
-        if let Some(parent) = &selected_parent {
-            arguments.extend([
-                OsString::from("diff"),
-                OsString::from("--patch"),
-                OsString::from("--no-color"),
-                OsString::from("--no-ext-diff"),
-                OsString::from("--no-textconv"),
-                OsString::from("--find-renames"),
-                OsString::from(format!("--unified={context_lines}")),
-                OsString::from(parent),
-                OsString::from(&oid),
-            ]);
-        } else {
-            arguments.extend([
-                OsString::from("diff-tree"),
-                OsString::from("--root"),
-                OsString::from("--no-commit-id"),
-                OsString::from("-r"),
-                OsString::from("--patch"),
-                OsString::from("--no-color"),
-                OsString::from("--no-ext-diff"),
-                OsString::from("--no-textconv"),
-                OsString::from("--find-renames"),
-                OsString::from(format!("--unified={context_lines}")),
-                OsString::from(&oid),
-            ]);
-        }
-        arguments.push(OsString::from("--"));
-        arguments.push(OsString::from(&changed_path.old_path));
-        if changed_path.new_path != changed_path.old_path {
-            arguments.push(OsString::from(&changed_path.new_path));
-        }
-        let output = SystemGit.run(&arguments).map_err(map_io_error)?;
-        if !output.success {
-            return Err(map_failed_output(&output.stderr));
-        }
-        files.push(parse_diff(&output.stdout, &changed_path.new_path)?);
+        files.push(commit_file_patch(
+            base,
+            &oid,
+            selected_parent.as_deref(),
+            &changed_path,
+            context_lines,
+        )?);
     }
     Ok(CommitDiff {
         commit,
         parent_oid: selected_parent,
         files,
     })
+}
+
+pub fn commit_files(
+    descriptor: &RepositoryDescriptor,
+    oid: &str,
+    parent_oid: Option<&str>,
+) -> Result<CommitFiles, RepositoryError> {
+    let base = descriptor
+        .worktree_root
+        .as_ref()
+        .unwrap_or(&descriptor.git_directory);
+    let oid = oid.to_ascii_lowercase();
+    let commit = load_commit(base, &oid)?;
+    let selected_parent = select_commit_parent(&commit, parent_oid)?;
+    let changed_paths = commit_changed_paths(base, &oid, selected_parent.as_deref())?;
+    validate_changed_path_budget(&changed_paths)?;
+    Ok(CommitFiles {
+        commit,
+        parent_oid: selected_parent,
+        files: changed_paths
+            .into_iter()
+            .map(|path| CommitChangedFile {
+                old_path: path.old_path,
+                new_path: path.new_path,
+                status: path.status,
+            })
+            .collect(),
+    })
+}
+
+pub fn commit_file_diff(
+    descriptor: &RepositoryDescriptor,
+    oid: &str,
+    parent_oid: Option<&str>,
+    path: &str,
+    context_lines: u8,
+) -> Result<FileDiff, RepositoryError> {
+    validate_repository_path(path)?;
+    let base = descriptor
+        .worktree_root
+        .as_ref()
+        .unwrap_or(&descriptor.git_directory);
+    let oid = oid.to_ascii_lowercase();
+    let commit = load_commit(base, &oid)?;
+    let selected_parent = select_commit_parent(&commit, parent_oid)?;
+    let changed_paths = commit_changed_paths(base, &oid, selected_parent.as_deref())?;
+    validate_changed_path_budget(&changed_paths)?;
+    let changed_path = changed_paths
+        .iter()
+        .find(|changed| changed.new_path == path)
+        .ok_or(RepositoryError::InvalidRepositoryPath)?;
+    commit_file_patch(
+        base,
+        &oid,
+        selected_parent.as_deref(),
+        changed_path,
+        context_lines,
+    )
+}
+
+fn select_commit_parent(
+    commit: &CommitSummary,
+    parent_oid: Option<&str>,
+) -> Result<Option<String>, RepositoryError> {
+    match (commit.parents.as_slice(), parent_oid) {
+        ([], None) => Ok(None),
+        ([], Some(_)) => Err(RepositoryError::InvalidCommitParent),
+        ([only], None) => Ok(Some(only.clone())),
+        ([_, _, ..], None) => Err(RepositoryError::CommitParentRequired),
+        (parents, Some(parent)) => parents
+            .iter()
+            .find(|candidate| candidate.eq_ignore_ascii_case(parent))
+            .cloned()
+            .map(Some)
+            .ok_or(RepositoryError::InvalidCommitParent),
+    }
+}
+
+fn validate_changed_path_budget(paths: &[ChangedPath]) -> Result<(), RepositoryError> {
+    let path_bytes = paths.iter().try_fold(0usize, |total, path| {
+        total
+            .checked_add(path.old_path.len())
+            .and_then(|value| value.checked_add(path.new_path.len()))
+    });
+    if paths.len() > MAX_COMMIT_FILES
+        || path_bytes.is_none_or(|bytes| bytes > MAX_COMMIT_PATH_BYTES)
+    {
+        return Err(RepositoryError::CommitFileLimit);
+    }
+    Ok(())
+}
+
+fn commit_file_patch(
+    base: &str,
+    oid: &str,
+    parent_oid: Option<&str>,
+    changed_path: &ChangedPath,
+    context_lines: u8,
+) -> Result<FileDiff, RepositoryError> {
+    let mut arguments = vec![
+        OsString::from("--literal-pathspecs"),
+        OsString::from("-C"),
+        OsString::from(base),
+        OsString::from("-c"),
+        OsString::from("core.quotePath=false"),
+    ];
+    if let Some(parent) = parent_oid {
+        arguments.extend([
+            OsString::from("diff"),
+            OsString::from("--patch"),
+            OsString::from("--no-color"),
+            OsString::from("--no-ext-diff"),
+            OsString::from("--no-textconv"),
+            OsString::from("--find-renames"),
+            OsString::from(format!("--unified={context_lines}")),
+            OsString::from(parent),
+            OsString::from(oid),
+        ]);
+    } else {
+        arguments.extend([
+            OsString::from("diff-tree"),
+            OsString::from("--root"),
+            OsString::from("--no-commit-id"),
+            OsString::from("-r"),
+            OsString::from("--patch"),
+            OsString::from("--no-color"),
+            OsString::from("--no-ext-diff"),
+            OsString::from("--no-textconv"),
+            OsString::from("--find-renames"),
+            OsString::from(format!("--unified={context_lines}")),
+            OsString::from(oid),
+        ]);
+    }
+    arguments.push(OsString::from("--"));
+    arguments.push(OsString::from(&changed_path.old_path));
+    if changed_path.new_path != changed_path.old_path {
+        arguments.push(OsString::from(&changed_path.new_path));
+    }
+    let output = SystemGit.run(&arguments).map_err(map_io_error)?;
+    if !output.success {
+        return Err(map_failed_output(&output.stderr));
+    }
+    if output.stdout.len() > MAX_COMMIT_FILE_DIFF_BYTES {
+        return Err(RepositoryError::CommitFileDiffLimit);
+    }
+    parse_diff(&output.stdout, &changed_path.new_path)
 }
 
 pub fn commit_parents_if_available(
@@ -709,6 +812,7 @@ fn commit_changed_paths(
 struct ChangedPath {
     old_path: String,
     new_path: String,
+    status: FileStatus,
 }
 
 fn parse_changed_paths(output: &[u8]) -> Result<Vec<ChangedPath>, RepositoryError> {
@@ -750,6 +854,16 @@ fn parse_changed_paths(output: &[u8]) -> Result<Vec<ChangedPath>, RepositoryErro
         paths.push(ChangedPath {
             old_path: old_path.to_owned(),
             new_path: new_path.to_owned(),
+            status: match status_kind {
+                b'A' => FileStatus::Added,
+                b'C' => FileStatus::Copied,
+                b'D' => FileStatus::Deleted,
+                b'M' => FileStatus::Modified,
+                b'R' => FileStatus::Renamed,
+                b'T' => FileStatus::TypeChanged,
+                b'U' => FileStatus::Unmerged,
+                _ => FileStatus::Unknown,
+            },
         });
         let path_count = if renamed { 2 } else { 1 };
         index += path_count;
@@ -1491,14 +1605,17 @@ mod tests {
                 ChangedPath {
                     old_path: "src/lib.rs".into(),
                     new_path: "src/lib.rs".into(),
+                    status: FileStatus::Modified,
                 },
                 ChangedPath {
                     old_path: "old name.txt".into(),
                     new_path: "new name.txt".into(),
+                    status: FileStatus::Renamed,
                 },
                 ChangedPath {
                     old_path: "gone.txt".into(),
                     new_path: "gone.txt".into(),
+                    status: FileStatus::Deleted,
                 },
             ]
         );

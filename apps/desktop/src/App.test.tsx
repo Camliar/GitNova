@@ -7,7 +7,7 @@ const repository = vi.hoisted(() => ({ selectRepositoryDirectory: vi.fn(), openR
 const status = vi.hoisted(() => ({ getWorkingTreeStatus: vi.fn() }));
 const diff = vi.hoisted(() => ({ getFileDiff: vi.fn() }));
 const history = vi.hoisted(() => ({ getCommitGraph: vi.fn() }));
-const commitDiff = vi.hoisted(() => ({ getCommitDiff: vi.fn() }));
+const commitDiff = vi.hoisted(() => ({ getCommitDiff: vi.fn(), getCommitFiles: vi.fn(), getCommitFileDiff: vi.fn() }));
 const mutations = vi.hoisted(() => ({ getRepositoryReferences: vi.fn(), commitStaged: vi.fn(), createLocalBranch: vi.fn(), switchLocalBranch: vi.fn() }));
 const ai = vi.hoisted(() => ({ previewAiInput: vi.fn(), generateAiCommitDraft: vi.fn() }));
 
@@ -38,9 +38,9 @@ describe("Desktop repository open", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.15", capabilities: { repositoryMutations: true } });
+    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.16", capabilities: { repositoryMutations: true } });
     core.configureCore.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
-    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.15", capabilities: { repositoryMutations: true } });
+    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.16", capabilities: { repositoryMutations: true } });
     core.shutdownCore.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
     repository.selectRepositoryDirectory.mockResolvedValue("/work/project");
     repository.openRepository.mockResolvedValue(descriptor);
@@ -51,6 +51,8 @@ describe("Desktop repository open", () => {
     diff.getFileDiff.mockResolvedValue({ oldPath: "src/app.ts", newPath: "src/app.ts", isBinary: false, hunks: [] });
     history.getCommitGraph.mockResolvedValue({ nodes: [], nextCursor: null });
     commitDiff.getCommitDiff.mockResolvedValue({ commit: null, parentOid: null, files: [] });
+    commitDiff.getCommitFiles.mockResolvedValue({ commit: null, parentOid: null, files: [] });
+    commitDiff.getCommitFileDiff.mockResolvedValue({ oldPath: "src/app.ts", newPath: "src/app.ts", isBinary: false, hunks: [] });
     mutations.getRepositoryReferences.mockResolvedValue({ head: { oid: "a".repeat(40), symbolicRef: "refs/heads/main" }, references: [
       { name: "main", fullName: "refs/heads/main", kind: "localBranch", targetOid: "a".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: null },
       { name: "origin/main", fullName: "refs/remotes/origin/main", kind: "remoteBranch", targetOid: "a".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: null },
@@ -59,7 +61,7 @@ describe("Desktop repository open", () => {
 
   it("launches Core in an explicit SSH environment and opens only its remote path", async () => {
     core.getCoreStatus.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
-    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.15", capabilities: { repositoryMutations: true }, environment: "ssh" });
+    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.16", capabilities: { repositoryMutations: true }, environment: "ssh" });
     render(<App />);
 
     fireEvent.change(await screen.findByLabelText("Core environment"), { target: { value: "ssh" } });
@@ -89,7 +91,7 @@ describe("Desktop repository open", () => {
   it("starts Core and restores the last successfully opened repository", async () => {
     localStorage.setItem("gitnova.workspace.v1", JSON.stringify({ version: 1, target: { kind: "local" }, path: "/work/project" }));
     core.getCoreStatus.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
-    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.15", capabilities: { repositoryMutations: true }, environment: "local" });
+    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.16", capabilities: { repositoryMutations: true }, environment: "local" });
     render(<App />);
 
     expect(await screen.findByRole("button", { name: "All Commits" })).toBeInTheDocument();
@@ -130,7 +132,7 @@ describe("Desktop repository open", () => {
   });
 
   it("hands an AI draft to the existing independent commit confirmation", async () => {
-    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.15", capabilities: { repositoryMutations: true, aiAssist: true } });
+    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.16", capabilities: { repositoryMutations: true, aiAssist: true } });
     status.getWorkingTreeStatus.mockResolvedValue({
       branch: { head: "main", oid: "a".repeat(40), upstream: null, ahead: 0, behind: 0 },
       entries: [{ path: "src/app.ts", originalPath: null, kind: "ordinary", indexStatus: "modified", worktreeStatus: "unmodified" }],
@@ -234,37 +236,48 @@ describe("Desktop repository open", () => {
   it("renders ordered commit files and reusable text and binary diff states", async () => {
     const commit = { oid: "d".repeat(40), parents: ["e".repeat(40)], summary: "Change files", message: "Change files\n", author: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" }, committer: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" } };
     history.getCommitGraph.mockResolvedValue({ nodes: [{ commit, isHead: true, references: [] }], nextCursor: null });
-    commitDiff.getCommitDiff.mockResolvedValue({ commit, parentOid: commit.parents[0], files: [
-      { oldPath: "old.ts", newPath: "new.ts", isBinary: false, hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, header: "", lines: [{ kind: "addition", content: "safe text", oldLine: null, newLine: 1 }] }] },
-      { oldPath: "image.png", newPath: "image.png", isBinary: true, hunks: [] },
+    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.16", capabilities: { repositoryMutations: true, lazyCommitDiff: true } });
+    commitDiff.getCommitFiles.mockResolvedValue({ commit, parentOid: commit.parents[0], files: [
+      { oldPath: "old.ts", newPath: "new.ts", status: "renamed" },
+      { oldPath: "image.png", newPath: "image.png", status: "modified" },
     ] });
+    commitDiff.getCommitFileDiff
+      .mockResolvedValueOnce({ oldPath: "old.ts", newPath: "new.ts", isBinary: false, hunks: [{ oldStart: 1, oldLines: 0, newStart: 1, newLines: 1, header: "", lines: [{ kind: "addition", content: "safe text", oldLine: null, newLine: 1 }] }] })
+      .mockResolvedValueOnce({ oldPath: "image.png", newPath: "image.png", isBinary: true, hunks: [] });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
     fireEvent.click(await screen.findByRole("button", { name: "All Commits" }));
     fireEvent.click(await screen.findByRole("button", { name: `View commit ${"d".repeat(8)}` }));
     fireEvent.click(screen.getByRole("tab", { name: "Changes" }));
 
+    expect(await screen.findByText("Its line-level diff will be loaded on demand.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /new\.ts/ }));
     expect(await screen.findByRole("region", { name: "Commit diff for new.ts" })).toHaveTextContent("safe text");
     expect(screen.getByText("from old.ts")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "image.png" }));
+    fireEvent.click(screen.getByRole("button", { name: /image\.png/ }));
     expect(await screen.findByText("Binary file changed. Content is not returned by Core.")).toBeInTheDocument();
+    expect(commitDiff.getCommitFiles).toHaveBeenCalledWith(commit.oid, undefined);
+    expect(commitDiff.getCommitFileDiff).toHaveBeenNthCalledWith(1, commit.oid, "new.ts", commit.parents[0]);
   });
 
-  it("keeps timeline context when commit diff fails and retries the same edge", async () => {
+  it("keeps the changed-file list when one lazy file diff fails and retries only that file", async () => {
     const commit = { oid: "f".repeat(40), parents: ["e".repeat(40)], summary: "Retry me", message: "Retry me\n", author: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" }, committer: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" } };
     history.getCommitGraph.mockResolvedValue({ nodes: [{ commit, isHead: true, references: [] }], nextCursor: null });
-    commitDiff.getCommitDiff.mockRejectedValueOnce({ code: "commit.not_found", message: "Commit unavailable", retryable: true }).mockResolvedValueOnce({ commit, parentOid: commit.parents[0], files: [] });
+    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.16", capabilities: { repositoryMutations: true, lazyCommitDiff: true } });
+    commitDiff.getCommitFiles.mockResolvedValue({ commit, parentOid: commit.parents[0], files: [{ oldPath: "large.ts", newPath: "large.ts", status: "modified" }] });
+    commitDiff.getCommitFileDiff.mockRejectedValueOnce({ code: "git.command_failed", message: "File diff unavailable", retryable: true }).mockResolvedValueOnce({ oldPath: "large.ts", newPath: "large.ts", isBinary: false, hunks: [] });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
     fireEvent.click(await screen.findByRole("button", { name: "All Commits" }));
     fireEvent.click(await screen.findByRole("button", { name: `View commit ${"f".repeat(8)}` }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("Commit unavailable. Commit history is still available.");
-    expect(screen.getByText("Retry me", { selector: ".commit-summary strong" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Retry commit diff" }));
     fireEvent.click(screen.getByRole("tab", { name: "Changes" }));
-    expect(await screen.findByText("No changed files in this comparison.")).toBeInTheDocument();
-    expect(commitDiff.getCommitDiff).toHaveBeenLastCalledWith(commit.oid, undefined);
+    fireEvent.click(await screen.findByRole("button", { name: /large\.ts/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("File diff unavailable. The changed-file list is still available.");
+    expect(screen.getByRole("button", { name: /large\.ts/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry file diff" }));
+    expect(await screen.findByText("No textual changes in this comparison.")).toBeInTheDocument();
+    expect(commitDiff.getCommitFiles).toHaveBeenCalledOnce();
+    expect(commitDiff.getCommitFileDiff).toHaveBeenCalledTimes(2);
   });
 
   it("does not restore a stale commit response after the detail is closed", async () => {
@@ -343,8 +356,8 @@ describe("Desktop repository open", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
 
-    expect(await screen.findByLabelText("Current branch")).toHaveDisplayValue("feature/status");
-    expect(screen.getAllByText("from src/old.ts")).toHaveLength(2);
+    expect(await screen.findAllByText("from src/old.ts")).toHaveLength(2);
+    expect(screen.queryByLabelText("Current branch")).not.toBeInTheDocument();
     expect(within(screen.getByRole("region", { name: "Staged" })).getByText("Renamed")).toBeInTheDocument();
     expect(within(screen.getByRole("region", { name: "Unstaged" })).getByText("Modified")).toBeInTheDocument();
     expect(within(screen.getByRole("region", { name: "Unstaged" })).getByText("Untracked")).toBeInTheDocument();
@@ -379,12 +392,11 @@ describe("Desktop repository open", () => {
     mutations.getRepositoryReferences.mockResolvedValue({ head: { oid: "a".repeat(40), symbolicRef: "refs/heads/main" }, references: branchRefs });
     mutations.createLocalBranch.mockResolvedValue(createSnapshot); mutations.switchLocalBranch.mockResolvedValue(switchSnapshot);
     render(<App />); fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
-    const select = await screen.findByLabelText("Current branch");
-    expect(await within(select).findByRole("option", { name: "main" })).toBeInTheDocument();
-    expect(within(select).getByRole("option", { name: "origin/main" })).toBeDisabled();
+    expect(await screen.findByLabelText("Current branch main")).toHaveClass("is-current");
+    expect(screen.queryByLabelText("Current branch")).not.toBeInTheDocument();
     expect(screen.getByTitle("Switch to topic")).toBeInTheDocument();
     expect(screen.getByText("v1.0")).toBeInTheDocument();
-    fireEvent.change(select, { target: { value: "topic" } });
+    fireEvent.click(screen.getByTitle("Switch to topic"));
     expect(mutations.switchLocalBranch).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole("button", { name: "Switch branch" }));
     expect(mutations.switchLocalBranch).toHaveBeenCalledWith("topic");
@@ -500,7 +512,7 @@ describe("Desktop repository open", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
 
-    expect(await screen.findByLabelText("Current branch")).toHaveDisplayValue("main");
+    expect(await screen.findByLabelText("Current branch main")).toHaveClass("is-current");
   });
 
   it("keeps the repository open when status fails and retries explicitly", async () => {
@@ -513,7 +525,7 @@ describe("Desktop repository open", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Git could not read status. The repository remains open.");
     expect(screen.getByLabelText("Current repository")).toHaveDisplayValue("project — /work/project");
     fireEvent.click(screen.getByRole("button", { name: "Refresh repository" }));
-    expect(await screen.findByLabelText("Current branch")).toHaveDisplayValue("Detached HEAD");
+    await waitFor(() => expect(screen.queryByLabelText(/Current branch /)).not.toBeInTheDocument());
   });
 
   it("reopens the same Core repository idempotently without another picker", async () => {

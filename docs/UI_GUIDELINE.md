@@ -22,8 +22,9 @@
 ## Desktop 仓库工作台
 
 - 已打开仓库使用紧凑顶部栏、固定仓库侧栏和单一主视图，Local Changes、All Commits、Pull Requests、Settings 不得同时纵向堆叠。
-- 仓库身份在顶部只展示一次；顶部选择器管理最近仓库。顶部选择器和左侧 Branches/Remotes/Tags 树使用同一份 Core refs 投影；只有本地分支可在明确确认后切换。
-- commit timeline 优先单行密度：graph、refs、message、author、SHA、时间横向排列，refs 位于 message 前，点击整行打开下方 Commit/Changes 标签详情；常规行高目标为 32 px，选中态覆盖整行。
+- 仓库身份在顶部只展示一次；顶部选择器管理最近仓库。分支上下文只在左侧 Branches/Remotes/Tags 树展示，当前本地分支加粗、着色并带当前标记，不在顶部重复分支选择器。
+- commit timeline 优先单行密度：graph、refs、message、author、SHA、时间横向排列，refs 位于 message 前，点击整行打开下方 Commit/Changes 标签详情；常规行高固定为 28 px，内容从顶部开始排列，不能因可用高度增加而拉伸，选中态覆盖整行。
+- commit Changes 先显示纵向 changed-file 列表，点击文件名才按需加载单文件 diff；加载或失败不得清空 timeline、commit metadata 和文件列表。
 - Local Changes 将 Core 状态明确分成 Unstaged 与 Staged 列表，混合状态文件在两个范围分别出现；点击对应范围内的文件名直接打开 diff，不另设 View 按钮或范围徽章。commit composer 位于同一工作流底部；AI 只作为 commit composer 内的显式渐进披露操作。
 - AI Provider、模型、端点及排除路径属于 Settings，不在 history、PR 或常驻导航中重复展示。
 

@@ -1,5 +1,11 @@
-import type { RepositoryReference } from "@gitnova/protocol";
-import type { ReferencesState } from "./BranchSwitcher";
+import type { RepositoryReference, RepositoryReferences } from "@gitnova/protocol";
+import type { DesktopError } from "./core";
+
+export type ReferencesState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "ready"; value: RepositoryReferences }
+  | { kind: "error"; error: DesktopError };
 
 function RefGroup({ title, references, currentBranch, canSwitch, onSwitch }: { title: string; references: RepositoryReference[]; currentBranch: string | null; canSwitch: boolean; onSwitch: (name: string) => void }) {
   if (references.length === 0) return null;
@@ -11,7 +17,7 @@ function RefGroup({ title, references, currentBranch, canSwitch, onSwitch }: { t
         return <li key={reference.fullName}>
           {reference.kind === "localBranch" && canSwitch && !current
             ? <button type="button" title={`Switch to ${reference.name}`} onClick={() => onSwitch(reference.name)}><span aria-hidden="true">⎇</span><span>{reference.name}</span>{reference.upstream && <small>{reference.upstream}</small>}</button>
-            : <span className={current ? "is-current" : ""}><span aria-hidden="true">{current ? "✓" : reference.kind === "tag" ? "◇" : "⎇"}</span><span>{reference.name}</span>{reference.upstream && <small>{reference.upstream}</small>}</span>}
+            : <span className={current ? "is-current" : ""} aria-label={current ? `Current branch ${reference.name}` : undefined}><span aria-hidden="true">{current ? "✓" : reference.kind === "tag" ? "◇" : "⎇"}</span><span>{reference.name}</span>{reference.upstream && <small>{reference.upstream}</small>}</span>}
         </li>;
       })}
     </ul>

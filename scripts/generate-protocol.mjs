@@ -4,7 +4,21 @@ import process from "node:process";
 const schemaUrl = new URL("../sdk/protocol/gitnova-protocol.schema.json", import.meta.url);
 const outputUrl = new URL("../packages/protocol/src/generated.ts", import.meta.url);
 const schema = JSON.parse(await readFile(schemaUrl, "utf8"));
-const requiredDefinitions = ["RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData", "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus", "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage", "CommitDiffParams", "CommitDiff", "ReferenceKind", "RepositoryHead", "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage", "CommitParams", "BranchParams", "RepositoryMutationSnapshot", "CommitResult", "GitHubRepositoryParams", "GitHubRepository", "GitHubPullRequestParams", "GitHubPullRequestState", "GitHubPullRequestRef", "GitHubCommitIdentity", "GitHubPullRequestCommit", "GitHubPullRequest", "GitHubPullRequestCommitDiffParams", "GitHubFileStatus", "GitHubPatchState", "GitHubCommitFileDiff", "GitHubPullRequestCommitDiff", "SquashTraceClassification", "SquashTraceConfidence", "SquashTraceLocalAvailability", "SquashTraceEvidence", "SquashTraceRelationship", "GitHubSquashTrace", "GitLabProjectParams", "GitLabProject", "GitLabMergeRequestParams", "GitLabMergeRequestState", "GitLabCommitIdentity", "GitLabMergeRequestCommit", "GitLabMergeRequestRef", "GitLabMergeRequest", "GitLabMergeRequestCommitDiffParams", "GitLabFileStatus", "GitLabCommitFileDiff", "GitLabMergeRequestCommitDiff", "GitLabSquashTrace", "AiProviderKind", "AiProviderConfig", "AiInputPreviewParams", "AiDisclosureDestination", "AiDisclosureFileState", "AiDisclosureFile", "AiInputPreview", "AiGenerateCommitDraftParams", "AiOperationSuggestionKind", "AiOperationSuggestion", "AiCommitDraft"];
+const requiredDefinitions = [
+  "RequestId", "ImplementationInfo", "ClientCapabilities", "ServerCapabilities", "InitializeParams", "InitializeResult", "CancelParams", "ErrorData",
+  "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus",
+  "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage",
+  "CommitDiffParams", "CommitDiff", "CommitFilesParams", "CommitChangedFile", "CommitFiles", "CommitFileDiffParams", "ReferenceKind", "RepositoryHead",
+  "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage", "CommitParams", "BranchParams", "RepositoryMutationSnapshot", "CommitResult",
+  "GitHubRepositoryParams", "GitHubRepository", "GitHubPullRequestParams", "GitHubPullRequestState", "GitHubPullRequestRef", "GitHubCommitIdentity",
+  "GitHubPullRequestCommit", "GitHubPullRequest", "GitHubPullRequestCommitDiffParams", "GitHubFileStatus", "GitHubPatchState", "GitHubCommitFileDiff",
+  "GitHubPullRequestCommitDiff", "SquashTraceClassification", "SquashTraceConfidence", "SquashTraceLocalAvailability", "SquashTraceEvidence",
+  "SquashTraceRelationship", "GitHubSquashTrace", "GitLabProjectParams", "GitLabProject", "GitLabMergeRequestParams", "GitLabMergeRequestState",
+  "GitLabCommitIdentity", "GitLabMergeRequestCommit", "GitLabMergeRequestRef", "GitLabMergeRequest", "GitLabMergeRequestCommitDiffParams", "GitLabFileStatus",
+  "GitLabCommitFileDiff", "GitLabMergeRequestCommitDiff", "GitLabSquashTrace", "AiProviderKind", "AiProviderConfig", "AiInputPreviewParams",
+  "AiDisclosureDestination", "AiDisclosureFileState", "AiDisclosureFile", "AiInputPreview", "AiGenerateCommitDraftParams", "AiOperationSuggestionKind",
+  "AiOperationSuggestion", "AiCommitDraft",
+];
 for (const name of requiredDefinitions) {
   if (!schema.$defs?.[name]) throw new Error(`Protocol schema is missing $defs.${name}`);
 }
@@ -33,6 +47,7 @@ export interface ServerCapabilities {
   structuredFileDiff: boolean;
   paginatedCommitHistory: boolean;
   structuredCommitDiff: boolean;
+  lazyCommitDiff?: boolean;
   repositoryReferences: boolean;
   commitGraphProjection: boolean;
   githubRepository: boolean;
@@ -176,6 +191,30 @@ export interface CommitDiff {
   commit: CommitSummary;
   parentOid: string | null;
   files: FileDiff[];
+}
+
+export interface CommitFilesParams {
+  oid: string;
+  parentOid?: string;
+}
+
+export interface CommitChangedFile {
+  oldPath: string;
+  newPath: string;
+  status: FileStatus;
+}
+
+export interface CommitFiles {
+  commit: CommitSummary;
+  parentOid: string | null;
+  files: CommitChangedFile[];
+}
+
+export interface CommitFileDiffParams {
+  oid: string;
+  parentOid?: string;
+  path: string;
+  contextLines?: number;
 }
 
 export type ReferenceKind = "localBranch" | "remoteBranch" | "tag";

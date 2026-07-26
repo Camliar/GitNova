@@ -73,3 +73,4 @@ TASK-0035 已锁定协议 1.14 的预览/生成类型、index-bound 确认、本
 ## Maintenance Tasks
 
 - TASK-0038 — 已修复 Desktop Windows Tauri 图标资源、跨平台 Dev Container 路径验证和 IntelliJ IDEA 2026.2/Java 25 CI 工具链一致性；完整平台矩阵已通过，不改变产品能力与架构边界。
+- TASK-0044 — 协议 1.16 将 commit 文件发现与单文件 patch 按需加载分离，修复超大 commit 的 Desktop transport 超时，并统一 28 px 紧凑 timeline 与侧栏分支上下文。

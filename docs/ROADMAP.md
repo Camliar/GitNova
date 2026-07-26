@@ -68,3 +68,7 @@ TASK-0035 已锁定协议 1.14 的预览/生成类型、index-bound 确认、本
 14. TASK-0037 — Desktop AI Assist 交互与安全确认
 
 该基线已全部交付。任何新增范围必须先更新 Roadmap，并继续使用独立 Task 作为开发与 Review 单元。
+
+## Maintenance Tasks
+
+- TASK-0038 — 修复 Desktop Windows Tauri 图标资源和 IntelliJ IDEA 2026.2/Java 25 CI 工具链一致性，不改变产品能力与架构边界。

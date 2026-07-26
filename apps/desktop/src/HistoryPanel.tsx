@@ -30,7 +30,7 @@ function formatTimestamp(value: string) {
   return timestamp.toLocaleDateString([], { month: "short", day: "numeric", year: timestamp.getFullYear() === now.getFullYear() ? undefined : "numeric" });
 }
 
-export function HistoryPanel({ state, commitLoading, onRetry, onLoadMore, onSelectCommit }: { state: HistoryState; commitLoading: boolean; onRetry: () => void; onLoadMore: () => void; onSelectCommit: (commit: CommitGraphNode["commit"]) => void }) {
+export function HistoryPanel({ state, selectedOid, commitLoading, onRetry, onLoadMore, onSelectCommit }: { state: HistoryState; selectedOid: string | null; commitLoading: boolean; onRetry: () => void; onLoadMore: () => void; onSelectCommit: (commit: CommitGraphNode["commit"]) => void }) {
   const graphRows = state.kind === "ready" ? projectGraphRows(state.nodes) : [];
   const graphStyle = { "--graph-column": `${Math.max(1, ...graphRows.map((row) => row.laneCount)) * 18}px` } as CSSProperties;
   return (
@@ -46,17 +46,17 @@ export function HistoryPanel({ state, commitLoading, onRetry, onLoadMore, onSele
       {state.kind === "ready" && state.nodes.length > 0 && (
         <ol className="commit-list" aria-label="Commit history" style={graphStyle}>
           {state.nodes.map((node, index) => (
-            <li key={node.commit.oid}>
+            <li key={node.commit.oid} className={selectedOid === node.commit.oid ? "is-selected" : ""}>
               <CommitGraph row={graphRows[index]} isHead={node.isHead} />
-              <button type="button" className="commit-main commit-row" aria-label={`View commit ${shortOid(node.commit.oid)}`} disabled={commitLoading} onClick={() => onSelectCommit(node.commit)}>
+              <button type="button" className="commit-main commit-row" aria-label={`View commit ${shortOid(node.commit.oid)}`} aria-current={selectedOid === node.commit.oid ? "true" : undefined} disabled={commitLoading} onClick={() => onSelectCommit(node.commit)}>
                 <div className="commit-summary">
-                  <strong>{node.commit.summary || "(no commit message)"}</strong>
                   {(node.isHead || node.references.length > 0) && (
                     <span className="commit-decorations">
                       {node.isHead && <span className="decoration decoration--head">HEAD</span>}
                       {node.references.map((reference) => <span className={`decoration decoration--${reference.kind}`} key={reference.fullName}>{reference.name}</span>)}
                     </span>
                   )}
+                  <strong>{node.commit.summary || "(no commit message)"}</strong>
                 </div>
                 <span className="commit-author">{node.commit.author.name}{node.commit.parents.length > 1 ? ` · Merge (${node.commit.parents.length} parents)` : ""}</span>
                 <code className="commit-oid">{shortOid(node.commit.oid)}</code>

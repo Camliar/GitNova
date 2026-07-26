@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CommitSummary, DiffScope, RepositoryDescriptor, RepositoryMutationSnapshot } from "@gitnova/protocol";
 import markUrl from "../../../assets/icons/gitnova-mark.svg";
-import { asDesktopError, configureCore, getCoreStatus, shutdownCore, startCore, type CoreEnvironment, type CoreLaunchTarget, type DesktopError } from "./core";
+import { asDesktopError, configureCore, getCoreStatus, shutdownCore, startCore, type CoreEnvironment, type CoreLaunchTarget, type CoreStatus, type DesktopError } from "./core";
 import { openRepository, selectRepositoryDirectory } from "./repository";
 import { getWorkingTreeStatus } from "./status";
 import { WorkingTreePanel, type WorkingTreeState } from "./WorkingTreePanel";
@@ -15,12 +15,14 @@ import { GitHubPanel } from "./GitHubPanel";
 import { MutationPanel } from "./MutationPanel";
 import { AiAssistPanel } from "./AiAssistPanel";
 import { AiSettingsPanel, defaultAiAssistSettings } from "./AiSettingsPanel";
-import { BranchSwitcher } from "./BranchSwitcher";
+import { BranchSwitcher, type ReferencesState } from "./BranchSwitcher";
+import { RepositoryRefTree } from "./RepositoryRefTree";
+import { getRepositoryReferences, switchLocalBranch } from "./mutations";
 
 type Connection =
   | { kind: "checking" }
   | { kind: "stopped" }
-  | { kind: "connected"; version: string; mutations: boolean; aiAssist: boolean }
+  | { kind: "connected"; version: string; mutations: boolean; references: boolean; aiAssist: boolean }
   | { kind: "error"; error: DesktopError };
 
 type RepositoryState =
@@ -30,6 +32,7 @@ type RepositoryState =
   | { kind: "error"; error: DesktopError };
 
 type WorkspaceView = "changes" | "history" | "pullRequests" | "settings";
+type BranchOperation = { kind: "idle" } | { kind: "confirm"; name: string } | { kind: "loading"; name: string } | { kind: "error"; name: string; error: DesktopError };
 
 const repositoryKindLabel: Record<RepositoryDescriptor["kind"], string> = {
   worktree: "Worktree",
@@ -109,6 +112,7 @@ function targetDetail(target: CoreLaunchTarget) {
 export function App() {
   const initialWorkspace = useRef(loadWorkspaceState());
   const [connection, setConnection] = useState<Connection>({ kind: "checking" });
+  const referencesCapability = useRef(false);
   const [environment, setEnvironment] = useState<CoreEnvironment>("local");
   const [environmentDetail, setEnvironmentDetail] = useState("");
   const [remoteRepositoryPath, setRemoteRepositoryPath] = useState("");
@@ -116,6 +120,9 @@ export function App() {
   const [recentRepositories, setRecentRepositories] = useState(initialWorkspace.current.repositories);
   const [workspaceError, setWorkspaceError] = useState<DesktopError | null>(null);
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("changes");
+  const [references, setReferences] = useState<ReferencesState>({ kind: "idle" });
+  const referencesRequest = useRef(0);
+  const [branchOperation, setBranchOperation] = useState<BranchOperation>({ kind: "idle" });
   const [aiSettings, setAiSettings] = useState(defaultAiAssistSettings);
   const [workingTree, setWorkingTree] = useState<WorkingTreeState>({ kind: "idle" });
   const workingTreeRequest = useRef(0);
@@ -124,6 +131,7 @@ export function App() {
   const [history, setHistory] = useState<HistoryState>({ kind: "idle" });
   const historyRequest = useRef(0);
   const [commitDetail, setCommitDetail] = useState<CommitDetailState>({ kind: "idle" });
+  const [historyDetailTab, setHistoryDetailTab] = useState<"commit" | "changes">("commit");
   const commitRequest = useRef(0);
   const [aiCommitDraft, setAiCommitDraft] = useState<{ id: number; message: string } | null>(null);
   const aiDraftSequence = useRef(0);
@@ -149,7 +157,7 @@ export function App() {
           status = await startCore();
           if (!active) return;
         }
-        setConnection(status.connected ? { kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true, aiAssist: status.capabilities?.aiAssist === true } : { kind: "stopped" });
+        if (status.connected) applyCoreStatus(status); else setConnection({ kind: "stopped" });
         if (!bookmark || !status.connected) return;
         setRepository({ kind: "selecting" });
         try {
@@ -174,6 +182,15 @@ export function App() {
     if (environment === "ssh") return { kind: "ssh", destination: environmentDetail.trim() };
     if (environment === "devContainer") return { kind: "devContainer", workspaceFolder: environmentDetail.trim() };
     return { kind: "local" };
+  }
+
+  function applyCoreStatus(status: CoreStatus) {
+    referencesCapability.current = status.capabilities?.repositoryReferences === true || status.capabilities?.repositoryMutations === true;
+    if (!referencesCapability.current) {
+      referencesRequest.current += 1;
+      setReferences({ kind: "idle" });
+    }
+    setConnection({ kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true, references: referencesCapability.current, aiAssist: status.capabilities?.aiAssist === true });
   }
 
   function rememberRepository(bookmark: RepositoryBookmark) {
@@ -202,20 +219,21 @@ export function App() {
       status = await startCore();
     }
     showTarget(target);
-    setConnection({ kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true, aiAssist: status.capabilities?.aiAssist === true });
+    applyCoreStatus(status);
   }
 
   async function activateRepository(opened: RepositoryDescriptor) {
     setRepository({ kind: "open", repository: opened });
     setWorkspaceView(opened.kind === "bare" ? "history" : "changes");
     setAiCommitDraft(null);
+    setBranchOperation({ kind: "idle" });
     diffRequest.current += 1;
     setFileDiff({ kind: "idle" });
     if (opened.kind === "bare") {
       workingTreeRequest.current += 1;
       setWorkingTree({ kind: "idle" });
     }
-    await Promise.all([opened.kind !== "bare" ? refreshWorkingTree() : Promise.resolve(), refreshHistory()]);
+    await Promise.all([opened.kind !== "bare" ? refreshWorkingTree() : Promise.resolve(), refreshHistory(), referencesCapability.current ? refreshReferences() : Promise.resolve()]);
   }
 
   async function connectCore() {
@@ -225,7 +243,7 @@ export function App() {
       await configureCore(target);
       const status = await startCore();
       setEnvironment(status.environment ?? environment);
-      setConnection({ kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true, aiAssist: status.capabilities?.aiAssist === true });
+      applyCoreStatus(status);
     } catch (error) {
       setConnection({ kind: "error", error: asDesktopError(error) });
     }
@@ -300,6 +318,33 @@ export function App() {
     }
   }
 
+  async function refreshReferences() {
+    const request = ++referencesRequest.current;
+    setReferences({ kind: "loading" });
+    try {
+      const value = await getRepositoryReferences();
+      if (request === referencesRequest.current) setReferences({ kind: "ready", value });
+    } catch (error) {
+      if (request === referencesRequest.current) setReferences({ kind: "error", error: asDesktopError(error) });
+    }
+  }
+
+  function reviewBranchSwitch(name: string) {
+    setBranchOperation({ kind: "confirm", name });
+  }
+
+  async function confirmBranchSwitch(name: string) {
+    setBranchOperation({ kind: "loading", name });
+    try {
+      const snapshot = await switchLocalBranch(name);
+      setReferences({ kind: "ready", value: snapshot.references });
+      applyMutation(snapshot);
+      setBranchOperation({ kind: "idle" });
+    } catch (error) {
+      setBranchOperation({ kind: "error", name, error: asDesktopError(error) });
+    }
+  }
+
   async function refreshWorkingTree() {
     const request = ++workingTreeRequest.current;
     diffRequest.current += 1;
@@ -346,6 +391,7 @@ export function App() {
 
   function selectCommit(commit: CommitSummary) {
     commitRequest.current += 1;
+    setHistoryDetailTab("commit");
     if (commit.parents.length > 1) {
       setCommitDetail({ kind: "choosingParent", commit });
     } else {
@@ -400,6 +446,7 @@ export function App() {
     commitRequest.current += 1;
     setCommitDetail({ kind: "idle" });
     setWorkingTree({ kind: "ready", status: snapshot.status });
+    setReferences({ kind: "ready", value: snapshot.references });
     void refreshHistory();
   }
 
@@ -424,6 +471,7 @@ export function App() {
   const repositoryPath = openedRepository?.worktreeRoot ?? openedRepository?.gitDirectory ?? "";
   const changeCount = workingTree.kind === "ready" ? workingTree.status.entries.length : 0;
   const branchName = workingTree.kind === "ready" ? workingTree.status.branch.head ?? "Detached HEAD" : "Reading branch…";
+  const selectedCommitOid = commitDetail.kind === "idle" ? null : commitDetail.kind === "choosingParent" ? commitDetail.commit.oid : commitDetail.selection.commit.oid;
 
   return (
     <div className="app-shell">
@@ -443,8 +491,8 @@ export function App() {
                 {recentRepositories.map((entry) => <option key={bookmarkKey(entry)} value={bookmarkKey(entry)}>{repositoryLabel(entry.path)} — {entry.path}</option>)}
               </select>
             </label>
-            {connection.kind === "connected" && connection.mutations && openedRepository.kind !== "bare"
-              ? <BranchSwitcher key={openedRepository.gitDirectory} currentBranch={workingTree.kind === "ready" ? workingTree.status.branch.head : null} disabled={workingTree.kind !== "ready"} onApplied={applyMutation} />
+            {connection.kind === "connected" && (connection.references || connection.mutations) && openedRepository.kind !== "bare"
+              ? <BranchSwitcher currentBranch={workingTree.kind === "ready" ? workingTree.status.branch.head : null} references={references} canSwitch={connection.mutations} switching={branchOperation.kind === "loading"} onSelect={reviewBranchSwitch} />
               : <span className="toolbar-branch-label">{branchName}</span>}
           </div>
         ) : <span className="toolbar-title">Local-first Git client</span>}
@@ -457,6 +505,12 @@ export function App() {
         </div>
       </header>
 
+      {(branchOperation.kind === "confirm" || branchOperation.kind === "loading" || branchOperation.kind === "error") && <div className="branch-confirmation" role="group" aria-label="Confirm branch switch">
+        <span>Switch to <strong>{branchOperation.name}</strong>? Working changes will be kept; GitNova will not stash or discard them.</span>
+        {branchOperation.kind === "error" && <span role="alert">{branchOperation.error.message}</span>}
+        <div><button type="button" disabled={branchOperation.kind === "loading"} onClick={() => setBranchOperation({ kind: "idle" })}>Cancel</button><button type="button" disabled={branchOperation.kind === "loading"} onClick={() => void confirmBranchSwitch(branchOperation.name)}>{branchOperation.kind === "loading" ? "Switching…" : branchOperation.kind === "error" ? "Retry" : "Switch branch"}</button></div>
+      </div>}
+
       {openedRepository ? (
         <main id="main-content" className="repository-workbench" tabIndex={-1}>
           <aside className="repository-sidebar" aria-label="Repository navigation">
@@ -466,6 +520,7 @@ export function App() {
               <button type="button" className={workspaceView === "pullRequests" ? "is-active" : ""} onClick={() => setWorkspaceView("pullRequests")}><span>Pull Requests</span></button>
               <button type="button" className={workspaceView === "settings" ? "is-active" : ""} onClick={() => setWorkspaceView("settings")}><span>Settings</span></button>
             </nav>
+            <RepositoryRefTree state={references} currentBranch={workingTree.kind === "ready" ? workingTree.status.branch.head : null} canSwitch={connection.kind === "connected" && connection.mutations} onSwitch={reviewBranchSwitch} />
             <dl className="repository-facts">
               <div><dt>Core</dt><dd>{coreDetail}</dd></div>
               <div><dt>System Git</dt><dd>{openedRepository.gitVersion}</dd></div>
@@ -477,10 +532,7 @@ export function App() {
           <section className="workbench-main">
             {workspaceError && <div className="workspace-error" role="alert"><span>{workspaceError.message}</span><button type="button" onClick={() => setWorkspaceError(null)}>Dismiss</button></div>}
             <header className="view-header">
-              <div>
-                <p>{workspaceView === "changes" ? "Working copy" : workspaceView === "history" ? "Repository history" : workspaceView === "pullRequests" ? "Provider data" : "Application preferences"}</p>
-                <h1>{workspaceView === "changes" ? "Local Changes" : workspaceView === "history" ? "All Commits" : workspaceView === "pullRequests" ? "Pull Requests" : "Settings"}</h1>
-              </div>
+              <h1>{workspaceView === "changes" ? "Local Changes" : workspaceView === "history" ? "All Commits" : workspaceView === "pullRequests" ? "Pull Requests" : "Settings"}</h1>
             </header>
 
             {workspaceView === "changes" && openedRepository.kind !== "bare" && (
@@ -489,7 +541,7 @@ export function App() {
                   <WorkingTreePanel state={workingTree} diffLoading={fileDiff.kind === "loading"} selection={fileDiff.kind === "idle" ? null : fileDiff.selection} onDiff={(path: string, scope: DiffScope) => void loadFileDiff({ path, scope })} />
                 </div>
                 <div className="changes-detail">
-                  {fileDiff.kind === "idle" ? <div className="pane-placeholder"><strong>Select a changed file</strong><span>Click a file name to inspect its diff. For mixed staged and working changes, choose the corresponding status badge.</span></div> : <DiffPanel state={fileDiff} onRetry={() => void loadFileDiff(fileDiff.selection)} onClose={closeFileDiff} />}
+                  {fileDiff.kind === "idle" ? <div className="pane-placeholder"><strong>Select a changed file</strong><span>Click a file name under Unstaged or Staged to inspect that diff.</span></div> : <DiffPanel state={fileDiff} onRetry={() => void loadFileDiff(fileDiff.selection)} onClose={closeFileDiff} />}
                 </div>
                 {connection.kind === "connected" && connection.mutations && workingTree.kind === "ready" && (
                   <MutationPanel
@@ -506,9 +558,15 @@ export function App() {
             {workspaceView === "history" && (
               <div className="history-workspace">
                 {openedRepository.kind === "bare" && <p className="bare-repository-note">Bare repositories do not have a working tree.</p>}
-                <HistoryPanel state={history} commitLoading={commitDetail.kind === "loading"} onRetry={() => void refreshHistory()} onLoadMore={() => void loadMoreHistory()} onSelectCommit={selectCommit} />
+                <HistoryPanel state={history} selectedOid={selectedCommitOid} commitLoading={commitDetail.kind === "loading"} onRetry={() => void refreshHistory()} onLoadMore={() => void loadMoreHistory()} onSelectCommit={selectCommit} />
                 <div className="history-detail">
-                  {commitDetail.kind === "idle" ? <div className="pane-placeholder"><strong>Select a commit</strong><span>Commit metadata, changed files and line-level diff will appear here.</span></div> : <CommitDetailPanel key={`${commitDetail.kind === "choosingParent" ? commitDetail.commit.oid : commitDetail.selection.commit.oid}:${commitDetail.kind === "choosingParent" ? "" : commitDetail.selection.parentOid ?? ""}`} state={commitDetail} onChooseParent={chooseCommitParent} onRetry={() => commitDetail.kind === "error" && void loadCommitDiff(commitDetail.selection)} onClose={closeCommitDetail} />}
+                  <div className="history-detail-tabs" role="tablist" aria-label="Commit detail views">
+                    <button type="button" role="tab" aria-selected={historyDetailTab === "commit"} className={historyDetailTab === "commit" ? "is-active" : ""} onClick={() => setHistoryDetailTab("commit")}>Commit</button>
+                    <button type="button" role="tab" aria-selected={historyDetailTab === "changes"} className={historyDetailTab === "changes" ? "is-active" : ""} onClick={() => setHistoryDetailTab("changes")}>Changes</button>
+                  </div>
+                  <div className="history-detail-content">
+                    {commitDetail.kind === "idle" ? <div className="pane-placeholder"><strong>Select a commit</strong><span>Commit metadata and line-level changes will appear here.</span></div> : <CommitDetailPanel key={`${commitDetail.kind === "choosingParent" ? commitDetail.commit.oid : commitDetail.selection.commit.oid}:${commitDetail.kind === "choosingParent" ? "" : commitDetail.selection.parentOid ?? ""}`} state={commitDetail} mode={historyDetailTab} onChooseParent={chooseCommitParent} onRetry={() => commitDetail.kind === "error" && void loadCommitDiff(commitDetail.selection)} onClose={closeCommitDetail} />}
+                  </div>
                 </div>
               </div>
             )}

@@ -242,6 +242,7 @@ describe("Desktop repository open", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
     fireEvent.click(await screen.findByRole("button", { name: "All Commits" }));
     fireEvent.click(await screen.findByRole("button", { name: `View commit ${"d".repeat(8)}` }));
+    fireEvent.click(screen.getByRole("tab", { name: "Changes" }));
 
     expect(await screen.findByRole("region", { name: "Commit diff for new.ts" })).toHaveTextContent("safe text");
     expect(screen.getByText("from old.ts")).toBeInTheDocument();
@@ -261,6 +262,7 @@ describe("Desktop repository open", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Commit unavailable. Commit history is still available.");
     expect(screen.getByText("Retry me", { selector: ".commit-summary strong" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry commit diff" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Changes" }));
     expect(await screen.findByText("No changed files in this comparison.")).toBeInTheDocument();
     expect(commitDiff.getCommitDiff).toHaveBeenLastCalledWith(commit.oid, undefined);
   });
@@ -342,10 +344,10 @@ describe("Desktop repository open", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
 
     expect(await screen.findByLabelText("Current branch")).toHaveDisplayValue("feature/status");
-    expect(screen.getByText("from src/old.ts")).toBeInTheDocument();
-    expect(screen.getByText("Staged · Renamed")).toBeInTheDocument();
-    expect(screen.getByText("Working · Modified")).toBeInTheDocument();
-    expect(screen.getByText("Working · Untracked")).toBeInTheDocument();
+    expect(screen.getAllByText("from src/old.ts")).toHaveLength(2);
+    expect(within(screen.getByRole("region", { name: "Staged" })).getByText("Renamed")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Unstaged" })).getByText("Modified")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Unstaged" })).getByText("Untracked")).toBeInTheDocument();
     expect(screen.getAllByText(/Conflict/)).toHaveLength(2);
   });
 
@@ -370,6 +372,7 @@ describe("Desktop repository open", () => {
       { name: "main", fullName: "refs/heads/main", kind: "localBranch", targetOid: "a".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: null },
       { name: "topic", fullName: "refs/heads/topic", kind: "localBranch", targetOid: "a".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: null },
       { name: "origin/main", fullName: "refs/remotes/origin/main", kind: "remoteBranch", targetOid: "a".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: null },
+      { name: "v1.0", fullName: "refs/tags/v1.0", kind: "tag", targetOid: "a".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: null },
     ];
     const createSnapshot = { status: { branch: { head: "main", oid: "a".repeat(40), upstream: null, ahead: 0, behind: 0 }, entries: [] }, references: { head: { oid: "a".repeat(40), symbolicRef: "refs/heads/main" }, references: branchRefs } };
     const switchSnapshot = { status: { branch: { head: "topic", oid: "a".repeat(40), upstream: null, ahead: 0, behind: 0 }, entries: [] }, references: { head: { oid: "a".repeat(40), symbolicRef: "refs/heads/topic" }, references: branchRefs } };
@@ -379,6 +382,8 @@ describe("Desktop repository open", () => {
     const select = await screen.findByLabelText("Current branch");
     expect(await within(select).findByRole("option", { name: "main" })).toBeInTheDocument();
     expect(within(select).getByRole("option", { name: "origin/main" })).toBeDisabled();
+    expect(screen.getByTitle("Switch to topic")).toBeInTheDocument();
+    expect(screen.getByText("v1.0")).toBeInTheDocument();
     fireEvent.change(select, { target: { value: "topic" } });
     expect(mutations.switchLocalBranch).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole("button", { name: "Switch branch" }));
@@ -412,7 +417,7 @@ describe("Desktop repository open", () => {
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
-    fireEvent.click(await screen.findByRole("button", { name: "src/app.ts" }));
+    fireEvent.click(await screen.findByRole("button", { name: "View working diff for src/app.ts" }));
 
     expect(diff.getFileDiff).toHaveBeenCalledWith("src/app.ts", "workingTree");
     const hunk = await screen.findByRole("region", { name: "Diff hunk 1" });
@@ -429,8 +434,7 @@ describe("Desktop repository open", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
 
-    expect(await screen.findByText("Working · Untracked")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /diff for new\.txt/ })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "View working diff for new.txt" })).toBeDisabled();
   });
 
   it("presents binary and empty scope results without content", async () => {
@@ -459,7 +463,7 @@ describe("Desktop repository open", () => {
     fireEvent.click(await screen.findByRole("button", { name: "View working diff for src/app.ts" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Diff failed. Working tree status is still available.");
-    expect(screen.getByText("Working · Modified")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Unstaged" })).getByText("Modified")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry diff" }));
     expect(await screen.findByText("No changes in this scope.")).toBeInTheDocument();
     expect(diff.getFileDiff).toHaveBeenLastCalledWith("src/app.ts", "workingTree");

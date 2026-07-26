@@ -21,23 +21,24 @@ const statusLabel: Record<FileStatus, string> = {
   unknown: "Unknown",
 };
 
-function ChangeBadges({ entry, disabled, selection, onDiff }: { entry: StatusEntry; disabled: boolean; selection: DiffSelection | null; onDiff: (path: string, scope: DiffScope) => void }) {
-  const stagedDiff = entry.indexStatus !== "unmodified" && entry.indexStatus !== "untracked";
-  const workingDiff = entry.worktreeStatus !== "unmodified" && entry.worktreeStatus !== "untracked";
-  return (
-    <span className="change-badges">
-      {entry.indexStatus !== "unmodified" && (
-        stagedDiff
-          ? <button type="button" className={`change-badge change-badge--${entry.indexStatus}${selection?.path === entry.path && selection.scope === "staged" ? " is-selected" : ""}`} disabled={disabled} aria-label={`View staged diff for ${entry.path}`} onClick={() => onDiff(entry.path, "staged")}>Staged · {statusLabel[entry.indexStatus]}</button>
-          : <span className={`change-badge change-badge--${entry.indexStatus}`}>Staged · {statusLabel[entry.indexStatus]}</span>
-      )}
-      {entry.worktreeStatus !== "unmodified" && (
-        workingDiff
-          ? <button type="button" className={`change-badge change-badge--${entry.worktreeStatus}${selection?.path === entry.path && selection.scope === "workingTree" ? " is-selected" : ""}`} disabled={disabled} aria-label={`View working diff for ${entry.path}`} onClick={() => onDiff(entry.path, "workingTree")}>Working · {statusLabel[entry.worktreeStatus]}</button>
-          : <span className={`change-badge change-badge--${entry.worktreeStatus}`}>Working · {statusLabel[entry.worktreeStatus]}</span>
-      )}
-    </span>
-  );
+function ChangeGroup({ title, entries, scope, disabled, selection, onDiff }: { title: string; entries: StatusEntry[]; scope: DiffScope; disabled: boolean; selection: DiffSelection | null; onDiff: (path: string, scope: DiffScope) => void }) {
+  return <section className="change-group" aria-labelledby={`change-group-${scope}`}>
+    <header><h2 id={`change-group-${scope}`}>{title}</h2><span>{entries.length}</span></header>
+    {entries.length === 0 ? <p className="change-group__empty">No {title.toLowerCase()} paths</p> : <ol className="change-list">
+      {entries.map((entry, index) => {
+        const fileStatus = scope === "staged" ? entry.indexStatus : entry.worktreeStatus;
+        const unavailable = scope === "workingTree" && fileStatus === "untracked";
+        const selected = selection?.path === entry.path && selection.scope === scope;
+        return <li key={`${scope}:${entry.path}:${index}`} className={selected ? "is-selected" : ""}>
+          <button type="button" className="change-path" disabled={disabled || unavailable} aria-label={`${scope === "staged" ? "View staged" : "View working"} diff for ${entry.path}`} onClick={() => onDiff(entry.path, scope)}>
+            <span className={`change-status change-status--${fileStatus}`} aria-hidden="true">{fileStatus === "added" || fileStatus === "untracked" ? "+" : fileStatus === "deleted" ? "−" : fileStatus === "renamed" ? "R" : "M"}</span>
+            <span className="change-path__label"><strong>{entry.path}</strong>{entry.originalPath && <small>from {entry.originalPath}</small>}</span>
+            <small>{statusLabel[fileStatus]}</small>
+          </button>
+        </li>;
+      })}
+    </ol>}
+  </section>;
 }
 
 export function WorkingTreePanel({ state, diffLoading, selection, onDiff }: { state: WorkingTreeState; diffLoading: boolean; selection: DiffSelection | null; onDiff: (path: string, scope: DiffScope) => void }) {
@@ -49,17 +50,10 @@ export function WorkingTreePanel({ state, diffLoading, selection, onDiff }: { st
       {state.kind === "loading" && <p className="empty-state" role="status">Reading status from GitNova Core…</p>}
       {status && status.entries.length === 0 && <p className="empty-state">Working tree clean</p>}
       {status && status.entries.length > 0 && (
-        <ol className="change-list" aria-label="Changed files">
-          {status.entries.map((entry, index) => (
-            <li key={`${entry.path}:${index}`} className={selection?.path === entry.path ? "is-selected" : ""}>
-              <button type="button" className="change-path" disabled={diffLoading || (entry.worktreeStatus === "untracked" && (entry.indexStatus === "unmodified" || entry.indexStatus === "untracked"))} onClick={() => onDiff(entry.path, entry.worktreeStatus !== "unmodified" && entry.worktreeStatus !== "untracked" ? "workingTree" : "staged")}>
-                <strong>{entry.path}</strong>
-                {entry.originalPath && <span>from {entry.originalPath}</span>}
-              </button>
-              <ChangeBadges entry={entry} disabled={diffLoading} selection={selection} onDiff={onDiff} />
-            </li>
-          ))}
-        </ol>
+        <div className="change-groups" aria-label="Changed files">
+          <ChangeGroup title="Unstaged" entries={status.entries.filter((entry) => entry.worktreeStatus !== "unmodified")} scope="workingTree" disabled={diffLoading} selection={selection} onDiff={onDiff} />
+          <ChangeGroup title="Staged" entries={status.entries.filter((entry) => entry.indexStatus !== "unmodified" && entry.indexStatus !== "untracked")} scope="staged" disabled={diffLoading} selection={selection} onDiff={onDiff} />
+        </div>
       )}
     </section>
   );

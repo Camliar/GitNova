@@ -13,8 +13,9 @@ export type CommitDetailState =
 
 const shortOid = (oid: string) => oid.slice(0, 8);
 
-export function CommitDetailPanel({ state, onChooseParent, onRetry, onClose }: {
+export function CommitDetailPanel({ state, mode, onChooseParent, onRetry, onClose }: {
   state: Exclude<CommitDetailState, { kind: "idle" }>;
+  mode: "commit" | "changes";
   onChooseParent: (parentOid: string) => void;
   onRetry: () => void;
   onClose: () => void;
@@ -25,17 +26,19 @@ export function CommitDetailPanel({ state, onChooseParent, onRetry, onClose }: {
   return (
     <section className="commit-detail" aria-labelledby="commit-detail-title" aria-busy={state.kind === "loading"}>
       <header className="commit-detail__header">
-        <div><p className="eyebrow">Commit detail</p><h2 id="commit-detail-title">{commit.summary || "(no commit message)"}</h2></div>
+        <div><h2 id="commit-detail-title">{commit.summary || "(no commit message)"}</h2></div>
         <button type="button" className="button-secondary" onClick={onClose}>Close commit</button>
       </header>
-      <dl className="commit-metadata">
-        <div><dt>Commit</dt><dd><code>{commit.oid}</code></dd></div>
-        <div><dt>Author</dt><dd>{commit.author.name} &lt;{commit.author.email}&gt; · {commit.author.timestamp}</dd></div>
-        <div><dt>Committer</dt><dd>{commit.committer.name} &lt;{commit.committer.email}&gt; · {commit.committer.timestamp}</dd></div>
-        <div><dt>Parents</dt><dd>{commit.parents.length ? commit.parents.join(" · ") : "Root commit (empty tree)"}</dd></div>
-        {state.kind === "ready" && <div><dt>Compared with</dt><dd>{state.diff.parentOid ?? "Empty tree"}</dd></div>}
-      </dl>
-      <div className="commit-message"><h3>Message</h3><pre>{commit.message}</pre></div>
+      {mode === "commit" && <>
+        <dl className="commit-metadata">
+          <div><dt>Commit</dt><dd><code>{commit.oid}</code></dd></div>
+          <div><dt>Author</dt><dd>{commit.author.name} &lt;{commit.author.email}&gt; · {commit.author.timestamp}</dd></div>
+          <div><dt>Committer</dt><dd>{commit.committer.name} &lt;{commit.committer.email}&gt; · {commit.committer.timestamp}</dd></div>
+          <div><dt>Parents</dt><dd>{commit.parents.length ? commit.parents.join(" · ") : "Root commit (empty tree)"}</dd></div>
+          {state.kind === "ready" && <div><dt>Compared with</dt><dd>{state.diff.parentOid ?? "Empty tree"}</dd></div>}
+        </dl>
+        <div className="commit-message"><h3>Message</h3><pre>{commit.message}</pre></div>
+      </>}
       {state.kind === "choosingParent" && (
         <div className="parent-choice">
           <p>This merge has multiple parents. Choose the parent edge to compare.</p>
@@ -44,8 +47,8 @@ export function CommitDetailPanel({ state, onChooseParent, onRetry, onClose }: {
       )}
       {state.kind === "loading" && <p className="empty-state" role="status">Reading commit diff from GitNova Core…</p>}
       {state.kind === "error" && <div className="diff-error"><p role="alert">{state.error.message}. Commit history is still available.</p><button type="button" onClick={onRetry}>Retry commit diff</button></div>}
-      {state.kind === "ready" && state.diff.files.length === 0 && <p className="empty-state">No changed files in this comparison.</p>}
-      {state.kind === "ready" && state.diff.files.length > 0 && (
+      {mode === "changes" && state.kind === "ready" && state.diff.files.length === 0 && <p className="empty-state">No changed files in this comparison.</p>}
+      {mode === "changes" && state.kind === "ready" && state.diff.files.length > 0 && (
         <>
           <ul className="commit-files" aria-label="Changed files">
             {state.diff.files.map((changedFile, index) => (

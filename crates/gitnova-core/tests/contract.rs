@@ -205,6 +205,166 @@ fn mutation_preconditions_return_stable_errors() {
 }
 
 #[test]
+fn fetches_pulls_fast_forward_pushes_without_force_and_rejects_stale_or_diverged_heads() {
+    let directory = TestDirectory::new("repository-sync");
+    git(&["init", "--bare", "remote.git"], &directory.0);
+    git(&["init", "seed"], &directory.0);
+    let seed = directory.0.join("seed");
+    git(&["symbolic-ref", "HEAD", "refs/heads/main"], &seed);
+    git(&["config", "user.name", "Ada"], &seed);
+    git(&["config", "user.email", "ada@example.com"], &seed);
+    fs::write(seed.join("tracked.txt"), "one\n").unwrap();
+    git(&["add", "tracked.txt"], &seed);
+    git(&["commit", "-qm", "initial"], &seed);
+    let remote = directory.0.join("remote.git");
+    git(
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+        &seed,
+    );
+    git(&["push", "-u", "origin", "main"], &seed);
+    git(&["symbolic-ref", "HEAD", "refs/heads/main"], &remote);
+    git(&["clone", remote.to_str().unwrap(), "local"], &directory.0);
+    git(&["clone", remote.to_str().unwrap(), "peer"], &directory.0);
+    let local = directory.0.join("local");
+    let peer = directory.0.join("peer");
+    for repository in [&local, &peer] {
+        git(&["config", "user.name", "Ada"], repository);
+        git(&["config", "user.email", "ada@example.com"], repository);
+    }
+
+    fs::write(peer.join("peer.txt"), "peer\n").unwrap();
+    git(&["add", "peer.txt"], &peer);
+    git(&["commit", "-qm", "peer change"], &peer);
+    git(&["push", "origin", "main"], &peer);
+    let initial_local = head_oid(&local);
+    let peer_head = head_oid(&peer);
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &local),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/fetch","params":{}}),
+        json!({"jsonrpc":"2.0","id":4,"method":"repository/pull","params":{"expectedBranch":"main","expectedHeadOid":initial_local}}),
+    ]);
+    let values = responses(&output.stdout);
+    assert_eq!(values[2]["result"]["operation"], "fetch");
+    assert_eq!(values[2]["result"]["remote"], "origin");
+    assert_eq!(values[3]["result"]["operation"], "pull");
+    assert_eq!(head_oid(&local), peer_head);
+
+    fs::write(local.join("local.txt"), "local\n").unwrap();
+    git(&["add", "local.txt"], &local);
+    git(&["commit", "-qm", "local push"], &local);
+    let local_push_head = head_oid(&local);
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &local),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/push","params":{"expectedBranch":"main","expectedHeadOid":local_push_head}}),
+    ]);
+    let values = responses(&output.stdout);
+    assert_eq!(values[2]["result"]["operation"], "push");
+    assert_eq!(head_oid(&remote), local_push_head);
+
+    git(&["switch", "-c", "topic"], &local);
+    fs::write(local.join("topic.txt"), "topic\n").unwrap();
+    git(&["add", "topic.txt"], &local);
+    git(&["commit", "-qm", "topic without upstream"], &local);
+    let topic_head = head_oid(&local);
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &local),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/push","params":{"expectedBranch":"topic","expectedHeadOid":topic_head}}),
+    ]);
+    let values = responses(&output.stdout);
+    assert_eq!(values[2]["result"]["remoteBranch"], "topic");
+    assert_eq!(
+        String::from_utf8(git_output(&["rev-parse", "refs/heads/topic"], &remote).stdout)
+            .unwrap()
+            .trim(),
+        topic_head
+    );
+    git(&["switch", "main"], &local);
+
+    git(&["pull", "--ff-only"], &peer);
+    fs::write(peer.join("peer-2.txt"), "peer two\n").unwrap();
+    git(&["add", "peer-2.txt"], &peer);
+    git(&["commit", "-qm", "peer second"], &peer);
+    git(&["push", "origin", "main"], &peer);
+    fs::write(local.join("local-2.txt"), "local two\n").unwrap();
+    git(&["add", "local-2.txt"], &local);
+    git(&["commit", "-qm", "local divergent"], &local);
+    let divergent_head = head_oid(&local);
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &local),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/pull","params":{"expectedBranch":"main","expectedHeadOid":divergent_head}}),
+        json!({"jsonrpc":"2.0","id":4,"method":"repository/push","params":{"expectedBranch":"main","expectedHeadOid":divergent_head}}),
+        json!({"jsonrpc":"2.0","id":5,"method":"repository/push","params":{"expectedBranch":"main","expectedHeadOid":initial_local}}),
+    ]);
+    let values = responses(&output.stdout);
+    assert_eq!(values[2]["error"]["data"]["stableCode"], "sync.diverged");
+    assert_eq!(values[3]["error"]["data"]["stableCode"], "sync.push_failed");
+    assert_eq!(values[4]["error"]["data"]["stableCode"], "sync.stale_head");
+    assert_eq!(head_oid(&local), divergent_head);
+    assert_eq!(head_oid(&remote), head_oid(&peer));
+}
+
+#[test]
+fn repository_sync_requires_an_open_worktree_and_safe_current_context() {
+    let oid = "a".repeat(40);
+    let without_repository = run(&[
+        initialize(json!(1)),
+        json!({"jsonrpc":"2.0","id":2,"method":"repository/fetch","params":{}}),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/pull","params":{"expectedBranch":"main","expectedHeadOid":oid}}),
+    ]);
+    let values = responses(&without_repository.stdout);
+    assert_eq!(
+        values[1]["error"]["data"]["stableCode"],
+        "repository.not_open"
+    );
+    assert_eq!(
+        values[2]["error"]["data"]["stableCode"],
+        "repository.not_open"
+    );
+
+    let directory = TestDirectory::new("repository-sync-errors");
+    git(&["init", "-q"], &directory.0);
+    git(&["symbolic-ref", "HEAD", "refs/heads/main"], &directory.0);
+    git(&["config", "user.name", "Ada"], &directory.0);
+    git(&["config", "user.email", "ada@example.com"], &directory.0);
+    fs::write(directory.0.join("tracked.txt"), "one\n").unwrap();
+    git(&["add", "tracked.txt"], &directory.0);
+    git(&["commit", "-qm", "initial"], &directory.0);
+    let head = head_oid(&directory.0);
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &directory.0),
+        json!({"jsonrpc":"2.0","id":3,"method":"repository/fetch","params":{"remote":"--upload-pack=evil"}}),
+        json!({"jsonrpc":"2.0","id":4,"method":"repository/pull","params":{"expectedBranch":"main","expectedHeadOid":head}}),
+        json!({"jsonrpc":"2.0","id":5,"method":"repository/push","params":{"expectedBranch":"main","expectedHeadOid":head}}),
+        json!({"jsonrpc":"2.0","id":6,"method":"repository/push","params":{"expectedBranch":"main","expectedHeadOid":"short"}}),
+    ]);
+    let values = responses(&output.stdout);
+    assert_eq!(
+        values[2]["error"]["data"]["stableCode"],
+        "sync.invalid_remote"
+    );
+    assert_eq!(
+        values[3]["error"]["data"]["stableCode"],
+        "sync.upstream_required"
+    );
+    assert_eq!(
+        values[4]["error"]["data"]["stableCode"],
+        "sync.remote_not_found"
+    );
+    assert_eq!(
+        values[5]["error"]["data"]["stableCode"],
+        "protocol.invalid_params"
+    );
+    for value in &values[2..] {
+        assert!(!serde_json::to_string(value).unwrap().contains("evil"));
+    }
+}
+
+#[test]
 fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let output = run(&[
         initialize(json!("init-1")),
@@ -216,7 +376,7 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let responses = responses(&output.stdout);
     assert_eq!(responses.len(), 2);
     assert_eq!(responses[0]["id"], "init-1");
-    assert_eq!(responses[0]["result"]["protocolVersion"], "1.17");
+    assert_eq!(responses[0]["result"]["protocolVersion"], "1.18");
     assert_eq!(responses[0]["result"]["capabilities"]["cancellation"], true);
     assert_eq!(
         responses[0]["result"]["capabilities"]["workingTreeStatus"],
@@ -232,6 +392,10 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     );
     assert_eq!(
         responses[0]["result"]["capabilities"]["structuredCommitDiff"],
+        true
+    );
+    assert_eq!(
+        responses[0]["result"]["capabilities"]["repositorySync"],
         true
     );
     assert_eq!(

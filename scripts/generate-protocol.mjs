@@ -9,7 +9,7 @@ const requiredDefinitions = [
   "RepositoryPathParams", "RepositoryKind", "RepositoryDescriptor", "StatusEntryKind", "FileStatus", "StatusEntry", "BranchStatus", "WorkingTreeStatus",
   "DiffScope", "DiffParams", "DiffLineKind", "DiffLine", "DiffHunk", "FileDiff", "HistoryParams", "CommitIdentity", "CommitSummary", "HistoryPage",
   "CommitDiffParams", "CommitDiff", "CommitFilesParams", "CommitChangedFile", "CommitFiles", "CommitFileDiffParams", "ReferenceKind", "RepositoryHead",
-  "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage", "CommitParams", "BranchParams", "RepositoryMutationSnapshot", "CommitResult",
+  "RepositoryReference", "RepositoryReferences", "CommitGraphNode", "CommitGraphPage", "CommitParams", "BranchParams", "RepositoryFetchParams", "RepositorySyncParams", "RepositoryMutationSnapshot", "RepositorySyncOperation", "RepositorySyncResult", "CommitResult",
   "GitHubRepositoryParams", "GitHubRepository", "GitHubPullRequestParams", "GitHubPullRequestState", "GitHubPullRequestRef", "GitHubCommitIdentity",
   "GitHubPullRequestCommit", "GitHubPullRequest", "GitHubPullRequestCommitDiffParams", "GitHubFileStatus", "GitHubPatchState", "GitHubCommitFileDiff",
   "GitHubPullRequestCommitDiff", "SquashTraceClassification", "SquashTraceConfidence", "SquashTraceLocalAvailability", "SquashTraceEvidence",
@@ -50,6 +50,7 @@ export interface ServerCapabilities {
   structuredCommitDiff: boolean;
   lazyCommitDiff?: boolean;
   historySquashTrace?: boolean;
+  repositorySync?: boolean;
   repositoryReferences: boolean;
   commitGraphProjection: boolean;
   githubRepository: boolean;
@@ -260,9 +261,28 @@ export interface BranchParams {
   name: string;
 }
 
+export interface RepositoryFetchParams {
+  remote?: string;
+}
+
+export interface RepositorySyncParams {
+  expectedBranch: string;
+  expectedHeadOid: string;
+}
+
 export interface RepositoryMutationSnapshot {
   status: WorkingTreeStatus;
   references: RepositoryReferences;
+}
+
+export type RepositorySyncOperation = "fetch" | "pull" | "push";
+
+export interface RepositorySyncResult {
+  operation: RepositorySyncOperation;
+  remote: string;
+  branch: string;
+  remoteBranch: string;
+  snapshot: RepositoryMutationSnapshot;
 }
 
 export interface CommitResult {

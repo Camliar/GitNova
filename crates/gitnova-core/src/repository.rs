@@ -42,6 +42,15 @@ pub enum RepositoryError {
     BranchNotFound,
     UnbornHead,
     MutationFailed,
+    SyncInvalidRemote,
+    SyncRemoteNotFound,
+    SyncBranchRequired,
+    SyncUpstreamRequired,
+    SyncStaleHead,
+    SyncDiverged,
+    SyncFetchFailed,
+    SyncPullFailed,
+    SyncPushFailed,
 }
 
 const MAX_COMMIT_FILES: usize = 20_000;
@@ -128,6 +137,8 @@ fn mutation_output(
         .arg(base)
         .args(arguments)
         .env("LC_ALL", "C")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GCM_INTERACTIVE", "Never")
         .stdin(if input.is_some() {
             Stdio::piped()
         } else {
@@ -248,6 +259,253 @@ pub fn switch_branch(
         return Err(RepositoryError::MutationFailed);
     }
     mutation_snapshot(descriptor)
+}
+
+#[derive(Debug)]
+struct SyncContext {
+    base: String,
+    branch: String,
+    head_oid: String,
+    upstream: Option<Upstream>,
+}
+
+#[derive(Debug)]
+struct Upstream {
+    remote: String,
+    remote_branch: String,
+    tracking_ref: String,
+}
+
+fn sync_context(descriptor: &RepositoryDescriptor) -> Result<SyncContext, RepositoryError> {
+    let base = mutation_base(descriptor)?.to_owned();
+    let current = status(descriptor)?.branch;
+    let branch = current.head.ok_or(RepositoryError::SyncBranchRequired)?;
+    let head_oid = current.oid.ok_or(RepositoryError::UnbornHead)?;
+    let upstream = upstream(&base, &branch)?;
+    Ok(SyncContext {
+        base,
+        branch,
+        head_oid,
+        upstream,
+    })
+}
+
+fn checked_sync_context(
+    descriptor: &RepositoryDescriptor,
+    expected_branch: &str,
+    expected_head_oid: &str,
+) -> Result<SyncContext, RepositoryError> {
+    let context = sync_context(descriptor)?;
+    if context.branch != expected_branch
+        || !context.head_oid.eq_ignore_ascii_case(expected_head_oid)
+    {
+        return Err(RepositoryError::SyncStaleHead);
+    }
+    Ok(context)
+}
+
+fn ensure_sync_context_current(
+    descriptor: &RepositoryDescriptor,
+    context: &SyncContext,
+) -> Result<(), RepositoryError> {
+    let current = status(descriptor)?.branch;
+    if current.head.as_deref() == Some(context.branch.as_str())
+        && current
+            .oid
+            .as_deref()
+            .is_some_and(|oid| oid.eq_ignore_ascii_case(&context.head_oid))
+    {
+        Ok(())
+    } else {
+        Err(RepositoryError::SyncStaleHead)
+    }
+}
+
+fn upstream(base: &str, branch: &str) -> Result<Option<Upstream>, RepositoryError> {
+    validate_branch(base, branch)?;
+    let reference = format!("refs/heads/{branch}");
+    let format = "%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream)";
+    let output = mutation_output(
+        base,
+        &[
+            "for-each-ref",
+            "--count=1",
+            &format!("--format={format}"),
+            &reference,
+        ],
+        None,
+    )?;
+    if !output.success {
+        return Err(map_failed_output(&output.stderr));
+    }
+    let value = String::from_utf8(output.stdout).map_err(|_| RepositoryError::ReferenceEncoding)?;
+    let value = value.trim_end_matches(['\r', '\n']);
+    if value.is_empty() || value.bytes().all(|byte| byte == 0) {
+        return Ok(None);
+    }
+    let fields: Vec<_> = value.split('\0').collect();
+    if fields.len() != 3
+        || fields.iter().any(|field| field.is_empty())
+        || !fields[1].starts_with("refs/heads/")
+        || !fields[2].starts_with("refs/")
+    {
+        return Err(RepositoryError::ReferenceParse);
+    }
+    Ok(Some(Upstream {
+        remote: fields[0].to_owned(),
+        remote_branch: fields[1].trim_start_matches("refs/heads/").to_owned(),
+        tracking_ref: fields[2].to_owned(),
+    }))
+}
+
+fn remotes(base: &str) -> Result<Vec<String>, RepositoryError> {
+    let output = mutation_output(base, &["remote"], None)?;
+    if !output.success {
+        return Err(map_failed_output(&output.stderr));
+    }
+    let value = String::from_utf8(output.stdout).map_err(|_| RepositoryError::ReferenceEncoding)?;
+    Ok(value.lines().map(str::to_owned).collect())
+}
+
+fn checked_remote(base: &str, requested: &str) -> Result<String, RepositoryError> {
+    if requested.is_empty()
+        || requested.len() > 255
+        || requested.starts_with('-')
+        || requested.chars().any(char::is_control)
+    {
+        return Err(RepositoryError::SyncInvalidRemote);
+    }
+    if remotes(base)?.iter().any(|remote| remote == requested) {
+        Ok(requested.to_owned())
+    } else {
+        Err(RepositoryError::SyncRemoteNotFound)
+    }
+}
+
+fn run_fetch(base: &str, remote: &str) -> Result<(), RepositoryError> {
+    let output = mutation_output(base, &["fetch", "--no-recurse-submodules", remote], None)?;
+    if output.success {
+        Ok(())
+    } else {
+        Err(RepositoryError::SyncFetchFailed)
+    }
+}
+
+pub fn fetch(
+    descriptor: &RepositoryDescriptor,
+    requested_remote: Option<&str>,
+) -> Result<gitnova_protocol::RepositorySyncResult, RepositoryError> {
+    let context = sync_context(descriptor)?;
+    let remote = if let Some(remote) = requested_remote {
+        checked_remote(&context.base, remote)?
+    } else if let Some(upstream) = &context.upstream {
+        checked_remote(&context.base, &upstream.remote)?
+    } else {
+        checked_remote(&context.base, "origin")?
+    };
+    run_fetch(&context.base, &remote)?;
+    let remote_branch = context
+        .upstream
+        .filter(|upstream| upstream.remote == remote)
+        .map_or_else(|| context.branch.clone(), |upstream| upstream.remote_branch);
+    Ok(gitnova_protocol::RepositorySyncResult {
+        operation: gitnova_protocol::RepositorySyncOperation::Fetch,
+        remote,
+        branch: context.branch,
+        remote_branch,
+        snapshot: mutation_snapshot(descriptor)?,
+    })
+}
+
+pub fn pull(
+    descriptor: &RepositoryDescriptor,
+    expected_branch: &str,
+    expected_head_oid: &str,
+) -> Result<gitnova_protocol::RepositorySyncResult, RepositoryError> {
+    let context = checked_sync_context(descriptor, expected_branch, expected_head_oid)?;
+    let upstream = context
+        .upstream
+        .as_ref()
+        .ok_or(RepositoryError::SyncUpstreamRequired)?;
+    let remote = checked_remote(&context.base, &upstream.remote)?;
+    run_fetch(&context.base, &remote)?;
+    ensure_sync_context_current(descriptor, &context)?;
+    let local_contains_remote = mutation_output(
+        &context.base,
+        &[
+            "merge-base",
+            "--is-ancestor",
+            &upstream.tracking_ref,
+            "HEAD",
+        ],
+        None,
+    )?
+    .success;
+    if !local_contains_remote {
+        let can_fast_forward = mutation_output(
+            &context.base,
+            &[
+                "merge-base",
+                "--is-ancestor",
+                "HEAD",
+                &upstream.tracking_ref,
+            ],
+            None,
+        )?
+        .success;
+        if !can_fast_forward {
+            return Err(RepositoryError::SyncDiverged);
+        }
+        let output = mutation_output(
+            &context.base,
+            &["merge", "--ff-only", "--no-edit", &upstream.tracking_ref],
+            None,
+        )?;
+        if !output.success {
+            return Err(RepositoryError::SyncPullFailed);
+        }
+    }
+    Ok(gitnova_protocol::RepositorySyncResult {
+        operation: gitnova_protocol::RepositorySyncOperation::Pull,
+        remote,
+        branch: context.branch,
+        remote_branch: upstream.remote_branch.clone(),
+        snapshot: mutation_snapshot(descriptor)?,
+    })
+}
+
+pub fn push(
+    descriptor: &RepositoryDescriptor,
+    expected_branch: &str,
+    expected_head_oid: &str,
+) -> Result<gitnova_protocol::RepositorySyncResult, RepositoryError> {
+    let context = checked_sync_context(descriptor, expected_branch, expected_head_oid)?;
+    let (remote, remote_branch) = if let Some(upstream) = &context.upstream {
+        (
+            checked_remote(&context.base, &upstream.remote)?,
+            upstream.remote_branch.clone(),
+        )
+    } else {
+        (
+            checked_remote(&context.base, "origin")?,
+            context.branch.clone(),
+        )
+    };
+    validate_branch(&context.base, &remote_branch)?;
+    ensure_sync_context_current(descriptor, &context)?;
+    let refspec = format!("{}:refs/heads/{remote_branch}", context.head_oid);
+    let arguments = ["push", "--porcelain", &remote, &refspec];
+    let output = mutation_output(&context.base, &arguments, None)?;
+    if !output.success {
+        return Err(RepositoryError::SyncPushFailed);
+    }
+    Ok(gitnova_protocol::RepositorySyncResult {
+        operation: gitnova_protocol::RepositorySyncOperation::Push,
+        remote,
+        branch: context.branch,
+        remote_branch,
+        snapshot: mutation_snapshot(descriptor)?,
+    })
 }
 
 pub fn diff(

@@ -27,15 +27,19 @@ use gitnova_protocol::{
     ERROR_INVALID_PATH, ERROR_INVALID_REPOSITORY_PATH, ERROR_INVALID_REQUEST,
     ERROR_METHOD_NOT_FOUND, ERROR_MUTATION_FAILED, ERROR_NOT_INITIALIZED, ERROR_NOTHING_STAGED,
     ERROR_PARSE, ERROR_REFERENCE_ENCODING, ERROR_REFERENCE_PARSE, ERROR_REPOSITORY_NOT_FOUND,
-    ERROR_REPOSITORY_NOT_OPEN, ERROR_REQUEST_CANCELLED, ERROR_STATUS_PARSE, ERROR_UNBORN_HEAD,
-    ERROR_UNRESOLVED_CONFLICTS, ERROR_UNSAFE_REPOSITORY, ERROR_WORKTREE_REQUIRED,
-    GitHubCommitSquashTraceParams, GitHubPullRequestCommitDiff, GitHubPullRequestCommitDiffParams,
-    GitHubPullRequestCommitFileDiffParams, GitHubPullRequestCommitFilesParams,
-    GitHubPullRequestParams, GitHubRepositoryParams, GitLabMergeRequestCommitDiffParams,
-    GitLabMergeRequestParams, GitLabProjectParams, HistoryParams, ImplementationInfo,
-    InitializeParams, InitializeResult, JSON_RPC_VERSION, Notification, PROTOCOL_VERSION,
-    RepositoryDescriptor, RepositoryPathParams, Request, Response, ResponseError,
-    ServerCapabilities,
+    ERROR_REPOSITORY_NOT_OPEN, ERROR_REQUEST_CANCELLED, ERROR_STATUS_PARSE,
+    ERROR_SYNC_BRANCH_REQUIRED, ERROR_SYNC_DIVERGED, ERROR_SYNC_FETCH_FAILED,
+    ERROR_SYNC_INVALID_REMOTE, ERROR_SYNC_PULL_FAILED, ERROR_SYNC_PUSH_FAILED,
+    ERROR_SYNC_REMOTE_NOT_FOUND, ERROR_SYNC_STALE_HEAD, ERROR_SYNC_UPSTREAM_REQUIRED,
+    ERROR_UNBORN_HEAD, ERROR_UNRESOLVED_CONFLICTS, ERROR_UNSAFE_REPOSITORY,
+    ERROR_WORKTREE_REQUIRED, GitHubCommitSquashTraceParams, GitHubPullRequestCommitDiff,
+    GitHubPullRequestCommitDiffParams, GitHubPullRequestCommitFileDiffParams,
+    GitHubPullRequestCommitFilesParams, GitHubPullRequestParams, GitHubRepositoryParams,
+    GitLabMergeRequestCommitDiffParams, GitLabMergeRequestParams, GitLabProjectParams,
+    HistoryParams, ImplementationInfo, InitializeParams, InitializeResult, JSON_RPC_VERSION,
+    Notification, PROTOCOL_VERSION, RepositoryDescriptor, RepositoryFetchParams,
+    RepositoryPathParams, RepositorySyncOperation, RepositorySyncParams, Request, Response,
+    ResponseError, ServerCapabilities,
 };
 use serde_json::Value;
 use std::io::{self, BufRead, Write};
@@ -183,6 +187,9 @@ fn dispatch_request(
         "repository/commit" => commit_request(request, state),
         "repository/createBranch" => branch_request(request, state, false),
         "repository/switchBranch" => branch_request(request, state, true),
+        "repository/fetch" => repository_fetch_request(request, state),
+        "repository/pull" => repository_sync_request(request, state, RepositorySyncOperation::Pull),
+        "repository/push" => repository_sync_request(request, state, RepositorySyncOperation::Push),
         "github/repository" => github_repository_request(request, state),
         "github/pullRequest" => github_pull_request_request(request, state),
         "github/pullRequestCommitDiff" => github_pull_request_commit_diff_request(request, state),
@@ -266,6 +273,7 @@ fn initialize(request: Request, state: &mut CoreState) -> Response {
             structured_commit_diff: true,
             lazy_commit_diff: true,
             history_squash_trace: true,
+            repository_sync: true,
             repository_references: true,
             commit_graph_projection: true,
             github_repository: true,
@@ -531,6 +539,60 @@ fn repository_error(error: repository::RepositoryError) -> ResponseError {
             ERROR_MUTATION_FAILED,
             "git.mutation_failed",
             "System Git rejected the requested mutation",
+            true,
+        ),
+        repository::RepositoryError::SyncInvalidRemote => ResponseError::new(
+            ERROR_SYNC_INVALID_REMOTE,
+            "sync.invalid_remote",
+            "Remote name is invalid",
+            false,
+        ),
+        repository::RepositoryError::SyncRemoteNotFound => ResponseError::new(
+            ERROR_SYNC_REMOTE_NOT_FOUND,
+            "sync.remote_not_found",
+            "The selected Git remote does not exist",
+            false,
+        ),
+        repository::RepositoryError::SyncBranchRequired => ResponseError::new(
+            ERROR_SYNC_BRANCH_REQUIRED,
+            "sync.branch_required",
+            "Repository sync requires an attached local branch",
+            false,
+        ),
+        repository::RepositoryError::SyncUpstreamRequired => ResponseError::new(
+            ERROR_SYNC_UPSTREAM_REQUIRED,
+            "sync.upstream_required",
+            "Pull requires an upstream branch",
+            false,
+        ),
+        repository::RepositoryError::SyncStaleHead => ResponseError::new(
+            ERROR_SYNC_STALE_HEAD,
+            "sync.stale_head",
+            "The current branch or HEAD changed after confirmation",
+            true,
+        ),
+        repository::RepositoryError::SyncDiverged => ResponseError::new(
+            ERROR_SYNC_DIVERGED,
+            "sync.diverged",
+            "Local and upstream branches have diverged; fast-forward pull was refused",
+            false,
+        ),
+        repository::RepositoryError::SyncFetchFailed => ResponseError::new(
+            ERROR_SYNC_FETCH_FAILED,
+            "sync.fetch_failed",
+            "Git fetch failed without changing the worktree",
+            true,
+        ),
+        repository::RepositoryError::SyncPullFailed => ResponseError::new(
+            ERROR_SYNC_PULL_FAILED,
+            "sync.pull_failed",
+            "Fast-forward pull could not be applied",
+            true,
+        ),
+        repository::RepositoryError::SyncPushFailed => ResponseError::new(
+            ERROR_SYNC_PUSH_FAILED,
+            "sync.push_failed",
+            "Non-force push was rejected or unavailable",
             true,
         ),
     }
@@ -1112,6 +1174,67 @@ fn branch_request(request: Request, state: &CoreState, switch: bool) -> Response
         Ok(snapshot) => Response::success(
             request.id,
             serde_json::to_value(snapshot).expect("serializable mutation snapshot"),
+        ),
+        Err(error) => Response::error(Some(request.id), repository_error(error)),
+    }
+}
+
+fn repository_fetch_request(request: Request, state: &CoreState) -> Response {
+    let params = if request.params.is_null() {
+        RepositoryFetchParams::default()
+    } else {
+        match serde_json::from_value::<RepositoryFetchParams>(request.params) {
+            Ok(params) => params,
+            Err(_) => return invalid_params(request.id, "Invalid repository fetch parameters"),
+        }
+    };
+    let Some(descriptor) = &state.active_repository else {
+        return repository_not_open(request.id, "fetching from a Git remote");
+    };
+    match repository::fetch(descriptor, params.remote.as_deref()) {
+        Ok(result) => Response::success(
+            request.id,
+            serde_json::to_value(result).expect("serializable repository fetch result"),
+        ),
+        Err(error) => Response::error(Some(request.id), repository_error(error)),
+    }
+}
+
+fn repository_sync_request(
+    request: Request,
+    state: &CoreState,
+    operation: RepositorySyncOperation,
+) -> Response {
+    let params = match serde_json::from_value::<RepositorySyncParams>(request.params) {
+        Ok(params)
+            if !params.expected_branch.is_empty()
+                && params.expected_branch.len() <= 255
+                && valid_full_oid(&params.expected_head_oid) =>
+        {
+            params
+        }
+        _ => return invalid_params(request.id, "Invalid repository sync parameters"),
+    };
+    let Some(descriptor) = &state.active_repository else {
+        return repository_not_open(request.id, "synchronizing a Git branch");
+    };
+    let result = match operation {
+        RepositorySyncOperation::Pull => repository::pull(
+            descriptor,
+            &params.expected_branch,
+            &params.expected_head_oid,
+        ),
+        RepositorySyncOperation::Push => repository::push(
+            descriptor,
+            &params.expected_branch,
+            &params.expected_head_oid,
+        ),
+        RepositorySyncOperation::Fetch => unreachable!("fetch uses its own parameter contract"),
+    };
+    match result {
+        Ok(result) => Response::success(
+            request.id,
+            serde_json::to_value(result).expect("serializable repository sync result"),
         ),
         Err(error) => Response::error(Some(request.id), repository_error(error)),
     }

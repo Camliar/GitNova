@@ -1,6 +1,6 @@
 # Repository Mutations
 
-Core protocol 1.17 exposes three explicit, worktree-only mutations. Hosts must show their own confirmation flow and call these methods only after direct user intent. Core never runs them during repository open, status refresh, history loading, Provider access, Squash Trace, or AI Assist.
+Core protocol 1.18 exposes explicit, worktree-only local and remote mutations. Hosts must call them only after direct user intent; Pull and Push require a visible confirmation flow. Core never runs them during repository open, status refresh, history loading, Provider access, Squash Trace, or AI Assist.
 
 ## Staged commit
 
@@ -18,12 +18,24 @@ Success returns `CommitResult`: the parsed new `CommitSummary` plus an authorita
 
 Both methods return the post-mutation status/reference snapshot. Bare repositories return `repository.worktree_required`.
 
+## Fetch, Pull and Push
+
+Core advertises these methods through optional `repositorySync`:
+
+- `repository/fetch` accepts optional `{ "remote": string }`. Without it, Core uses the current upstream remote or `origin`. It runs non-interactive `git fetch --no-recurse-submodules <remote>`, without prune or ref deletion.
+- `repository/pull` accepts `{ "expectedBranch", "expectedHeadOid" }`. Core rejects stale confirmation, requires a configured upstream, fetches that exact remote, then permits only up-to-date/local-ahead or `git merge --ff-only` against the verified tracking ref. Divergence is `sync.diverged`; Core never creates a merge commit or invokes rebase/stash/reset.
+- `repository/push` uses the same confirmation-bound parameters. Core pushes the confirmed full OID to only the configured upstream branch; without upstream, it targets only `origin` plus the same local branch name. The refspec contains no force/delete form, and Core does not change tracking configuration.
+
+All three methods require an attached, born branch in a non-bare worktree and return `RepositorySyncResult`: operation, normalized remote/branch target and an authoritative post-operation snapshot. Remote names must be present in `git remote`; Hosts neither parse upstreams nor construct refspecs. Git runs with interactive terminal/credential prompting disabled. stderr, remote URLs and credential material never cross JSON-RPC.
+
 ## Deliberate limits
 
-This contract does not stage paths, amend, override author, bypass hooks, configure signing, detach HEAD, delete/rename branches, set upstreams, or run reset/restore/stash/merge/rebase/fetch/pull/push. Those require separate Tasks and explicit safety contracts.
+This contract does not stage paths, amend, override author, bypass hooks, configure signing, detach HEAD, delete/rename branches, edit remotes/upstreams, force/delete/prune remote refs, auto-stash, merge-pull, rebase-pull, reset or restore. Bare-repository sync also remains outside this slice.
 
 ## Desktop workflow
 
 Desktop 只在 Core 声明 `repositoryMutations` capability、已打开非 bare worktree 且 status 可用时显示操作区。每项 mutation 都经过 Review 和 Confirm 两次明确操作；打开仓库、刷新 status/history 或读取 refs 不会触发 mutation。
 
 Commit 预览显示 Core status 中 index 非 `unmodified` 的 path 数量，但是否允许 commit 仍由 Core 决定。Branch switch 下拉只包含 Core `repository/references` 返回的 `localBranch`，不把 remote refs 猜测为可切换分支。成功后 Desktop 直接采用 Core 返回的 status/references snapshot、清除可能失效的 diff/detail 并刷新 graph；失败保留输入与 action，可 Retry 或 Cancel，且不显示成功状态。
+
+Desktop 顶部只在 capability、non-bare worktree 与 current branch/HEAD 同时可用时显示 Fetch/Pull/Push。Fetch 点击即执行并显示进度；Pull 在没有 upstream 时禁用；Pull/Push 的确认框固定显示 branch、短 OID 与禁止的 merge/rebase/stash/force/delete 语义。成功统一采用 Core snapshot 并刷新 history；网络失败保留仓库工作区和明确 Retry。

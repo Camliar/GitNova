@@ -75,3 +75,4 @@ TASK-0035 已锁定协议 1.14 的预览/生成类型、index-bound 确认、本
 - TASK-0038 — 已修复 Desktop Windows Tauri 图标资源、跨平台 Dev Container 路径验证和 IntelliJ IDEA 2026.2/Java 25 CI 工具链一致性；完整平台矩阵已通过，不改变产品能力与架构边界。
 - TASK-0044 — 协议 1.16 将 commit 文件发现与单文件 patch 按需加载分离，修复超大 commit 的 Desktop transport 超时，并统一 28 px 紧凑 timeline 与侧栏分支上下文。
 - TASK-0045 — 协议 1.17 将所选 history commit 与 GitHub merged PR 精确关联；Desktop 仅为 Core-classified squash candidate 展示 ordered original commits，并按 original commit/file 懒加载 Provider diff。普通 merge 继续使用本地 Commit/Changes。
+- TASK-0046 — 在 Core 中以非交互 System Git 增加安全 Fetch、fast-forward-only Pull 与 non-force Push，并在 Desktop 顶部提供显式操作和 Pull/Push 二次确认。

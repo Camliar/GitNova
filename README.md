@@ -7,7 +7,7 @@ GitNova 是一个本地优先、面向多种开发工具宿主的现代 Git 客�
 
 桌面端与 IDE 扩展只负责交互和宿主集成；独立的 `gitnova-core` 进程承载全部 Git、GitHub/GitLab、PR/MR 与 Squash Trace 领域能力，并通过 stdio 上的 JSON-RPC 与 Host 通信。
 
-> 当前仓库已包含可执行的 Core 协议、本地 Git 读模型与安全 mutation、Core-owned GitHub/GitLab Squash Trace 与 AI Assist，以及可构建的 Tauri 2 + React 19 Desktop Host。Desktop 可查看 status、commit graph 与 diff，经两步确认执行 staged commit/local branch 操作，显式查看 PR original commits、远程 patch 与最终 commit 关系证据，并可预览 AI 输入、生成/编辑 commit 草稿后交给独立 commit 确认；Core 也可运行在 WSL、Remote SSH 或 Dev Container 的仓库环境。
+> 当前仓库已包含可执行的 Core 协议、本地 Git 读模型与安全 mutation、Core-owned GitHub/GitLab Squash Trace 与 AI Assist，以及可构建的 Tauri 2 + React 19 Desktop Host。Desktop 可查看 status、commit graph 与 diff，经确认执行 staged commit/local branch 及 Fetch/fast-forward Pull/non-force Push，显式查看 PR original commits、远程 patch 与最终 commit 关系证据，并可预览 AI 输入、生成/编辑 commit 草稿后交给独立 commit 确认；Core 也可运行在 WSL、Remote SSH 或 Dev Container 的仓库环境。
 
 ## 架构
 

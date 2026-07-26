@@ -28,9 +28,9 @@ spawn → gitnova/initialize → requests and notifications → gitnova/shutdown
 
 ## Initialize
 
-`gitnova/initialize` 参数包含 `clientInfo`、`protocolVersion` 和 Host capabilities。结果包含 `coreInfo`、协商后的协议版本和 Core capabilities。初始协议版本为 `1.0`，当前版本为 `1.17`；主版本不同即不兼容，次版本能力通过 capability 字段协商。
+`gitnova/initialize` 参数包含 `clientInfo`、`protocolVersion` 和 Host capabilities。结果包含 `coreInfo`、协商后的协议版本和 Core capabilities。初始协议版本为 `1.0`，当前版本为 `1.18`；主版本不同即不兼容，次版本能力通过 capability 字段协商。
 
-Core 当前另声明 `repositoryMutations`、optional `lazyCommitDiff` 与 optional `historySquashTrace` capability；完整 capability 由 Schema 定义。支持 `lazyCommitDiff` 的 Host 应先调用 `repository/commitFiles` 获取有界文件 metadata，只在用户选择文件后调用 `repository/commitFileDiff`。支持 `historySquashTrace` 的 Host 可在用户显式触发后调用 `github/commitSquashTrace`，再通过 `github/pullRequestCommitFiles` 与 `github/pullRequestCommitFileDiff` 按需查看 original commit。仓库方法及路径语义见[仓库发现](REPOSITORIES.md)，写操作安全契约见[Repository Mutations](MUTATIONS.md)，其余读模型与 Provider 文档保持各自事实来源。
+Core 当前另声明 `repositoryMutations`、optional `lazyCommitDiff`、optional `historySquashTrace` 与 optional `repositorySync` capability；完整 capability 由 Schema 定义。支持 `lazyCommitDiff` 的 Host 应先调用 `repository/commitFiles` 获取有界文件 metadata，只在用户选择文件后调用 `repository/commitFileDiff`。支持 `historySquashTrace` 的 Host 可在用户显式触发后调用 `github/commitSquashTrace`，再通过 `github/pullRequestCommitFiles` 与 `github/pullRequestCommitFileDiff` 按需查看 original commit。支持 `repositorySync` 的 Host 可显式调用 `repository/fetch`，并在二次确认后调用绑定 branch/HEAD 的 `repository/pull` 与 `repository/push`。仓库方法及路径语义见[仓库发现](REPOSITORIES.md)，写操作安全契约见[Repository Mutations](MUTATIONS.md)，其余读模型与 Provider 文档保持各自事实来源。
 
 请求 id 可以是 JSON string 或 integer，Core 必须在响应中保持其类型和值。
 
@@ -107,6 +107,15 @@ JSON-RPC error 使用标准数值 `code`，同时在 `data.stableCode` 提供稳
 | `-32157` | `commit.file_limit` | commit changed-file metadata 超出安全上限 |
 | `-32158` | `commit.file_diff_limit` | 单个文件的 commit patch 超出安全上限 |
 | `-32159` | `github.commit_association_ambiguous` | 多个 PR 将所选 commit 报告为最终 merge commit，Core 拒绝猜测 |
+| `-32160` | `sync.invalid_remote` | remote 名称无效 |
+| `-32161` | `sync.remote_not_found` | 目标 remote 不存在 |
+| `-32162` | `sync.branch_required` | sync 需要 attached local branch |
+| `-32163` | `sync.upstream_required` | Pull 需要已配置 upstream |
+| `-32164` | `sync.stale_head` | 确认后的 branch 或 HEAD 已变化 |
+| `-32165` | `sync.diverged` | local/upstream 已分叉，拒绝非 fast-forward Pull |
+| `-32166` | `sync.fetch_failed` | Fetch 失败 |
+| `-32167` | `sync.pull_failed` | fast-forward 更新工作树失败 |
+| `-32168` | `sync.push_failed` | non-force Push 被拒绝或不可达 |
 | `-32800` | `request.cancelled` | 请求已取消 |
 
 GitLab Provider 方法为 `gitlab/project`、`gitlab/mergeRequest`、`gitlab/mergeRequestCommitDiff` 和 `gitlab/squashTrace`。`pathWithNamespace` 可覆盖 remote path，但 hostname 始终来自已验证 remote；任何网络动作仍必须由 Host 显式触发。

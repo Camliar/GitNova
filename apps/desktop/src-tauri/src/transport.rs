@@ -31,6 +31,9 @@ const HOST_CORE_METHODS: &[&str] = &[
     "repository/commit",
     "repository/createBranch",
     "repository/switchBranch",
+    "repository/fetch",
+    "repository/pull",
+    "repository/push",
     "github/repository",
     "github/pullRequest",
     "github/pullRequestCommitDiff",
@@ -359,7 +362,13 @@ impl CoreProcess {
         .map_err(|_| DesktopError::transport())?;
         let timeout = if method == "ai/generateCommitDraft" {
             AI_RESPONSE_TIMEOUT
-        } else if method.starts_with("github/") || method.starts_with("gitlab/") {
+        } else if method.starts_with("github/")
+            || method.starts_with("gitlab/")
+            || matches!(
+                method,
+                "repository/fetch" | "repository/pull" | "repository/push"
+            )
+        {
             PROVIDER_RESPONSE_TIMEOUT
         } else {
             RESPONSE_TIMEOUT
@@ -702,13 +711,13 @@ function drain() {
     if (request.method === 'exit') process.exit(0);
     if (request.method === 'gitnova/initialize') {
       send({jsonrpc:'2.0', id:request.id, result:{
-        coreInfo:{name:'fake-core',version:'0.1.0'}, protocolVersion:'1.17', capabilities:{
+        coreInfo:{name:'fake-core',version:'0.1.0'}, protocolVersion:'1.18', capabilities:{
           cancellation:true, repositoryDiscovery:true, workingTreeStatus:true,
           structuredFileDiff:true, paginatedCommitHistory:true, structuredCommitDiff:true,
           repositoryReferences:true, commitGraphProjection:true, githubRepository:true,
           githubPullRequest:true, githubPullRequestCommitDiff:true, githubSquashTrace:true,
           gitlabProject:true, gitlabMergeRequest:true, gitlabMergeRequestCommitDiff:true, gitlabSquashTrace:true, aiAssist:true,
-          repositoryMutations:true
+          repositoryMutations:true, repositorySync:true
         }
       }});
     } else if (request.method === 'gitnova/shutdown') {
@@ -750,6 +759,9 @@ function drain() {
         assert!(!valid_method("repository/open?path=secret"));
         assert!(allowed_host_method("ai/inputPreview"));
         assert!(allowed_host_method("ai/generateCommitDraft"));
+        assert!(allowed_host_method("repository/fetch"));
+        assert!(allowed_host_method("repository/pull"));
+        assert!(allowed_host_method("repository/push"));
         assert!(!allowed_host_method("test/echo"));
         assert_eq!(major_version("1.11"), Some("1"));
         assert_eq!(major_version("invalid"), None);
@@ -764,7 +776,7 @@ function drain() {
         });
         let status = supervisor.start().unwrap();
         assert!(status.connected);
-        assert_eq!(status.protocol_version.as_deref(), Some("1.17"));
+        assert_eq!(status.protocol_version.as_deref(), Some("1.18"));
         assert!(status.capabilities.unwrap().github_squash_trace);
 
         let response = supervisor

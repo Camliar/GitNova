@@ -19,11 +19,12 @@ import { AiAssistPanel } from "./AiAssistPanel";
 import { AiSettingsPanel, defaultAiAssistSettings } from "./AiSettingsPanel";
 import { RepositoryRefTree, type ReferencesState } from "./RepositoryRefTree";
 import { getRepositoryReferences, switchLocalBranch } from "./mutations";
+import { RepositorySyncControls } from "./RepositorySyncControls";
 
 type Connection =
   | { kind: "checking" }
   | { kind: "stopped" }
-  | { kind: "connected"; version: string; mutations: boolean; references: boolean; aiAssist: boolean; lazyCommitDiff: boolean; historySquashTrace: boolean }
+  | { kind: "connected"; version: string; mutations: boolean; references: boolean; aiAssist: boolean; lazyCommitDiff: boolean; historySquashTrace: boolean; repositorySync: boolean }
   | { kind: "error"; error: DesktopError };
 
 type RepositoryState =
@@ -196,7 +197,7 @@ export function App() {
       referencesRequest.current += 1;
       setReferences({ kind: "idle" });
     }
-    setConnection({ kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true, references: referencesCapability.current, aiAssist: status.capabilities?.aiAssist === true, lazyCommitDiff: status.capabilities?.lazyCommitDiff === true, historySquashTrace: status.capabilities?.historySquashTrace === true });
+    setConnection({ kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true, references: referencesCapability.current, aiAssist: status.capabilities?.aiAssist === true, lazyCommitDiff: status.capabilities?.lazyCommitDiff === true, historySquashTrace: status.capabilities?.historySquashTrace === true, repositorySync: status.capabilities?.repositorySync === true });
   }
 
   function rememberRepository(bookmark: RepositoryBookmark) {
@@ -564,6 +565,7 @@ export function App() {
           </div>
         ) : <span className="toolbar-title">Local-first Git client</span>}
         <div className="toolbar-actions">
+          {openedRepository && openedRepository.kind !== "bare" && connection.kind === "connected" && connection.repositorySync && workingTree.kind === "ready" && <RepositorySyncControls key={`sync:${openedRepository.gitDirectory}`} branch={workingTree.status.branch} onApplied={applyMutation} />}
           {openedRepository && <button type="button" onClick={() => void chooseRepository()}>Add repository</button>}
           {openedRepository && openedRepository.kind !== "bare" && (
             <button type="button" onClick={() => void refreshWorkingTree()}>Refresh repository</button>

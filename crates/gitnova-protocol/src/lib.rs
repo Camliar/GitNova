@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: &str = "1.17";
+pub const PROTOCOL_VERSION: &str = "1.18";
 
 pub const ERROR_PARSE: i64 = -32700;
 pub const ERROR_INVALID_REQUEST: i64 = -32600;
@@ -76,6 +76,15 @@ pub const ERROR_AI_INPUT_LIMIT: i64 = -32156;
 pub const ERROR_COMMIT_FILE_LIMIT: i64 = -32157;
 pub const ERROR_COMMIT_FILE_DIFF_LIMIT: i64 = -32158;
 pub const ERROR_GITHUB_COMMIT_ASSOCIATION_AMBIGUOUS: i64 = -32159;
+pub const ERROR_SYNC_INVALID_REMOTE: i64 = -32160;
+pub const ERROR_SYNC_REMOTE_NOT_FOUND: i64 = -32161;
+pub const ERROR_SYNC_BRANCH_REQUIRED: i64 = -32162;
+pub const ERROR_SYNC_UPSTREAM_REQUIRED: i64 = -32163;
+pub const ERROR_SYNC_STALE_HEAD: i64 = -32164;
+pub const ERROR_SYNC_DIVERGED: i64 = -32165;
+pub const ERROR_SYNC_FETCH_FAILED: i64 = -32166;
+pub const ERROR_SYNC_PULL_FAILED: i64 = -32167;
+pub const ERROR_SYNC_PUSH_FAILED: i64 = -32168;
 pub const ERROR_REQUEST_CANCELLED: i64 = -32800;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -205,6 +214,8 @@ pub struct ServerCapabilities {
     pub lazy_commit_diff: bool,
     #[serde(default)]
     pub history_squash_trace: bool,
+    #[serde(default)]
+    pub repository_sync: bool,
     pub repository_references: bool,
     pub commit_graph_projection: bool,
     pub github_repository: bool,
@@ -504,11 +515,43 @@ pub struct BranchParams {
     pub name: String,
 }
 
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RepositoryFetchParams {
+    #[serde(default)]
+    pub remote: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RepositorySyncParams {
+    pub expected_branch: String,
+    pub expected_head_oid: String,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RepositoryMutationSnapshot {
     pub status: WorkingTreeStatus,
     pub references: RepositoryReferences,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RepositorySyncOperation {
+    Fetch,
+    Pull,
+    Push,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepositorySyncResult {
+    pub operation: RepositorySyncOperation,
+    pub remote: String,
+    pub branch: String,
+    pub remote_branch: String,
+    pub snapshot: RepositoryMutationSnapshot,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1185,7 +1228,11 @@ mod tests {
             "CommitGraphPage",
             "CommitParams",
             "BranchParams",
+            "RepositoryFetchParams",
+            "RepositorySyncParams",
             "RepositoryMutationSnapshot",
+            "RepositorySyncOperation",
+            "RepositorySyncResult",
             "CommitResult",
             "GitHubRepositoryParams",
             "GitHubRepository",

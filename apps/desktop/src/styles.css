@@ -334,6 +334,17 @@ button, input, select, textarea { color: inherit; }
 .toolbar-actions { display: flex; justify-content: end; gap: 7px; }
 .toolbar-actions button { min-height: 34px; padding: 0 12px; border: 1px solid #cfd2d8; border-radius: 7px; background: #fff; cursor: pointer; font-size: 11px; font-weight: 700; }
 .toolbar-actions button:hover { background: #f0f1f4; }
+.repository-sync { position: relative; display: flex; gap: 3px; padding-right: 7px; border-right: 1px solid #d6d8dd; }
+.repository-sync > button { min-width: 50px; padding: 0 8px; }
+.repository-sync > button:disabled { cursor: default; opacity: .48; }
+.sync-confirmation { position: fixed; z-index: 22; top: 60px; left: 50%; display: grid; width: min(560px, calc(100vw - 28px)); gap: 7px; padding: 12px 14px; border: 1px solid #c7cad1; border-radius: 9px; background: #fff; box-shadow: 0 14px 35px rgb(25 29 37 / 20%); color: #424955; font-size: 10px; line-height: 1.5; transform: translateX(-50%); }
+.sync-confirmation > strong { font-size: 11px; }
+.sync-confirmation > div { display: flex; justify-content: flex-end; gap: 7px; }
+.sync-confirmation button { min-height: 30px; }
+.sync-confirmation button:last-child { border-color: #256bd8; background: #256bd8; color: #fff; }
+.sync-feedback { position: absolute; z-index: 4; top: 38px; right: 0; width: max-content; max-width: 420px; padding: 5px 8px; border: 1px solid #cfd2d8; border-radius: 5px; background: #fff; color: #59616d; box-shadow: 0 5px 14px rgb(25 29 37 / 12%); font-size: 9px; }
+.sync-feedback--error { color: #a13c4b; }
+.sync-feedback button { min-height: 20px; margin-left: 4px; padding: 0 5px; font-size: 8px; }
 
 .repository-workbench { display: grid; grid-template-columns: 236px minmax(0, 1fr); height: calc(100vh - 54px); min-height: 520px; overflow: hidden; }
 .repository-sidebar { display: flex; min-width: 0; flex-direction: column; padding: 12px 10px; border-right: 1px solid #d2d5da; background: #e9eaed; }

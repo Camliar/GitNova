@@ -89,11 +89,9 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(44px, 7vw, 84px); line-height
 .commit-list > li { display: grid; grid-template-columns: var(--graph-column, 46px) minmax(0, 1fr); gap: 12px; min-height: 78px; border-top: 1px solid var(--border); }
 .commit-graph { display: block; width: var(--graph-width); max-width: 100%; min-height: 78px; overflow: visible; }
 .commit-graph svg { display: block; overflow: visible; }
-.graph-line { fill: none; stroke: #69758f; stroke-width: 2; }
-.graph-line--parent-1, .graph-line--parent-3 { stroke: #8d7542; }
-.graph-line--parent-2, .graph-line--parent-4 { stroke: #4e8e82; }
-.graph-node { fill: #0c111d; stroke: #a6b0c5; stroke-width: 2.5; }
-.graph-node--head { fill: var(--cyan); stroke: var(--cyan); filter: drop-shadow(0 0 4px rgb(85 219 234 / 55%)); }
+.graph-line { fill: none; stroke: var(--graph-color, #69758f); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.graph-node { fill: #0c111d; stroke: var(--graph-color, #a6b0c5); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.graph-node--head { fill: var(--graph-color, var(--cyan)); filter: drop-shadow(0 0 4px rgb(85 219 234 / 55%)); }
 .commit-main { display: grid; min-width: 0; gap: 6px; }
 .commit-list > li > .commit-main { padding: 13px 0; }
 .commit-summary { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
@@ -730,6 +728,13 @@ button.ref-row__primary { cursor: pointer; }
 .repository-tabs > button:disabled { cursor: wait; opacity: .72; }
 .repository-tabs > .repository-tabs__add { min-width: 38px; width: 38px; padding: 0; background: transparent; font-size: 18px; font-weight: 400; }
 .repository-workbench { height: calc(100vh - 98px); }
+
+/* TASK-0050: stable lane colors and curved topology edges */
+.commit-graph svg { shape-rendering: geometricPrecision; }
+.commit-graph .graph-node.graph-node--head { fill: var(--graph-color); }
+.commit-list > li.is-selected .graph-line { filter: drop-shadow(0 0 1px rgb(255 255 255 / 85%)); stroke-width: 2.25; }
+.commit-list > li.is-selected .graph-node { fill: #fff; filter: drop-shadow(0 0 1px rgb(255 255 255 / 90%)); }
+.commit-list > li.is-selected .graph-node.graph-node--head { fill: var(--graph-color); }
 
 @media (max-width: 900px) {
   .app-toolbar { grid-template-columns: 150px minmax(0, 1fr); min-height: 58px; }

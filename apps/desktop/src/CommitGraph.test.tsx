@@ -14,6 +14,7 @@ describe("Desktop visual commit graph", () => {
     expect(rows.map((row) => ({ lane: row.lane, parents: row.parentLanes }))).toEqual([
       { lane: 0, parents: [0] }, { lane: 0, parents: [0] }, { lane: 0, parents: [] },
     ]);
+    expect(rows.map((row) => row.hasIncoming)).toEqual([false, true, true]);
   });
 
   it("routes an ordered merge parent to a second lane and rejoins it", () => {
@@ -36,5 +37,30 @@ describe("Desktop visual commit graph", () => {
     const row = projectGraphRows([node("m", ["a", "b"])])[0];
     render(<CommitGraph row={row} isHead />);
     expect(screen.getByRole("img", { name: "Commit graph lane 1; 2 parents" })).toBeInTheDocument();
+  });
+
+  it("uses a stable lane palette and curves only cross-lane parent edges", () => {
+    const row = projectGraphRows([node("m", ["a", "b"])])[0];
+    const { container } = render(<CommitGraph row={row} isHead={false} />);
+    const firstParent = container.querySelector('[data-edge="parent"][data-lane="0"]');
+    const secondParent = container.querySelector('[data-edge="parent"][data-lane="1"]');
+
+    expect(firstParent).toHaveAttribute("data-curved", "false");
+    expect(firstParent).toHaveAttribute("d", "M 9 14 L 9 28");
+    expect(firstParent).toHaveStyle("--graph-color: #e47d14");
+    expect(secondParent).toHaveAttribute("data-curved", "true");
+    expect(secondParent).toHaveAttribute("d", "M 9 14 C 18 14 27 18 27 28");
+    expect(secondParent).toHaveStyle("--graph-color: #1595a3");
+  });
+
+  it("keeps a branch color on its first-parent curve when it rejoins another lane", () => {
+    const rows = projectGraphRows([node("m", ["a", "b"]), node("a", ["r"]), node("b", ["r"])]);
+    const { container } = render(<CommitGraph row={rows[2]} isHead={false} />);
+    const joiningEdge = container.querySelector('[data-edge="parent"]');
+
+    expect(rows[2].lane).toBe(1);
+    expect(container.querySelector('[data-edge="incoming"]')).toHaveAttribute("d", "M 27 0 L 27 14");
+    expect(joiningEdge).toHaveAttribute("data-lane", "1");
+    expect(joiningEdge).toHaveAttribute("d", "M 27 14 C 27 21 9 21 9 28");
   });
 });

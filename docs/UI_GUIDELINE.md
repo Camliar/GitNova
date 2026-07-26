@@ -25,7 +25,7 @@
 - 顶部采用两行结构：第一行从主内容左侧开始放置 Add repository、Fetch、Pull、Push、Refresh、Reopen 等图标工具；第二行是稳定顺序的 repository Tab strip 和 `+` 入口。仓库 Tab 最多保存 12 个，只表达本地 Host 偏好；切换 Tab 重启并重新绑定唯一 Core 会话，不并行运行多个业务 Core，也不在 Host 复制仓库逻辑。添加或切换失败时保留并恢复原 active Tab。
 - 仓库身份在 Tab strip 与左侧顶端各自承担导航定位，不使用下拉选择器。分支上下文只在左侧 Branches/Remotes/Tags 树展示，当前本地分支加粗、着色并带当前标记，不在顶部重复分支选择器。分支操作由右键或可聚焦的 actions 按钮打开：本地分支 Checkout，非 symbolic remote branch 创建 direct tracking local branch；菜单支持 Escape 和外部点击关闭。
 - 顶部仓库工具区提供紧凑 Fetch/Pull/Push。Fetch 始终由用户点击触发；Pull/Push 二次确认必须显示当前 branch/HEAD 及 fast-forward-only/non-force 安全语义，操作反馈不得挤压 timeline。没有 Core 契约的 Stash 等动作不得制作空按钮。
-- commit timeline 优先单行密度：graph、refs、message、author、SHA、时间横向排列，refs 位于 message 前，点击整行打开下方 Commit/Changes 标签详情；常规行高固定为 28 px，内容从顶部开始排列，不能因可用高度增加而拉伸，选中态覆盖整行。
+- commit timeline 优先单行密度：graph、refs、message、author、SHA、时间横向排列，refs 位于 message 前，点击整行打开下方 Commit/Changes 标签详情；常规行高固定为 28 px，内容从顶部开始排列，不能因可用高度增加而拉伸，选中态覆盖整行。并发 topology lanes 使用稳定区分色，跨 lane 的 branch/merge edge 使用紧凑平滑曲线；颜色只编码视觉 lane，不得在 Host 猜测 named branch identity。
 - commit Changes 先显示纵向 changed-file 列表，点击文件名才按需加载单文件 diff；加载或失败不得清空 timeline、commit metadata 和文件列表。
 - Squash Trace 从所选 timeline commit 的显式检查动作进入。确认关联后先显示紧凑的 PR ordered original commits 与 `originals → final commit` 关系；点击 original commit 后再显示 Commit/Changes，点击 changed-file 后才加载该文件 patch。没有关联或 Provider 失败时，普通本地 Commit/Changes 始终保留。
 - Local Changes 将 Core 状态明确分成 Unstaged 与 Staged 列表，混合状态文件在两个范围分别出现；点击对应范围内的文件名直接打开 diff，不另设 View 按钮或范围徽章。commit composer 位于同一工作流底部；AI 只作为 commit composer 内的显式渐进披露操作。

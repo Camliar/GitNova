@@ -38,9 +38,9 @@ describe("Desktop repository open", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.14", capabilities: { repositoryMutations: true } });
+    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.15", capabilities: { repositoryMutations: true } });
     core.configureCore.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
-    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.14", capabilities: { repositoryMutations: true } });
+    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.15", capabilities: { repositoryMutations: true } });
     core.shutdownCore.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
     repository.selectRepositoryDirectory.mockResolvedValue("/work/project");
     repository.openRepository.mockResolvedValue(descriptor);
@@ -59,7 +59,7 @@ describe("Desktop repository open", () => {
 
   it("launches Core in an explicit SSH environment and opens only its remote path", async () => {
     core.getCoreStatus.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
-    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.14", capabilities: { repositoryMutations: true }, environment: "ssh" });
+    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.15", capabilities: { repositoryMutations: true }, environment: "ssh" });
     render(<App />);
 
     fireEvent.change(await screen.findByLabelText("Core environment"), { target: { value: "ssh" } });
@@ -89,7 +89,7 @@ describe("Desktop repository open", () => {
   it("starts Core and restores the last successfully opened repository", async () => {
     localStorage.setItem("gitnova.workspace.v1", JSON.stringify({ version: 1, target: { kind: "local" }, path: "/work/project" }));
     core.getCoreStatus.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
-    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.14", capabilities: { repositoryMutations: true }, environment: "local" });
+    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.15", capabilities: { repositoryMutations: true }, environment: "local" });
     render(<App />);
 
     expect(await screen.findByRole("button", { name: "All Commits" })).toBeInTheDocument();
@@ -130,7 +130,7 @@ describe("Desktop repository open", () => {
   });
 
   it("hands an AI draft to the existing independent commit confirmation", async () => {
-    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.14", capabilities: { repositoryMutations: true, aiAssist: true } });
+    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.15", capabilities: { repositoryMutations: true, aiAssist: true } });
     status.getWorkingTreeStatus.mockResolvedValue({
       branch: { head: "main", oid: "a".repeat(40), upstream: null, ahead: 0, behind: 0 },
       entries: [{ path: "src/app.ts", originalPath: null, kind: "ordinary", indexStatus: "modified", worktreeStatus: "unmodified" }],

@@ -71,7 +71,7 @@ GitNova 的所有 Host 都必须通过独立 Core 获得业务能力。[ADR-0004
 
 - [x] Deliverables 全部完成。
 - [x] Review Checklist 全部通过且无未声明范围扩张。
-- [x] 按用户授权完成自主 Review；后续协议版本已增量演进至 1.14 并持续通过契约测试。
+- [x] 按用户授权完成自主 Review；后续协议版本已增量演进至 1.15 并持续通过契约测试。
 - [x] Task 状态更新为 Done。
 
 ## Notes

@@ -1,4 +1,4 @@
-# ADR-0008: AI Assist 使用本地 Ollama 或用户配置的 OpenAI 直连
+# ADR-0008: AI Assist 使用本地 Ollama 或用户配置的外部 Provider 直连
 
 - **Status:** Accepted
 - **Date:** 2026-07-26
@@ -10,9 +10,9 @@ GitNova 需要根据 staged diff 生成 commit message 草稿和操作建议，�
 
 ## Decision
 
-- 首批 Provider 是仓库环境中的本地 Ollama，以及用户选择的 OpenAI Responses API 直连。Core 是唯一 Provider client；Host 不接触 prompt、diff payload 或凭据。
-- Ollama 默认仅允许 `http://127.0.0.1:11434`，自定义 URL 也必须是 loopback HTTP。OpenAI endpoint 固定为 `https://api.openai.com/v1/responses`，模型由用户显式填写。
-- OpenAI API key 仅由 Core 在仓库环境读取 `OPENAI_API_KEY`；不得经 JSON-RPC 传递、持久化或写入日志。请求使用 `store: false`、禁用工具调用，并要求结构化 JSON 输出。
+- Provider 包含仓库环境中的本地 Ollama，以及用户选择的 OpenAI、Claude、DeepSeek、Qwen 和 Kimi 直连。Core 是唯一 Provider client；Host 不接触 prompt、diff payload 或凭据。
+- Ollama 默认仅允许 `http://127.0.0.1:11434`，自定义 URL 也必须是 loopback HTTP。外部 endpoint 固定为各 Provider 官方 HTTPS API，模型由用户显式填写；协议不接受自定义外部 endpoint。
+- API key 仅由 Core 在仓库环境读取 Provider 对应环境变量；不得经 JSON-RPC 传递、持久化或写入日志。OpenAI 使用 Responses API 与 `store: false`，Claude 使用 Messages API，DeepSeek/Qwen/Kimi 使用 OpenAI-compatible Chat Completions；请求不声明工具，输出必须通过 Core 严格校验。
 - Core 使用仓库环境的 System `curl` 作为首个 HTTP transport；endpoint/body/header 通过 stdin config 传递，固定参数中不包含 API key 或 diff，响应受硬上限约束。
 - `ai/inputPreview` 是完全离线的披露预检。它只读取 staged diff 与最小状态，返回目标 endpoint、文件、字节数、排除/截断原因和绑定 index/provider/model/exclusion 的 `previewId`。
 - `ai/generateCommitDraft` 必须由用户显式触发。外部 Provider 还要求确认披露；Core 重新计算预览并拒绝 stale/mismatched `previewId`。
@@ -21,7 +21,7 @@ GitNova 需要根据 staged diff 生成 commit message 草稿和操作建议，�
 
 ## Consequences
 
-本地 Ollama 可使内容不离开仓库环境；OpenAI 直连提供可选云能力但需要逐次可见确认。没有 GitNova 代理或账户，也不保存 AI 内容。代价是用户必须自行运行 Ollama或配置 OpenAI key/model，且模型不可用、凭据缺失和预览过期都需要稳定错误处理。
+本地 Ollama 可使内容不离开仓库环境；外部直连提供多种云模型选择但需要逐次可见确认。没有 GitNova 代理或账户，也不保存 AI 内容。代价是用户必须自行运行 Ollama 或配置所选 Provider 的 key/model，Qwen 固定 endpoint 还要求同区域 key；模型不可用、凭据缺失和预览过期都需要稳定错误处理。
 
 ## Alternatives considered
 
@@ -32,4 +32,4 @@ GitNova 需要根据 staged diff 生成 commit message 草稿和操作建议，�
 
 ## Links
 
-[AI Assist Contract](../docs/AI_ASSIST.md) · [Architecture](../docs/ARCHITECTURE.md) · [OpenAI Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses) · [OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data)
+[AI Assist Contract](../docs/AI_ASSIST.md) · [Architecture](../docs/ARCHITECTURE.md) · [OpenAI Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses) · [Claude Messages API](https://platform.claude.com/docs/en/api/messages) · [DeepSeek API](https://api-docs.deepseek.com/) · [Qwen OpenAI compatibility](https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope) · [Kimi API](https://platform.kimi.ai/docs/api/chat)

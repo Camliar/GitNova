@@ -444,10 +444,14 @@ export interface GitLabSquashTrace {
   relationship: SquashTraceRelationship;
 }
 
-export type AiProviderKind = "ollama" | "openAi";
+export type AiProviderKind = "ollama" | "openAi" | "anthropic" | "deepSeek" | "qwen" | "kimi";
 export type AiProviderConfig =
   | { kind: "ollama"; model: string; baseUrl?: string }
-  | { kind: "openAi"; model: string };
+  | { kind: "openAi"; model: string }
+  | { kind: "anthropic"; model: string }
+  | { kind: "deepSeek"; model: string }
+  | { kind: "qwen"; model: string }
+  | { kind: "kimi"; model: string };
 
 export interface AiInputPreviewParams {
   provider: AiProviderConfig;

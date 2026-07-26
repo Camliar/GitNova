@@ -77,4 +77,14 @@ describe("Desktop AI Assist", () => {
     expect(screen.queryByLabelText(/I confirm the listed staged patch/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Generate draft" })).not.toBeInTheDocument();
   });
+
+  it.each(["openAi", "anthropic", "deepSeek", "qwen", "kimi"] as const)("projects the %s Provider config without credentials", async (providerKind) => {
+    render(<AiAssistPanel settings={{ ...settings, providerKind }} onUseCommitMessage={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Preview input" }));
+    expect(ai.previewAiInput).toHaveBeenCalledWith(
+      { kind: providerKind, model: "user-model" },
+      ["private.json"],
+    );
+    expect(screen.queryByLabelText(/API key/i)).not.toBeInTheDocument();
+  });
 });

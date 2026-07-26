@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: &str = "1.14";
+pub const PROTOCOL_VERSION: &str = "1.15";
 
 pub const ERROR_PARSE: i64 = -32700;
 pub const ERROR_INVALID_REQUEST: i64 = -32600;
@@ -821,6 +821,10 @@ pub struct GitLabSquashTrace {
 pub enum AiProviderKind {
     Ollama,
     OpenAi,
+    Anthropic,
+    DeepSeek,
+    Qwen,
+    Kimi,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -832,6 +836,18 @@ pub enum AiProviderConfig {
         base_url: Option<String>,
     },
     OpenAi {
+        model: String,
+    },
+    Anthropic {
+        model: String,
+    },
+    DeepSeek {
+        model: String,
+    },
+    Qwen {
+        model: String,
+    },
+    Kimi {
         model: String,
     },
 }
@@ -1001,6 +1017,17 @@ mod tests {
             }))
             .is_err()
         );
+
+        for kind in ["anthropic", "deepSeek", "qwen", "kimi"] {
+            let provider: AiProviderConfig = serde_json::from_value(serde_json::json!({
+                "kind": kind,
+                "model": "user-selected-model"
+            }))
+            .unwrap();
+            let serialized = serde_json::to_value(provider).unwrap();
+            assert_eq!(serialized["kind"], kind);
+            assert!(serialized.get("apiKey").is_none());
+        }
     }
 
     #[test]

@@ -34,9 +34,21 @@ export function AiAssistPanel({ settings, onUseCommitMessage }: { settings: AiAs
   }
 
   function provider(): AiProviderConfig {
-    return settings.providerKind === "ollama"
-      ? { kind: "ollama", model: settings.model.trim(), ...(settings.baseUrl.trim() ? { baseUrl: settings.baseUrl.trim() } : {}) }
-      : { kind: "openAi", model: settings.model.trim() };
+    const model = settings.model.trim();
+    switch (settings.providerKind) {
+      case "ollama":
+        return { kind: "ollama", model, ...(settings.baseUrl.trim() ? { baseUrl: settings.baseUrl.trim() } : {}) };
+      case "openAi":
+        return { kind: "openAi", model };
+      case "anthropic":
+        return { kind: "anthropic", model };
+      case "deepSeek":
+        return { kind: "deepSeek", model };
+      case "qwen":
+        return { kind: "qwen", model };
+      case "kimi":
+        return { kind: "kimi", model };
+    }
   }
 
   async function runPreview() {
@@ -90,7 +102,7 @@ export function AiAssistPanel({ settings, onUseCommitMessage }: { settings: AiAs
   }
 
   const busy = operation !== "idle";
-  const canPreview = !busy && settings.model.trim().length > 0 && (settings.providerKind === "openAi" || settings.baseUrl.trim().length > 0);
+  const canPreview = !busy && settings.model.trim().length > 0 && (settings.providerKind !== "ollama" || settings.baseUrl.trim().length > 0);
   const canGenerate =
     !busy &&
     preview !== null &&

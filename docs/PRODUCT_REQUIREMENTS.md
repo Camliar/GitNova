@@ -42,6 +42,6 @@ AI Assist 是所有既有 Roadmap 阶段完成后的候选增强，不属于 Squ
 
 AI 请求必须由用户显式触发，发送前展示数据范围并支持敏感路径排除。源码、diff 或派生数据不得经 GitNova 中心服务转发；仅可使用本地模型或用户自行配置的直连 Provider。AI 输出不是 Git 指令授权，任何 commit 或其他 mutation 都必须由用户确认并交给 Core 的确定性 Git 能力执行。
 
-首批 Provider 锁定为仓库环境中的 loopback Ollama 和用户配置的 OpenAI Responses API 直连。输入只包含受限 staged textual diff 与最小结构化状态；外部生成确认绑定当前 index，预览后内容变化必须重新确认。AI 结果只能是可编辑草稿、固定类别建议和警告。
+Provider 包含仓库环境中的 loopback Ollama，以及用户配置的 OpenAI、Claude、DeepSeek、Qwen 和 Kimi 官方 API 直连。输入只包含受限 staged textual diff 与最小结构化状态；外部生成确认绑定当前 index，预览后内容变化必须重新确认。AI 结果只能是可编辑草稿、固定类别建议和警告。Provider/model/排除路径配置集中在 Settings，AI 入口只出现在 commit composer。
 
 质量约束见[非功能需求](NON_FUNCTIONAL.md)，系统边界见[架构](ARCHITECTURE.md)。

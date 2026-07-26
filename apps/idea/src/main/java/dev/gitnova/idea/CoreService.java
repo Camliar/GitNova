@@ -9,7 +9,7 @@ import java.nio.file.Path;
 
 @Service(Service.Level.PROJECT)
 public final class CoreService implements Disposable {
-    private static final String PROTOCOL_VERSION = "1.14";
+    private static final String PROTOCOL_VERSION = "1.15";
     private CoreProtocolClient client;
 
     public synchronized JsonObject request(String method, JsonObject params) throws Exception {

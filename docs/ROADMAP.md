@@ -44,7 +44,7 @@ TASK-0033 已交付 VisualStudio.Extensibility 进程外 Host、Solution 环境 
 
 AI 编排和 Git 语义属于 Core；Host 只展示输入范围、建议、可编辑草稿和确认步骤。功能必须显式触发，默认只生成建议，不自动 commit，也不自动执行 reset、rebase、push 等高风险操作。模型可为本地模型或用户自行配置的直连 Provider；不得引入 GitNova 账户或中心代理，发送前必须展示并最小化将离开仓库环境的数据。
 
-TASK-0035 已锁定协议 1.14 的预览/生成类型、index-bound 确认、本地 Ollama 与可选 OpenAI Responses API 直连边界。TASK-0036 已在 Core 交付 staged input builder、敏感/二进制排除、两种 Provider adapter、严格结构化输出和稳定错误。TASK-0037 已交付 Desktop 披露预览、外发确认、可编辑草稿、建议呈现，以及进入既有 commit 两步确认的安全 handoff；该路线基线的全部 Task 已完成。
+TASK-0035 已锁定协议 1.14 的预览/生成类型、index-bound 确认、本地 Ollama 与可选 OpenAI Responses API 直连边界。TASK-0036 已在 Core 交付 staged input builder、敏感/二进制排除、首批 Provider adapter、严格结构化输出和稳定错误。TASK-0037 已交付 Desktop 披露预览、外发确认、可编辑草稿、建议呈现，以及进入既有 commit 两步确认的安全 handoff。TASK-0043 以协议 1.15 增加 Claude、DeepSeek、Qwen 与 Kimi 固定官方 endpoint，并把多 Provider 配置集中在 Settings；AI 仍只在 commit composer 出现。
 
 产品目标见[愿景](VISION.md)，技术选择见[技术栈](TECH_STACK.md)，质量门槛见[非功能需求](NON_FUNCTIONAL.md)。
 
@@ -66,6 +66,7 @@ TASK-0035 已锁定协议 1.14 的预览/生成类型、index-bound 确认、本
 12. TASK-0035 — AI Assist 协议、隐私与 Provider 决策
 13. TASK-0036 — Core AI commit draft 与操作建议
 14. TASK-0037 — Desktop AI Assist 交互与安全确认
+15. TASK-0043 — AI Provider 扩展与 Settings 配置
 
 该基线已全部交付。任何新增范围必须先更新 Roadmap，并继续使用独立 Task 作为开发与 Review 单元。
 

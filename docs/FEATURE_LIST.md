@@ -50,7 +50,7 @@
 - 本地模型或用户配置的直连 AI Provider
 - 输入预览、敏感路径排除、最小披露与用户确认
 - AI 不自动执行 commit 或 reset/rebase/push 等高风险操作
-- AI Assist 协议、Ollama/OpenAI Provider 与隐私契约（已实现）
+- AI Assist 协议、Ollama/OpenAI/Claude/DeepSeek/Qwen/Kimi Provider 与隐私契约（已实现）
 - Core staged input preview、commit draft 与结构化操作建议（已实现）
 - Desktop 输入披露、生成、草稿编辑与 commit 二次确认（已实现）
 

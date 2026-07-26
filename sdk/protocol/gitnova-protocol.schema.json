@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitnova.dev/schema/protocol/1.14/gitnova-protocol.schema.json",
-  "title": "GitNova Core Protocol 1.14",
+  "$id": "https://gitnova.dev/schema/protocol/1.15/gitnova-protocol.schema.json",
+  "title": "GitNova Core Protocol 1.15",
   "type": "object",
-  "properties": { "protocolVersion": { "const": "1.14" } },
+  "properties": { "protocolVersion": { "const": "1.15" } },
   "required": ["protocolVersion"],
   "$defs": {
     "RequestId": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
@@ -548,7 +548,7 @@
       "properties": { "mergeRequest": { "$ref": "#/$defs/GitLabMergeRequest" }, "relationship": { "$ref": "#/$defs/SquashTraceRelationship" } },
       "required": ["mergeRequest", "relationship"]
     },
-    "AiProviderKind": { "enum": ["ollama", "openAi"] },
+    "AiProviderKind": { "enum": ["ollama", "openAi", "anthropic", "deepSeek", "qwen", "kimi"] },
     "AiProviderConfig": {
       "oneOf": [
         {
@@ -561,6 +561,26 @@
         {
           "type": "object", "additionalProperties": false,
           "properties": { "kind": { "const": "openAi" }, "model": { "type": "string", "minLength": 1, "maxLength": 255 } },
+          "required": ["kind", "model"]
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "properties": { "kind": { "const": "anthropic" }, "model": { "type": "string", "minLength": 1, "maxLength": 255 } },
+          "required": ["kind", "model"]
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "properties": { "kind": { "const": "deepSeek" }, "model": { "type": "string", "minLength": 1, "maxLength": 255 } },
+          "required": ["kind", "model"]
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "properties": { "kind": { "const": "qwen" }, "model": { "type": "string", "minLength": 1, "maxLength": 255 } },
+          "required": ["kind", "model"]
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "properties": { "kind": { "const": "kimi" }, "model": { "type": "string", "minLength": 1, "maxLength": 255 } },
           "required": ["kind", "model"]
         }
       ]

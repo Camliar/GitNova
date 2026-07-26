@@ -19,6 +19,9 @@ dependencies {
 java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
 
 intellijPlatform {
+    // IDEA-390693: 2026.2 nullability instrumentation fails on otherwise valid Java classes.
+    // GitNova uses no GUI Designer forms, so packaging the compiled classes directly is safe.
+    instrumentCode = false
     pluginConfiguration {
         ideaVersion {
             sinceBuild = "262"

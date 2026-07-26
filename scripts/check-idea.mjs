@@ -21,6 +21,7 @@ try {
   if (!client.includes("Redirect.DISCARD")) throw new Error("Core stderr must not enter the IDE UI");
   if (!plugin.includes("dev.gitnova.idea.InspectPullRequest") || !build.includes("org.jetbrains.intellij.platform")) throw new Error("JetBrains plugin registration is incomplete");
   if (!build.includes("JavaLanguageVersion.of(25)") || !ci.includes("java-version: 25")) throw new Error("IntelliJ IDEA 2026.2 builds must use Java 25 in Gradle and CI");
+  if (!build.includes("instrumentCode = false")) throw new Error("IDEA 2026.2 code instrumentation must remain disabled until IDEA-390693 is resolved");
   if (!service.includes(`PROTOCOL_VERSION = "${schema.properties.protocolVersion.const}"`)) throw new Error("JetBrains protocol version is out of date");
   console.log("JetBrains Host static checks passed");
 } finally {

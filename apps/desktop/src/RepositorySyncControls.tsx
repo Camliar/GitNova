@@ -42,9 +42,9 @@ export function RepositorySyncControls({ branch, onApplied }: { branch: BranchSt
   }
 
   return <div className="repository-sync" aria-label="Repository sync actions">
-    <button type="button" disabled={busy || !attached} onClick={() => void execute("fetch")}>Fetch</button>
-    <button type="button" disabled={busy || !attached || !branch.upstream} onClick={() => review("pull")} title={branch.upstream ? "Pull the tracked branch" : "Pull requires an upstream branch"}>Pull</button>
-    <button type="button" disabled={busy || !attached} onClick={() => review("push")}>Push</button>
+    <button className="toolbar-command" type="button" disabled={busy || !attached} onClick={() => void execute("fetch")}><span aria-hidden="true">⇣</span>Fetch</button>
+    <button className="toolbar-command" type="button" disabled={busy || !attached || !branch.upstream} onClick={() => review("pull")} title={branch.upstream ? "Pull the tracked branch" : "Pull requires an upstream branch"}><span aria-hidden="true">↓</span>Pull</button>
+    <button className="toolbar-command" type="button" disabled={busy || !attached} onClick={() => review("push")}><span aria-hidden="true">↑</span>Push</button>
     {state.kind === "confirm" && <div className="sync-confirmation" role="group" aria-label={`Confirm ${state.action}`}>
       <strong>{label(state.action)} {state.branch} at {state.oid.slice(0, 8)}?</strong>
       <span>{state.action === "pull" ? "Only a fast-forward is allowed. GitNova will not merge, rebase, stash, reset, or discard changes." : "Only the current branch is pushed. GitNova will not force, delete, or push another ref."}</span>

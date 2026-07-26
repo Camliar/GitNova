@@ -82,7 +82,7 @@ describe("Desktop repository open", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
 
-    expect(await screen.findByLabelText("Current repository")).toHaveDisplayValue("project — /work/project");
+    expect(await screen.findByRole("tab", { name: "project" })).toHaveAttribute("aria-selected", "true");
     expect(repository.openRepository).toHaveBeenCalledWith("/work/project");
     expect(screen.getByText("/work/project")).toBeInTheDocument();
     expect(screen.getByText("git version 2.50.0")).toBeInTheDocument();
@@ -113,17 +113,63 @@ describe("Desktop repository open", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
     fireEvent.click(await screen.findByRole("button", { name: "Add repository" }));
 
-    const repositorySelect = await screen.findByLabelText("Current repository");
-    await waitFor(() => expect(repositorySelect).toHaveDisplayValue("second — /work/second"));
-    const first = within(repositorySelect).getByRole("option", { name: "project — /work/project" });
-    expect(within(repositorySelect).getAllByRole("option")).toHaveLength(2);
-    fireEvent.change(repositorySelect, { target: { value: first.getAttribute("value") } });
+    const tabs = await screen.findByRole("tablist", { name: "Open repositories" });
+    const projectTab = within(tabs).getByRole("tab", { name: "project" });
+    const secondTab = within(tabs).getByRole("tab", { name: "second" });
+    await waitFor(() => expect(secondTab).toHaveAttribute("aria-selected", "true"));
+    expect(within(tabs).getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["project", "second"]);
+    fireEvent.click(projectTab);
     await waitFor(() => expect(repository.openRepository).toHaveBeenLastCalledWith("/work/project"));
-    expect(repositorySelect).toHaveDisplayValue("project — /work/project");
+    expect(projectTab).toHaveAttribute("aria-selected", "true");
+    expect(within(tabs).getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["project", "second"]);
+    expect(core.shutdownCore).toHaveBeenCalledTimes(2);
 
     const saved = JSON.parse(localStorage.getItem("gitnova.workspace.v2") ?? "null");
     expect(saved.active.path).toBe("/work/project");
     expect(saved.repositories.map((entry: { path: string }) => entry.path)).toEqual(["/work/project", "/work/second"]);
+  });
+
+  it("rolls back the active tab and Core repository when adding another repository fails", async () => {
+    repository.selectRepositoryDirectory.mockResolvedValueOnce("/work/project").mockResolvedValueOnce("/work/broken");
+    repository.openRepository
+      .mockResolvedValueOnce(descriptor)
+      .mockRejectedValueOnce({ code: "repository.not_found", message: "Repository was not found", retryable: true })
+      .mockResolvedValueOnce(descriptor);
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add repository" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Repository was not found");
+    expect(screen.getByRole("tab", { name: "project" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("tab", { name: "broken" })).not.toBeInTheDocument();
+    expect(repository.openRepository).toHaveBeenNthCalledWith(2, "/work/broken");
+    expect(repository.openRepository).toHaveBeenNthCalledWith(3, "/work/project");
+    expect(JSON.parse(localStorage.getItem("gitnova.workspace.v2") ?? "null").active.path).toBe("/work/project");
+  });
+
+  it("restores the previous tab when switching a saved repository fails", async () => {
+    localStorage.setItem("gitnova.workspace.v2", JSON.stringify({
+      version: 2,
+      active: { target: { kind: "local" }, path: "/work/project" },
+      repositories: [
+        { target: { kind: "local" }, path: "/work/project" },
+        { target: { kind: "local" }, path: "/work/second" },
+      ],
+    }));
+    repository.openRepository
+      .mockResolvedValueOnce(descriptor)
+      .mockRejectedValueOnce({ code: "git.command_failed", message: "Git could not open the repository", retryable: true })
+      .mockResolvedValueOnce(descriptor);
+    render(<App />);
+    const projectTab = await screen.findByRole("tab", { name: "project" });
+    const secondTab = screen.getByRole("tab", { name: "second" });
+    fireEvent.keyDown(projectTab, { key: "ArrowRight" });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Git could not open the repository");
+    expect(projectTab).toHaveAttribute("aria-selected", "true");
+    expect(secondTab).toHaveAttribute("aria-selected", "false");
+    expect(repository.openRepository).toHaveBeenNthCalledWith(2, "/work/second");
+    expect(repository.openRepository).toHaveBeenNthCalledWith(3, "/work/project");
   });
 
   it("does not expose mutations when Core does not advertise the capability", async () => {
@@ -624,7 +670,7 @@ describe("Desktop repository open", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Git could not read status. The repository remains open.");
-    expect(screen.getByLabelText("Current repository")).toHaveDisplayValue("project — /work/project");
+    expect(screen.getByRole("tab", { name: "project" })).toHaveAttribute("aria-selected", "true");
     fireEvent.click(screen.getByRole("button", { name: "Refresh repository" }));
     await waitFor(() => expect(screen.queryByLabelText(/Current branch /)).not.toBeInTheDocument());
   });

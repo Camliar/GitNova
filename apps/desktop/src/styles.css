@@ -705,3 +705,40 @@ button.ref-row__primary { cursor: pointer; }
   .mutation-grid { grid-template-columns: 1fr; }
   .commit-changes-layout { grid-template-columns: 190px minmax(0, 1fr); }
 }
+
+/* TASK-0049: Fork-style toolbar and stable repository tabs */
+.app-toolbar { grid-template-columns: 236px minmax(0, 1fr) auto; min-height: 64px; padding: 5px 10px; }
+.app-toolbar .brand { grid-column: 1; align-self: center; padding-left: 5px; }
+.toolbar-actions { grid-column: 2; align-items: stretch; justify-content: start; gap: 3px; overflow: visible; }
+.toolbar-actions > button, .repository-sync > button { min-width: 58px; min-height: 52px; padding: 3px 8px; border: 0; border-radius: 6px; background: transparent; }
+.toolbar-actions > button:hover, .repository-sync > button:hover:not(:disabled) { background: #e9eaed; }
+.toolbar-command { display: grid; grid-template-rows: 22px auto; align-content: center; justify-items: center; gap: 1px; color: #505761; cursor: pointer; font-size: 9px; font-weight: 650; }
+.toolbar-command > span { color: #626974; font-size: 17px; font-weight: 500; line-height: 20px; }
+.toolbar-status { grid-column: 3; align-self: center; padding: 0 8px; color: #858b94; font-size: 9px; white-space: nowrap; }
+.repository-sync { align-items: stretch; gap: 1px; padding: 0 5px 0 2px; border-right: 1px solid #d6d8dd; }
+.repository-sync > button { display: grid; }
+.repository-sync > button:disabled { opacity: .35; }
+.sync-feedback { top: 55px; right: auto; left: 0; }
+.sync-confirmation, .branch-confirmation { top: 104px; }
+
+.repository-tabbar { position: relative; z-index: 2; display: grid; grid-template-columns: 236px minmax(0, 1fr); height: 34px; border-bottom: 1px solid #d2d5da; background: #f1f1f2; }
+.repository-tabbar__identity { display: flex; min-width: 0; align-items: center; padding: 0 14px; border-right: 1px solid #d2d5da; color: #3f4650; font-size: 11px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
+.repository-tabs { display: flex; min-width: 0; align-items: end; overflow-x: auto; overflow-y: hidden; }
+.repository-tabs > button { display: flex; min-width: 150px; max-width: 280px; height: 33px; align-items: center; justify-content: center; gap: 6px; padding: 0 14px; border: 0; border-right: 1px solid #d5d7db; background: #e7e8ea; color: #69707a; cursor: pointer; font-size: 10px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.repository-tabs > button:hover:not(:disabled) { background: #edeef0; color: #363d47; }
+.repository-tabs > button.is-active { height: 34px; border-top: 2px solid #2879da; background: #fff; color: #282e37; font-weight: 750; }
+.repository-tabs > button:disabled { cursor: wait; opacity: .72; }
+.repository-tabs > .repository-tabs__add { min-width: 38px; width: 38px; padding: 0; background: transparent; font-size: 18px; font-weight: 400; }
+.repository-workbench { height: calc(100vh - 98px); }
+
+@media (max-width: 900px) {
+  .app-toolbar { grid-template-columns: 150px minmax(0, 1fr); min-height: 58px; }
+  .toolbar-status { display: none; }
+  .toolbar-actions { overflow-x: auto; }
+  .toolbar-actions > button, .repository-sync > button { min-width: 52px; min-height: 46px; }
+  .repository-tabbar { grid-template-columns: 1fr; }
+  .repository-tabbar__identity { display: none; }
+  .repository-workbench { height: auto; }
+  .repository-sidebar { top: 92px; }
+  .sync-confirmation, .branch-confirmation { top: 98px; }
+}

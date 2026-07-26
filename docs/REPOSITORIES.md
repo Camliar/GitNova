@@ -35,7 +35,7 @@ JSON-RPC 只能无损承载 Unicode string。若平台路径无法无损转换�
 
 Desktop 使用受限的原生目录选择器获取用户明确选择的一个路径，并将其作为 opaque string 交给 `repository/open`。取消选择不产生请求或错误。Host 不递归扫描目录、不验证 `.git`、不运行 Git，也不从 Core 返回路径推导额外仓库事实。
 
-当前 Desktop 会话只能打开一个仓库；选择不同仓库时，Core 的 `repository.different_repository_open` 边界仍然生效。worktree、linked worktree 和 bare 类型及其路径均由 Core 返回。远程环境必须在后续 launcher/picker Task 中于仓库所在环境选择路径，Desktop 不转换本机与 WSL、SSH 或 container 路径。
+Desktop 可以把最多 12 个成功打开的 opaque path/Core launch target 保存为稳定顺序的本地 repository Tabs，但任一时刻仍只有一个 active repository 和一个业务 Core。点击不同 Tab 时 Host 先正常关闭旧 Core，再在目标仓库所在环境启动新 Core 并调用 `repository/open`，因此不会绕过单会话的 `repository.different_repository_open` 边界，也不会把 Git 逻辑移入 Host。新仓库追加到末尾；切换不重排；打开失败时尝试重启并恢复上一个仓库。worktree、linked worktree 和 bare 类型及其路径均由 Core 返回，Desktop 不转换本机与 WSL、SSH 或 container 路径。
 
 ## Stable errors
 

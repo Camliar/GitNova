@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { CommitSummary, DiffScope, GitHubSquashTrace, RepositoryDescriptor, RepositoryMutationSnapshot } from "@gitnova/protocol";
 import markUrl from "../../../assets/icons/gitnova-mark.svg";
 import { asDesktopError, configureCore, getCoreStatus, shutdownCore, startCore, type CoreEnvironment, type CoreLaunchTarget, type CoreStatus, type DesktopError } from "./core";
@@ -67,10 +67,6 @@ function bookmarkKey(bookmark: RepositoryBookmark) {
   return `${JSON.stringify(bookmark.target)}\n${bookmark.path}`;
 }
 
-function targetKey(target: CoreLaunchTarget) {
-  return JSON.stringify(target);
-}
-
 function loadWorkspaceState(): PersistedWorkspace {
   try {
     const value = JSON.parse(localStorage.getItem(workspaceStateKey) ?? "null") as Partial<PersistedWorkspace> | null;
@@ -124,6 +120,8 @@ export function App() {
   const [remoteRepositoryPath, setRemoteRepositoryPath] = useState("");
   const [repository, setRepository] = useState<RepositoryState>({ kind: "idle" });
   const [recentRepositories, setRecentRepositories] = useState(initialWorkspace.current.repositories);
+  const [activeRepository, setActiveRepository] = useState<RepositoryBookmark | null>(initialWorkspace.current.active);
+  const [switchingRepositoryKey, setSwitchingRepositoryKey] = useState<string | null>(null);
   const [workspaceError, setWorkspaceError] = useState<DesktopError | null>(null);
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("changes");
   const [references, setReferences] = useState<ReferencesState>({ kind: "idle" });
@@ -173,7 +171,7 @@ export function App() {
         try {
           const opened = await openRepository(bookmark.path);
           if (!active) return;
-          rememberRepository(bookmark);
+          rememberRepository(bookmark, "preserve");
           await activateRepository(opened);
         } catch (error) {
           if (active) setRepository({ kind: "error", error: asDesktopError(error) });
@@ -203,10 +201,16 @@ export function App() {
     setConnection({ kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true, references: referencesCapability.current, aiAssist: status.capabilities?.aiAssist === true, lazyCommitDiff: status.capabilities?.lazyCommitDiff === true, historySquashTrace: status.capabilities?.historySquashTrace === true, repositorySync: status.capabilities?.repositorySync === true, remoteBranchCheckout: status.capabilities?.remoteBranchCheckout === true });
   }
 
-  function rememberRepository(bookmark: RepositoryBookmark) {
+  function rememberRepository(bookmark: RepositoryBookmark, placement: "append" | "preserve" = "append") {
+    setActiveRepository(bookmark);
     setRecentRepositories((current) => {
       const key = bookmarkKey(bookmark);
-      const repositories = [bookmark, ...current.filter((entry) => bookmarkKey(entry) !== key)].slice(0, 12);
+      const exists = current.some((entry) => bookmarkKey(entry) === key);
+      const repositories = exists
+        ? current
+        : placement === "append"
+          ? [...current, bookmark].slice(-12)
+          : [bookmark, ...current].slice(0, 12);
       saveWorkspaceState({ version: 2, active: bookmark, repositories });
       return repositories;
     });
@@ -218,18 +222,13 @@ export function App() {
     setRemoteRepositoryPath(target.kind === "local" ? "" : path);
   }
 
-  async function ensureCoreTarget(target: CoreLaunchTarget) {
-    const current = launchTarget();
-    let status = await getCoreStatus();
-    if (status.connected && targetKey(current) !== targetKey(target)) {
-      status = await shutdownCore();
-    }
-    if (!status.connected) {
-      await configureCore(target);
-      status = await startCore();
-    }
+  async function restartCoreTarget(target: CoreLaunchTarget) {
+    const status = await getCoreStatus();
+    if (status.connected) await shutdownCore();
+    await configureCore(target);
+    const started = await startCore();
     showTarget(target);
-    applyCoreStatus(status);
+    applyCoreStatus(started);
   }
 
   async function activateRepository(opened: RepositoryDescriptor) {
@@ -261,6 +260,7 @@ export function App() {
 
   async function chooseRepository() {
     const previous = repository.kind === "open" ? repository : null;
+    const previousBookmark = activeRepository;
     if (!previous) setRepository({ kind: "selecting" });
     setWorkspaceError(null);
     try {
@@ -272,37 +272,21 @@ export function App() {
       if (path.length === 0) {
         throw { code: "desktop.remote_path_required", message: "Enter the repository path in the Core environment", retryable: false } satisfies DesktopError;
       }
+      const bookmark = { target: launchTarget(), path };
+      const previousPath = previous?.repository.worktreeRoot ?? previous?.repository.gitDirectory;
+      if (previous && previousPath !== path) await restartCoreTarget(bookmark.target);
       const opened = await openRepository(path);
-      rememberRepository({ target: launchTarget(), path });
-      await activateRepository(opened);
-    } catch (error) {
-      const desktopError = asDesktopError(error);
-      if (previous) {
-        setRepository(previous);
-        setWorkspaceError(desktopError);
-      } else setRepository({ kind: "error", error: desktopError });
-    }
-  }
-
-  async function switchRepository(bookmark: RepositoryBookmark) {
-    if (repository.kind === "open" && bookmark.path === (repository.repository.worktreeRoot ?? repository.repository.gitDirectory) && bookmarkKey({ target: launchTarget(), path: bookmark.path }) === bookmarkKey(bookmark)) return;
-    const previous = repository.kind === "open" ? repository : null;
-    const previousTarget = launchTarget();
-    const previousPath = previous ? previous.repository.worktreeRoot ?? previous.repository.gitDirectory : null;
-    setWorkspaceError(null);
-    try {
-      await ensureCoreTarget(bookmark.target);
-      const opened = await openRepository(bookmark.path);
-      showTarget(bookmark.target, bookmark.path);
-      rememberRepository(bookmark);
+      rememberRepository(bookmark, "append");
       await activateRepository(opened);
     } catch (error) {
       const desktopError = asDesktopError(error);
       if (previous) {
         try {
-          if (targetKey(previousTarget) !== targetKey(bookmark.target)) {
-            await ensureCoreTarget(previousTarget);
-            if (previousPath) await openRepository(previousPath);
+          if (previousBookmark) {
+            await restartCoreTarget(previousBookmark.target);
+            await openRepository(previousBookmark.path);
+            showTarget(previousBookmark.target, previousBookmark.path);
+            rememberRepository(previousBookmark, "preserve");
           }
           setRepository(previous);
           setWorkspaceError(desktopError);
@@ -313,6 +297,53 @@ export function App() {
     }
   }
 
+  async function switchRepository(bookmark: RepositoryBookmark) {
+    if (repository.kind === "open" && bookmark.path === (repository.repository.worktreeRoot ?? repository.repository.gitDirectory) && bookmarkKey({ target: launchTarget(), path: bookmark.path }) === bookmarkKey(bookmark)) return;
+    const previous = repository.kind === "open" ? repository : null;
+    const previousTarget = launchTarget();
+    const previousPath = previous ? previous.repository.worktreeRoot ?? previous.repository.gitDirectory : null;
+    const requestedKey = bookmarkKey(bookmark);
+    setSwitchingRepositoryKey(requestedKey);
+    setWorkspaceError(null);
+    try {
+      await restartCoreTarget(bookmark.target);
+      const opened = await openRepository(bookmark.path);
+      showTarget(bookmark.target, bookmark.path);
+      rememberRepository(bookmark, "preserve");
+      await activateRepository(opened);
+    } catch (error) {
+      const desktopError = asDesktopError(error);
+      if (previous) {
+        try {
+          await restartCoreTarget(previousTarget);
+          if (previousPath) await openRepository(previousPath);
+          if (previousPath) rememberRepository({ target: previousTarget, path: previousPath }, "preserve");
+          setRepository(previous);
+          setWorkspaceError(desktopError);
+        } catch (rollbackError) {
+          setRepository({ kind: "error", error: asDesktopError(rollbackError) });
+        }
+      } else setRepository({ kind: "error", error: desktopError });
+    } finally {
+      setSwitchingRepositoryKey(null);
+    }
+  }
+
+  function navigateRepositoryTabs(event: KeyboardEvent<HTMLButtonElement>) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    const tabs = Array.from(event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? []);
+    const current = tabs.indexOf(event.currentTarget);
+    if (current < 0 || tabs.length === 0) return;
+    event.preventDefault();
+    const next = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? tabs.length - 1
+        : (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    tabs[next]?.focus();
+    tabs[next]?.click();
+  }
+
   async function reopenRepository() {
     if (repository.kind !== "open") return;
     const path = repository.repository.worktreeRoot ?? repository.repository.gitDirectory;
@@ -321,7 +352,7 @@ export function App() {
     setRepository({ kind: "selecting" });
     try {
       const opened = await openRepository(path);
-      rememberRepository({ target: launchTarget(), path });
+      rememberRepository({ target: launchTarget(), path }, "preserve");
       await activateRepository(opened);
     } catch (error) {
       setRepository({ kind: "error", error: asDesktopError(error) });
@@ -561,28 +592,28 @@ export function App() {
           <img src={markUrl} alt="" width="30" height="30" />
           <span>GitNova</span>
         </a>
-        {openedRepository ? (
-          <div className="toolbar-context">
-            <label className="toolbar-repository">
-              <span className="sr-only">Current repository</span>
-              <select aria-label="Current repository" value={bookmarkKey({ target: launchTarget(), path: repositoryPath })} onChange={(event) => {
-                const selected = recentRepositories.find((entry) => bookmarkKey(entry) === event.target.value);
-                if (selected) void switchRepository(selected);
-              }}>
-                {recentRepositories.map((entry) => <option key={bookmarkKey(entry)} value={bookmarkKey(entry)}>{repositoryLabel(entry.path)} — {entry.path}</option>)}
-              </select>
-            </label>
-          </div>
-        ) : <span className="toolbar-title">Local-first Git client</span>}
         <div className="toolbar-actions">
+          {openedRepository && <button className="toolbar-command" type="button" onClick={() => void chooseRepository()}><span aria-hidden="true">▣</span>Add repository</button>}
           {openedRepository && openedRepository.kind !== "bare" && connection.kind === "connected" && connection.repositorySync && workingTree.kind === "ready" && <RepositorySyncControls key={`sync:${openedRepository.gitDirectory}`} branch={workingTree.status.branch} onApplied={applyMutation} />}
-          {openedRepository && <button type="button" onClick={() => void chooseRepository()}>Add repository</button>}
           {openedRepository && openedRepository.kind !== "bare" && (
-            <button type="button" onClick={() => void refreshWorkingTree()}>Refresh repository</button>
+            <button className="toolbar-command" type="button" aria-label="Refresh repository" onClick={() => void refreshWorkingTree()}><span aria-hidden="true">↻</span>Refresh</button>
           )}
-          {openedRepository && <button type="button" onClick={() => void reopenRepository()}>Reopen repository</button>}
+          {openedRepository && <button className="toolbar-command" type="button" aria-label="Reopen repository" onClick={() => void reopenRepository()}><span aria-hidden="true">↗</span>Reopen</button>}
         </div>
+        <span className="toolbar-status">{openedRepository ? coreDetail : "Local-first Git client"}</span>
       </header>
+
+      {openedRepository && <div className="repository-tabbar">
+        <div className="repository-tabbar__identity" title={repositoryPath}>{repositoryLabel(repositoryPath)}</div>
+        <div className="repository-tabs" role="tablist" aria-label="Open repositories">
+          {recentRepositories.map((entry) => {
+            const key = bookmarkKey(entry);
+            const active = activeRepository !== null && bookmarkKey(activeRepository) === key;
+            return <button type="button" role="tab" aria-selected={active} aria-controls="main-content" tabIndex={active ? 0 : -1} className={active ? "is-active" : ""} disabled={switchingRepositoryKey !== null} key={key} title={entry.path} onKeyDown={navigateRepositoryTabs} onClick={() => void switchRepository(entry)}>{repositoryLabel(entry.path)}{switchingRepositoryKey === key && <span aria-label="Opening">…</span>}</button>;
+          })}
+          <button type="button" className="repository-tabs__add" aria-label="Add repository tab" title="Add repository" disabled={switchingRepositoryKey !== null} onClick={() => void chooseRepository()}>+</button>
+        </div>
+      </div>}
 
       {(branchOperation.kind === "confirm" || branchOperation.kind === "loading" || branchOperation.kind === "error") && <div className="branch-confirmation" role="group" aria-label="Confirm branch switch">
         <span>{branchOperation.target.kind === "local" ? <>Switch to <strong>{branchOperation.target.name}</strong>?</> : <>Create and switch to a local branch tracking <strong>{branchOperation.target.displayName}</strong>?</>} Working changes will be kept; GitNova will not stash or discard them.</span>

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AiAssistPanel } from "./AiAssistPanel";
+import type { AiAssistSettings } from "./AiSettingsPanel";
 
 const ai = vi.hoisted(() => ({ previewAiInput: vi.fn(), generateAiCommitDraft: vi.fn() }));
 vi.mock("./ai", () => ai);
@@ -21,6 +22,7 @@ const preview = {
   truncated: false,
   externalConfirmationRequired: true,
 };
+const settings: AiAssistSettings = { providerKind: "openAi", model: "user-model", baseUrl: "http://127.0.0.1:11434", excludedText: "private.json\nprivate.json" };
 
 describe("Desktop AI Assist", () => {
   beforeEach(() => {
@@ -38,10 +40,7 @@ describe("Desktop AI Assist", () => {
 
   it("requires external disclosure confirmation and hands off an editable draft without committing", async () => {
     const onUse = vi.fn();
-    render(<AiAssistPanel onUseCommitMessage={onUse} />);
-    fireEvent.change(screen.getByLabelText("Provider"), { target: { value: "openAi" } });
-    fireEvent.change(screen.getByLabelText("Model"), { target: { value: "user-model" } });
-    fireEvent.change(screen.getByLabelText(/Excluded repository paths/), { target: { value: "private.json\nprivate.json" } });
+    render(<AiAssistPanel settings={settings} onUseCommitMessage={onUse} />);
     expect(screen.queryByLabelText(/API key/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Preview input" }));
 
@@ -68,17 +67,14 @@ describe("Desktop AI Assist", () => {
   });
 
   it("invalidates disclosure and confirmation when configuration changes", async () => {
-    render(<AiAssistPanel onUseCommitMessage={vi.fn()} />);
-    fireEvent.change(screen.getByLabelText("Provider"), { target: { value: "openAi" } });
-    fireEvent.change(screen.getByLabelText("Model"), { target: { value: "user-model" } });
+    const { rerender } = render(<AiAssistPanel settings={settings} onUseCommitMessage={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Preview input" }));
     expect(await screen.findByRole("heading", { name: "Leaves this environment" })).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText(/I confirm the listed staged patch/));
-    fireEvent.change(screen.getByLabelText("Model"), { target: { value: "another-model" } });
+    rerender(<AiAssistPanel settings={{ ...settings, model: "another-model" }} onUseCommitMessage={vi.fn()} />);
 
     expect(screen.queryByRole("heading", { name: "Leaves this environment" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/I confirm the listed staged patch/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Generate draft" })).not.toBeInTheDocument();
   });
 });
-

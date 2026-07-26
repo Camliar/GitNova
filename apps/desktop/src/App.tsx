@@ -14,6 +14,7 @@ import { CommitDetailPanel, type CommitDetailState, type CommitSelection } from 
 import { GitHubPanel } from "./GitHubPanel";
 import { MutationPanel } from "./MutationPanel";
 import { AiAssistPanel } from "./AiAssistPanel";
+import { AiSettingsPanel, defaultAiAssistSettings } from "./AiSettingsPanel";
 
 type Connection =
   | { kind: "checking" }
@@ -27,11 +28,42 @@ type RepositoryState =
   | { kind: "open"; repository: RepositoryDescriptor }
   | { kind: "error"; error: DesktopError };
 
+type WorkspaceView = "changes" | "history" | "pullRequests" | "settings";
+
 const repositoryKindLabel: Record<RepositoryDescriptor["kind"], string> = {
   worktree: "Worktree",
   linkedWorktree: "Linked worktree",
   bare: "Bare repository",
 };
+
+const workspaceBookmarkKey = "gitnova.workspace.v1";
+type WorkspaceBookmark = { version: 1; target: CoreLaunchTarget; path: string };
+
+function loadWorkspaceBookmark(): WorkspaceBookmark | null {
+  try {
+    const value = JSON.parse(localStorage.getItem(workspaceBookmarkKey) ?? "null") as Partial<WorkspaceBookmark> | null;
+    if (value?.version !== 1 || typeof value.path !== "string" || !value.path || !value.target || typeof value.target.kind !== "string") return null;
+    if (!(["local", "wsl", "ssh", "devContainer"] as string[]).includes(value.target.kind)) return null;
+    return value as WorkspaceBookmark;
+  } catch {
+    return null;
+  }
+}
+
+function saveWorkspaceBookmark(bookmark: WorkspaceBookmark) {
+  try {
+    localStorage.setItem(workspaceBookmarkKey, JSON.stringify(bookmark));
+  } catch {
+    // Host preference persistence must never block opening a repository.
+  }
+}
+
+function targetDetail(target: CoreLaunchTarget) {
+  if (target.kind === "wsl") return target.distribution;
+  if (target.kind === "ssh") return target.destination;
+  if (target.kind === "devContainer") return target.workspaceFolder;
+  return "";
+}
 
 export function App() {
   const [connection, setConnection] = useState<Connection>({ kind: "checking" });
@@ -39,6 +71,8 @@ export function App() {
   const [environmentDetail, setEnvironmentDetail] = useState("");
   const [remoteRepositoryPath, setRemoteRepositoryPath] = useState("");
   const [repository, setRepository] = useState<RepositoryState>({ kind: "idle" });
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("changes");
+  const [aiSettings, setAiSettings] = useState(defaultAiAssistSettings);
   const [workingTree, setWorkingTree] = useState<WorkingTreeState>({ kind: "idle" });
   const [fileDiff, setFileDiff] = useState<DiffState>({ kind: "idle" });
   const diffRequest = useRef(0);
@@ -51,32 +85,62 @@ export function App() {
 
   useEffect(() => {
     let active = true;
-    void getCoreStatus()
-      .then((status) => {
+    void (async () => {
+      try {
+        const initialStatus = await getCoreStatus();
         if (!active) return;
-        setEnvironment(status.environment ?? "local");
-        setConnection(
-          status.connected
-            ? { kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true, aiAssist: status.capabilities?.aiAssist === true }
-            : { kind: "stopped" },
-        );
-      })
-      .catch((error: unknown) => {
+        const bookmark = loadWorkspaceBookmark();
+        setEnvironment(bookmark?.target.kind ?? initialStatus.environment ?? "local");
+        if (bookmark) {
+          setEnvironmentDetail(targetDetail(bookmark.target));
+          if (bookmark.target.kind !== "local") setRemoteRepositoryPath(bookmark.path);
+        }
+        let status = initialStatus;
+        if (bookmark && !status.connected) {
+          await configureCore(bookmark.target);
+          status = await startCore();
+          if (!active) return;
+        }
+        setConnection(status.connected ? { kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true, aiAssist: status.capabilities?.aiAssist === true } : { kind: "stopped" });
+        if (!bookmark || !status.connected) return;
+        setRepository({ kind: "selecting" });
+        try {
+          const opened = await openRepository(bookmark.path);
+          if (!active) return;
+          await activateRepository(opened);
+        } catch (error) {
+          if (active) setRepository({ kind: "error", error: asDesktopError(error) });
+        }
+      } catch (error) {
         if (active) setConnection({ kind: "error", error: asDesktopError(error) });
-      });
+      }
+    })();
     return () => {
       active = false;
     };
   }, []);
 
+  function launchTarget(): CoreLaunchTarget {
+    if (environment === "wsl") return { kind: "wsl", distribution: environmentDetail.trim() };
+    if (environment === "ssh") return { kind: "ssh", destination: environmentDetail.trim() };
+    if (environment === "devContainer") return { kind: "devContainer", workspaceFolder: environmentDetail.trim() };
+    return { kind: "local" };
+  }
+
+  async function activateRepository(opened: RepositoryDescriptor) {
+    setRepository({ kind: "open", repository: opened });
+    setWorkspaceView(opened.kind === "bare" ? "history" : "changes");
+    setAiCommitDraft(null);
+    diffRequest.current += 1;
+    setFileDiff({ kind: "idle" });
+    if (opened.kind === "bare") setWorkingTree({ kind: "idle" });
+    await Promise.all([opened.kind !== "bare" ? refreshWorkingTree() : Promise.resolve(), refreshHistory()]);
+  }
+
   async function connectCore() {
     setConnection({ kind: "checking" });
     try {
-      let target: CoreLaunchTarget;
-      if (environment === "wsl") target = { kind: "wsl", distribution: environmentDetail.trim() };
-      else if (environment === "ssh") target = { kind: "ssh", destination: environmentDetail.trim() };
-      else if (environment === "devContainer") target = { kind: "devContainer", workspaceFolder: environmentDetail.trim() };
-      else target = { kind: "local" };
+      const target = launchTarget();
       await configureCore(target);
       const status = await startCore();
       setEnvironment(status.environment ?? environment);
@@ -98,12 +162,8 @@ export function App() {
         throw { code: "desktop.remote_path_required", message: "Enter the repository path in the Core environment", retryable: false } satisfies DesktopError;
       }
       const opened = await openRepository(path);
-      setRepository({ kind: "open", repository: opened });
-      setAiCommitDraft(null);
-      diffRequest.current += 1;
-      setFileDiff({ kind: "idle" });
-      if (opened.kind === "bare") setWorkingTree({ kind: "idle" });
-      await Promise.all([opened.kind !== "bare" ? refreshWorkingTree() : Promise.resolve(), refreshHistory()]);
+      saveWorkspaceBookmark({ version: 1, target: launchTarget(), path });
+      await activateRepository(opened);
     } catch (error) {
       setRepository({ kind: "error", error: asDesktopError(error) });
     }
@@ -117,12 +177,8 @@ export function App() {
     setRepository({ kind: "selecting" });
     try {
       const opened = await openRepository(path);
-      setRepository({ kind: "open", repository: opened });
-      setAiCommitDraft(null);
-      diffRequest.current += 1;
-      setFileDiff({ kind: "idle" });
-      if (opened.kind === "bare") setWorkingTree({ kind: "idle" });
-      await Promise.all([opened.kind !== "bare" ? refreshWorkingTree() : Promise.resolve(), refreshHistory()]);
+      saveWorkspaceBookmark({ version: 1, target: launchTarget(), path });
+      await activateRepository(opened);
     } catch (error) {
       setRepository({ kind: "error", error: asDesktopError(error) });
     }
@@ -245,163 +301,127 @@ export function App() {
           ? "Not opened"
           : "Not opened";
 
+  const openedRepository = repository.kind === "open" ? repository.repository : null;
+  const repositoryPath = openedRepository?.worktreeRoot ?? openedRepository?.gitDirectory ?? "";
+  const repositoryName = repositoryPath.split(/[\\/]/).filter(Boolean).at(-1) ?? "Repository";
+  const changeCount = workingTree.kind === "ready" ? workingTree.status.entries.length : 0;
+  const branchName = workingTree.kind === "ready" ? workingTree.status.branch.head ?? "Detached HEAD" : "Reading branch…";
+
   return (
     <div className="app-shell">
-      <header className="app-header">
+      <header className="app-header app-toolbar">
         <a className="brand" href="#main-content" aria-label="GitNova home">
-          <img src={markUrl} alt="" width="36" height="36" />
+          <img src={markUrl} alt="" width="30" height="30" />
           <span>GitNova</span>
         </a>
-        <span className="local-badge">
-          <span aria-hidden="true" className="local-badge__dot" />
-          Local-first desktop
-        </span>
+        {openedRepository ? (
+          <div className="toolbar-repository" aria-label="Current repository">
+            <strong>{repositoryName}</strong>
+            <span>{branchName}</span>
+          </div>
+        ) : <span className="toolbar-title">Local-first Git client</span>}
+        <div className="toolbar-actions">
+          {openedRepository && openedRepository.kind !== "bare" && (
+            <button type="button" onClick={() => void refreshWorkingTree()}>Refresh repository</button>
+          )}
+          {openedRepository && <button type="button" onClick={() => void reopenRepository()}>Reopen repository</button>}
+        </div>
       </header>
 
-      <main id="main-content" className="workspace" tabIndex={-1}>
-        <section className="hero" aria-labelledby="welcome-title">
-          <p className="eyebrow">Open a local repository</p>
-          <h1 id="welcome-title">Understand the history behind the merge.</h1>
-          <p className="hero__copy">
-            Choose a repository in this environment. GitNova Core will identify it without scanning
-            other folders or moving repository data to a central service.
-          </p>
-          {repository.kind === "open" ? (
-            <section className="repository-card" aria-labelledby="repository-title">
-              <div>
-                <p className="eyebrow">Active repository</p>
-                <h2 id="repository-title">{repositoryKindLabel[repository.repository.kind]}</h2>
-              </div>
-              <dl>
-                {repository.repository.worktreeRoot && (
-                  <div><dt>Worktree</dt><dd>{repository.repository.worktreeRoot}</dd></div>
-                )}
-                <div><dt>Git directory</dt><dd>{repository.repository.gitDirectory}</dd></div>
-                <div><dt>System Git</dt><dd>{repository.repository.gitVersion}</dd></div>
-              </dl>
-            </section>
-          ) : (
-            <div className="next-step" role="status" aria-live="polite">
-              <span className="next-step__icon" aria-hidden="true">01</span>
-              <span>
-                <strong>{connection.kind === "connected" ? "Choose a repository" : "Start Core"}</strong>{" "}
-                to establish the local data path.
-              </span>
+      {openedRepository ? (
+        <main id="main-content" className="repository-workbench" tabIndex={-1}>
+          <aside className="repository-sidebar" aria-label="Repository navigation">
+            <div className="repository-sidebar__title">
+              <img src={markUrl} alt="" width="28" height="28" />
+              <span><strong>{repositoryName}</strong><small>{repositoryKindLabel[openedRepository.kind]}</small></span>
             </div>
-          )}
-          {repository.kind === "open" && repository.repository.kind === "bare" && (
-            <section className="working-tree" aria-labelledby="working-tree-title">
-              <p className="eyebrow">Working tree</p>
-              <h2 id="working-tree-title">Not available</h2>
-              <p className="empty-state">Bare repositories do not have a working tree.</p>
-            </section>
-          )}
-          {repository.kind === "open" && repository.repository.kind !== "bare" && (
-            <WorkingTreePanel
-              state={workingTree}
-              diffLoading={fileDiff.kind === "loading"}
-              onRefresh={() => void refreshWorkingTree()}
-              onDiff={(path: string, scope: DiffScope) => void loadFileDiff({ path, scope })}
-            />
-          )}
-          {connection.kind === "connected" && connection.aiAssist && repository.kind === "open" && repository.repository.kind !== "bare" && workingTree.kind === "ready" && (
-            <AiAssistPanel key={`ai:${repository.repository.gitDirectory}`} onUseCommitMessage={(message) => setAiCommitDraft({ id: ++aiDraftSequence.current, message })} />
-          )}
-          {connection.kind === "connected" && connection.mutations && repository.kind === "open" && repository.repository.kind !== "bare" && workingTree.kind === "ready" && (
-            <MutationPanel key={`mutations:${repository.repository.gitDirectory}`} status={workingTree.status} suggestedCommit={aiCommitDraft} onApplied={applyMutation} />
-          )}
-          {fileDiff.kind !== "idle" && (
-            <DiffPanel
-              state={fileDiff}
-              onRetry={() => void loadFileDiff(fileDiff.selection)}
-              onClose={closeFileDiff}
-            />
-          )}
-          {repository.kind === "open" && (
-            <HistoryPanel
-              state={history}
-              commitLoading={commitDetail.kind === "loading"}
-              onRetry={() => void refreshHistory()}
-              onLoadMore={() => void loadMoreHistory()}
-              onSelectCommit={selectCommit}
-            />
-          )}
-          {commitDetail.kind !== "idle" && (
-            <CommitDetailPanel
-              key={`${commitDetail.kind === "choosingParent" ? commitDetail.commit.oid : commitDetail.selection.commit.oid}:${commitDetail.kind === "choosingParent" ? "" : commitDetail.selection.parentOid ?? ""}`}
-              state={commitDetail}
-              onChooseParent={chooseCommitParent}
-              onRetry={() => commitDetail.kind === "error" && void loadCommitDiff(commitDetail.selection)}
-              onClose={closeCommitDetail}
-            />
-          )}
-          {repository.kind === "open" && <GitHubPanel key={`github:${repository.repository.gitDirectory}`} />}
-        </section>
+            <nav>
+              {openedRepository.kind !== "bare" && <button type="button" className={workspaceView === "changes" ? "is-active" : ""} onClick={() => setWorkspaceView("changes")}><span>Local Changes</span><strong>{changeCount}</strong></button>}
+              <button type="button" className={workspaceView === "history" ? "is-active" : ""} onClick={() => setWorkspaceView("history")}><span>All Commits</span></button>
+              <button type="button" className={workspaceView === "pullRequests" ? "is-active" : ""} onClick={() => setWorkspaceView("pullRequests")}><span>Pull Requests</span></button>
+              <button type="button" className={workspaceView === "settings" ? "is-active" : ""} onClick={() => setWorkspaceView("settings")}><span>Settings</span></button>
+            </nav>
+            <dl className="repository-facts">
+              <div><dt>Core</dt><dd>{coreDetail}</dd></div>
+              <div><dt>System Git</dt><dd>{openedRepository.gitVersion}</dd></div>
+              <div><dt>Path</dt><dd title={repositoryPath}>{repositoryPath}</dd></div>
+            </dl>
+            <p className="privacy-note">Repository data stays in the Core environment.</p>
+          </aside>
 
-        <aside className="foundation-card" aria-labelledby="foundation-title">
-          <div><p className="eyebrow">System status</p><h2 id="foundation-title">Workspace</h2></div>
-          <ul>
-            <li>
-              <span className={`status-mark status-mark--${connection.kind === "connected" ? "ready" : connection.kind === "checking" ? "pending" : "idle"}`} aria-hidden="true" />
-              <span>Core connection</span><strong>{coreDetail}</strong>
-            </li>
-            <li>
-              <span className={`status-mark status-mark--${repository.kind === "open" ? "ready" : repository.kind === "selecting" ? "pending" : "idle"}`} aria-hidden="true" />
-              <span>Repository</span><strong>{repositoryDetail}</strong>
-            </li>
-          </ul>
-          {(connection.kind === "stopped" || connection.kind === "error") && (
-            <div className="connection-action">
-              {connection.kind === "error" && <p role="alert">{connection.error.message}. No repository data was changed.</p>}
-              <label className="environment-field">
-                Core environment
-                <select value={environment} onChange={(event) => { setEnvironment(event.target.value as CoreEnvironment); setEnvironmentDetail(""); }}>
-                  <option value="local">This computer</option>
-                  <option value="wsl">WSL distribution</option>
-                  <option value="ssh">Remote SSH</option>
-                  <option value="devContainer">Dev Container</option>
-                </select>
-              </label>
-              {environment !== "local" && (
-                <label className="environment-field">
-                  {environment === "wsl" ? "Distribution name" : environment === "ssh" ? "SSH destination" : "Local workspace folder"}
-                  <input
-                    value={environmentDetail}
-                    onChange={(event) => setEnvironmentDetail(event.target.value)}
-                    placeholder={environment === "wsl" ? "Ubuntu-24.04" : environment === "ssh" ? "user@example.com" : "/absolute/path/to/workspace"}
+          <section className="workbench-main">
+            <header className="view-header">
+              <div>
+                <p>{workspaceView === "changes" ? "Working copy" : workspaceView === "history" ? "Repository history" : workspaceView === "pullRequests" ? "Provider data" : "Application preferences"}</p>
+                <h1>{workspaceView === "changes" ? "Local Changes" : workspaceView === "history" ? "All Commits" : workspaceView === "pullRequests" ? "Pull Requests" : "Settings"}</h1>
+              </div>
+              <span className="branch-pill">{branchName}</span>
+            </header>
+
+            {workspaceView === "changes" && openedRepository.kind !== "bare" && (
+              <div className="changes-workspace">
+                <div className="changes-browser">
+                  <WorkingTreePanel state={workingTree} diffLoading={fileDiff.kind === "loading"} onRefresh={() => void refreshWorkingTree()} onDiff={(path: string, scope: DiffScope) => void loadFileDiff({ path, scope })} />
+                </div>
+                <div className="changes-detail">
+                  {fileDiff.kind === "idle" ? <div className="pane-placeholder"><strong>Select a changed file</strong><span>Choose View beside a staged or working change to inspect its line diff.</span></div> : <DiffPanel state={fileDiff} onRetry={() => void loadFileDiff(fileDiff.selection)} onClose={closeFileDiff} />}
+                </div>
+                {connection.kind === "connected" && connection.mutations && workingTree.kind === "ready" && (
+                  <MutationPanel
+                    key={`mutations:${openedRepository.gitDirectory}`}
+                    status={workingTree.status}
+                    suggestedCommit={aiCommitDraft}
+                    onApplied={applyMutation}
+                    aiAssist={connection.aiAssist ? <AiAssistPanel key={`ai:${openedRepository.gitDirectory}`} settings={aiSettings} onUseCommitMessage={(message) => setAiCommitDraft({ id: ++aiDraftSequence.current, message })} /> : null}
                   />
-                </label>
-              )}
-              {environment !== "local" && <p className="environment-note"><code>gitnova-core</code> must already be installed on PATH in that environment. GitNova uses non-interactive stdio transport and does not copy credentials or repositories.</p>}
-              <button type="button" onClick={() => void connectCore()}>
-                {connection.kind === "error" ? "Retry Core" : "Start Core"}
-              </button>
-            </div>
-          )}
-          {connection.kind === "connected" && repository.kind !== "open" && (
-            <div className="connection-action">
+                )}
+              </div>
+            )}
+
+            {workspaceView === "history" && (
+              <div className="history-workspace">
+                {openedRepository.kind === "bare" && <p className="bare-repository-note">Bare repositories do not have a working tree.</p>}
+                <HistoryPanel state={history} commitLoading={commitDetail.kind === "loading"} onRetry={() => void refreshHistory()} onLoadMore={() => void loadMoreHistory()} onSelectCommit={selectCommit} />
+                <div className="history-detail">
+                  {commitDetail.kind === "idle" ? <div className="pane-placeholder"><strong>Select a commit</strong><span>Commit metadata, changed files and line-level diff will appear here.</span></div> : <CommitDetailPanel key={`${commitDetail.kind === "choosingParent" ? commitDetail.commit.oid : commitDetail.selection.commit.oid}:${commitDetail.kind === "choosingParent" ? "" : commitDetail.selection.parentOid ?? ""}`} state={commitDetail} onChooseParent={chooseCommitParent} onRetry={() => commitDetail.kind === "error" && void loadCommitDiff(commitDetail.selection)} onClose={closeCommitDetail} />}
+                </div>
+              </div>
+            )}
+
+            {workspaceView === "pullRequests" && <div className="provider-workspace"><GitHubPanel key={`github:${openedRepository.gitDirectory}`} /></div>}
+            {workspaceView === "settings" && <div className="settings-workspace"><AiSettingsPanel settings={aiSettings} onChange={setAiSettings} /></div>}
+          </section>
+        </main>
+      ) : (
+        <main id="main-content" className="setup-workspace" tabIndex={-1}>
+          <section className="setup-intro">
+            <img src={markUrl} alt="" width="72" height="72" />
+            <p className="eyebrow">GitNova Desktop</p>
+            <h1>Open a repository.</h1>
+            <p>Inspect local changes, commit history, pull request commits and Squash Trace without moving repository data to a central service.</p>
+          </section>
+          <aside className="foundation-card" aria-labelledby="foundation-title">
+            <div><p className="eyebrow">Workspace setup</p><h2 id="foundation-title">Connect Core</h2></div>
+            <ul>
+              <li><span className={`status-mark status-mark--${connection.kind === "connected" ? "ready" : connection.kind === "checking" ? "pending" : "idle"}`} aria-hidden="true" /><span>Core connection</span><strong>{coreDetail}</strong></li>
+              <li><span className={`status-mark status-mark--${repository.kind === "open" ? "ready" : repository.kind === "selecting" ? "pending" : "idle"}`} aria-hidden="true" /><span>Repository</span><strong>{repositoryDetail}</strong></li>
+            </ul>
+            {(connection.kind === "stopped" || connection.kind === "error") && <div className="connection-action">
+              {connection.kind === "error" && <p role="alert">{connection.error.message}. No repository data was changed.</p>}
+              <label className="environment-field">Core environment<select value={environment} onChange={(event) => { setEnvironment(event.target.value as CoreEnvironment); setEnvironmentDetail(""); }}><option value="local">This computer</option><option value="wsl">WSL distribution</option><option value="ssh">Remote SSH</option><option value="devContainer">Dev Container</option></select></label>
+              {environment !== "local" && <label className="environment-field">{environment === "wsl" ? "Distribution name" : environment === "ssh" ? "SSH destination" : "Local workspace folder"}<input value={environmentDetail} onChange={(event) => setEnvironmentDetail(event.target.value)} placeholder={environment === "wsl" ? "Ubuntu-24.04" : environment === "ssh" ? "user@example.com" : "/absolute/path/to/workspace"} /></label>}
+              {environment !== "local" && <p className="environment-note"><code>gitnova-core</code> must already be installed on PATH in that environment.</p>}
+              <button type="button" onClick={() => void connectCore()}>{connection.kind === "error" ? "Retry Core" : "Start Core"}</button>
+            </div>}
+            {connection.kind === "connected" && <div className="connection-action">
               {repository.kind === "error" && <p role="alert">{repository.error.message}. No repository data was changed.</p>}
-              {environment !== "local" && (
-                <label className="environment-field">
-                  Repository path in {environment}
-                  <input value={remoteRepositoryPath} onChange={(event) => setRemoteRepositoryPath(event.target.value)} placeholder="/workspaces/project" />
-                </label>
-              )}
-              <button type="button" disabled={repository.kind === "selecting"} onClick={() => void chooseRepository()}>
-                {repository.kind === "selecting" ? "Opening…" : repository.kind === "error" ? environment === "local" ? "Choose another folder" : "Open another repository path" : environment === "local" ? "Choose repository" : "Open repository path"}
-              </button>
-            </div>
-          )}
-          {connection.kind === "connected" && repository.kind === "open" && (
-            <div className="connection-action">
-              <button type="button" className="button-secondary" onClick={() => void reopenRepository()}>
-                Reopen repository
-              </button>
-            </div>
-          )}
-          <p className="privacy-note">The selected path is sent only to GitNova Core in the same repository environment.</p>
-        </aside>
-      </main>
+              {environment !== "local" && <label className="environment-field">Repository path in {environment}<input value={remoteRepositoryPath} onChange={(event) => setRemoteRepositoryPath(event.target.value)} placeholder="/workspaces/project" /></label>}
+              <button type="button" disabled={repository.kind === "selecting"} onClick={() => void chooseRepository()}>{repository.kind === "selecting" ? "Opening…" : repository.kind === "error" ? environment === "local" ? "Choose another folder" : "Open another repository path" : environment === "local" ? "Choose repository" : "Open repository path"}</button>
+            </div>}
+            <p className="privacy-note">The selected path is sent only to GitNova Core in the same repository environment.</p>
+          </aside>
+        </main>
+      )}
     </div>
   );
 }

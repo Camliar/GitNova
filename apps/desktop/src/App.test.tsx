@@ -36,6 +36,7 @@ const descriptor = {
 describe("Desktop repository open", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.14", capabilities: { repositoryMutations: true } });
     core.configureCore.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
     core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.14", capabilities: { repositoryMutations: true } });
@@ -74,19 +75,33 @@ describe("Desktop repository open", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
 
-    expect(await screen.findByRole("heading", { name: "Worktree" })).toBeInTheDocument();
+    expect(await screen.findByText("Worktree")).toBeInTheDocument();
     expect(repository.openRepository).toHaveBeenCalledWith("/work/project");
-    expect(screen.getByText("/work/project/.git")).toBeInTheDocument();
+    expect(screen.getByText("/work/project")).toBeInTheDocument();
     expect(screen.getByText("git version 2.50.0")).toBeInTheDocument();
     expect(await screen.findByText("Working tree clean")).toBeInTheDocument();
     expect(status.getWorkingTreeStatus).toHaveBeenCalledOnce();
+    expect(JSON.parse(localStorage.getItem("gitnova.workspace.v1") ?? "null")).toEqual({ version: 1, target: { kind: "local" }, path: "/work/project" });
+  });
+
+  it("starts Core and restores the last successfully opened repository", async () => {
+    localStorage.setItem("gitnova.workspace.v1", JSON.stringify({ version: 1, target: { kind: "local" }, path: "/work/project" }));
+    core.getCoreStatus.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
+    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.14", capabilities: { repositoryMutations: true }, environment: "local" });
+    render(<App />);
+
+    expect(await screen.findByRole("button", { name: "All Commits" })).toBeInTheDocument();
+    expect(core.configureCore).toHaveBeenCalledWith({ kind: "local" });
+    expect(core.startCore).toHaveBeenCalledOnce();
+    expect(repository.openRepository).toHaveBeenCalledWith("/work/project");
+    expect(screen.queryByRole("button", { name: "Choose repository" })).not.toBeInTheDocument();
   });
 
   it("does not expose mutations when Core does not advertise the capability", async () => {
     core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.11", capabilities: { repositoryMutations: false } });
     render(<App />); fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
     expect(await screen.findByText("Working tree clean")).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Commit & branches" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Commit" })).not.toBeInTheDocument();
     expect(mutations.getRepositoryReferences).not.toHaveBeenCalled();
   });
 
@@ -107,14 +122,18 @@ describe("Desktop repository open", () => {
     mutations.commitStaged.mockResolvedValue({ commit: { oid: "b".repeat(40) }, snapshot });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    fireEvent.change(await screen.findByLabelText("Model"), { target: { value: "local-model" } });
+    fireEvent.click(screen.getByRole("button", { name: /Local Changes/ }));
+    await screen.findByRole("region", { name: "Commit" });
+    fireEvent.click(screen.getByText("Generate message with AI"));
     const aiPanel = await screen.findByRole("region", { name: "AI commit draft" });
-    fireEvent.change(within(aiPanel).getByLabelText("Model"), { target: { value: "local-model" } });
     fireEvent.click(within(aiPanel).getByRole("button", { name: "Preview input" }));
     fireEvent.click(await within(aiPanel).findByRole("button", { name: "Generate draft" }));
     fireEvent.click(await within(aiPanel).findByRole("button", { name: "Use in commit" }));
 
-    const mutationPanel = screen.getByRole("region", { name: "Commit & branches" });
-    expect(within(mutationPanel).getByLabelText("Commit message")).toHaveValue("feat: generated draft");
+    const mutationPanel = screen.getByRole("region", { name: "Commit" });
+    expect(within(mutationPanel).getByLabelText("Commit message", { selector: "#commit-message" })).toHaveValue("feat: generated draft");
     fireEvent.click(within(mutationPanel).getByRole("button", { name: "Review commit" }));
     expect(mutations.commitStaged).not.toHaveBeenCalled();
     fireEvent.click(within(mutationPanel).getByRole("button", { name: "Confirm action" }));
@@ -142,6 +161,7 @@ describe("Desktop repository open", () => {
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: "All Commits" }));
 
     await screen.findByText("Merge topic");
     const historyList = screen.getByRole("list", { name: "Commit history" });
@@ -160,6 +180,7 @@ describe("Desktop repository open", () => {
     commitDiff.getCommitDiff.mockResolvedValue({ commit: root, parentOid: null, files: [] });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: "All Commits" }));
     fireEvent.click(await screen.findByRole("button", { name: `View commit ${"a".repeat(8)}` }));
 
     expect(commitDiff.getCommitDiff).toHaveBeenCalledWith(root.oid, undefined);
@@ -176,6 +197,7 @@ describe("Desktop repository open", () => {
     commitDiff.getCommitDiff.mockResolvedValue({ commit: merge, parentOid: parents[1], files: [] });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: "All Commits" }));
     fireEvent.click(await screen.findByRole("button", { name: `View commit ${"a".repeat(8)}` }));
 
     expect(await screen.findByText("This merge has multiple parents. Choose the parent edge to compare.")).toBeInTheDocument();
@@ -194,6 +216,7 @@ describe("Desktop repository open", () => {
     ] });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: "All Commits" }));
     fireEvent.click(await screen.findByRole("button", { name: `View commit ${"d".repeat(8)}` }));
 
     expect(await screen.findByRole("region", { name: "Commit diff for new.ts" })).toHaveTextContent("safe text");
@@ -208,6 +231,7 @@ describe("Desktop repository open", () => {
     commitDiff.getCommitDiff.mockRejectedValueOnce({ code: "commit.not_found", message: "Commit unavailable", retryable: true }).mockResolvedValueOnce({ commit, parentOid: commit.parents[0], files: [] });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: "All Commits" }));
     fireEvent.click(await screen.findByRole("button", { name: `View commit ${"f".repeat(8)}` }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Commit unavailable. Commit history is still available.");
@@ -224,6 +248,7 @@ describe("Desktop repository open", () => {
     commitDiff.getCommitDiff.mockReturnValue(new Promise((resolve) => { resolveDiff = resolve; }));
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: "All Commits" }));
     fireEvent.click(await screen.findByRole("button", { name: `View commit ${"9".repeat(8)}` }));
     fireEvent.click(await screen.findByRole("button", { name: "Close commit" }));
     resolveDiff({ commit, parentOid: null, files: [] });
@@ -243,6 +268,7 @@ describe("Desktop repository open", () => {
       .mockResolvedValueOnce({ nodes: [node("2", "Older")], nextCursor: null });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: "All Commits" }));
     fireEvent.click(await screen.findByRole("button", { name: "Load more" }));
 
     expect(await screen.findByText("Older")).toBeInTheDocument();
@@ -259,6 +285,7 @@ describe("Desktop repository open", () => {
       .mockResolvedValueOnce({ nodes: [], nextCursor: null });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: "All Commits" }));
     fireEvent.click(await screen.findByRole("button", { name: "Load more" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("History page failed. Loaded commits were kept.");
@@ -453,7 +480,7 @@ describe("Desktop repository open", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Git could not read status. The repository remains open.");
-    expect(screen.getByRole("heading", { name: "Worktree" })).toBeInTheDocument();
+    expect(screen.getByText("Worktree")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
     expect(await screen.findByRole("heading", { name: "Detached HEAD" })).toBeInTheDocument();
   });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { RepositoryMutationSnapshot, RepositoryReferences, WorkingTreeStatus } from "@gitnova/protocol";
 import { asDesktopError, type DesktopError } from "./core";
 import { commitStaged, createLocalBranch, getRepositoryReferences, switchLocalBranch } from "./mutations";
@@ -6,7 +6,7 @@ import { commitStaged, createLocalBranch, getRepositoryReferences, switchLocalBr
 type Pending = { kind: "commit"; message: string } | { kind: "create"; name: string } | { kind: "switch"; name: string };
 type Operation = { kind: "idle" } | { kind: "confirm"; pending: Pending } | { kind: "loading"; pending: Pending } | { kind: "error"; pending: Pending; error: DesktopError } | { kind: "success"; message: string };
 
-export function MutationPanel({ status, suggestedCommit, onApplied }: { status: WorkingTreeStatus; suggestedCommit: { id: number; message: string } | null; onApplied: (snapshot: RepositoryMutationSnapshot) => void }) {
+export function MutationPanel({ status, suggestedCommit, onApplied, aiAssist = null }: { status: WorkingTreeStatus; suggestedCommit: { id: number; message: string } | null; onApplied: (snapshot: RepositoryMutationSnapshot) => void; aiAssist?: ReactNode }) {
   const [message, setMessage] = useState("");
   const [branchName, setBranchName] = useState("");
   const [switchName, setSwitchName] = useState("");
@@ -55,23 +55,26 @@ export function MutationPanel({ status, suggestedCommit, onApplied }: { status: 
   }
 
   return <section className="mutation-panel" aria-labelledby="mutation-title" aria-busy={busy}>
-    <header><p className="eyebrow">Explicit Git actions</p><h2 id="mutation-title">Commit & branches</h2></header>
+    <header><p className="eyebrow">Staged index</p><h2 id="mutation-title">Commit</h2></header>
     <div className="mutation-grid">
-      <form onSubmit={(event) => { event.preventDefault(); if (message.trim()) review({ kind: "commit", message }); }}>
-        <h3>Commit staged changes</h3><p>{stagedCount} staged path{stagedCount === 1 ? "" : "s"}. Unstaged and untracked files will not be added.</p>
+      <form className="commit-form" onSubmit={(event) => { event.preventDefault(); if (message.trim()) review({ kind: "commit", message }); }}>
+        <div className="commit-form__summary"><h3>Commit staged changes</h3><p>{stagedCount} staged path{stagedCount === 1 ? "" : "s"}. Unstaged and untracked files will not be added.</p></div>
         <label htmlFor="commit-message">Commit message</label><textarea ref={messageInput} id="commit-message" value={message} onChange={(event) => setMessage(event.target.value)} disabled={busy} />
+        {aiAssist && <details className="commit-ai"><summary>Generate message with AI</summary>{aiAssist}</details>}
         <button type="submit" disabled={busy || !message.trim()}>Review commit</button>
       </form>
-      <form onSubmit={(event) => { event.preventDefault(); if (branchName) review({ kind: "create", name: branchName }); }}>
-        <h3>Create local branch</h3><p>Creates at current HEAD without switching.</p>
-        <label htmlFor="new-branch">Branch name</label><input id="new-branch" value={branchName} onChange={(event) => setBranchName(event.target.value)} disabled={busy} />
-        <button type="submit" disabled={busy || !branchName}>Review branch creation</button>
-      </form>
-      <form onSubmit={(event) => { event.preventDefault(); if (switchName) review({ kind: "switch", name: switchName }); }}>
-        <h3>Switch local branch</h3><p>Core will not stash, force, or discard working changes.</p>
-        <label htmlFor="switch-branch">Local branch</label><select id="switch-branch" value={switchName} onChange={(event) => setSwitchName(event.target.value)} disabled={busy || references.kind !== "ready"}><option value="">Choose branch</option>{localBranches.map((branch) => <option key={branch.fullName} value={branch.name}>{branch.name}</option>)}</select>
-        <button type="submit" disabled={busy || !switchName}>Review branch switch</button>
-      </form>
+      <details className="branch-tools"><summary>Branch actions</summary><div>
+        <form onSubmit={(event) => { event.preventDefault(); if (branchName) review({ kind: "create", name: branchName }); }}>
+          <h3>Create local branch</h3><p>Creates at current HEAD without switching.</p>
+          <label htmlFor="new-branch">Branch name</label><input id="new-branch" value={branchName} onChange={(event) => setBranchName(event.target.value)} disabled={busy} />
+          <button type="submit" disabled={busy || !branchName}>Review branch creation</button>
+        </form>
+        <form onSubmit={(event) => { event.preventDefault(); if (switchName) review({ kind: "switch", name: switchName }); }}>
+          <h3>Switch local branch</h3><p>Core will not stash, force, or discard working changes.</p>
+          <label htmlFor="switch-branch">Local branch</label><select id="switch-branch" value={switchName} onChange={(event) => setSwitchName(event.target.value)} disabled={busy || references.kind !== "ready"}><option value="">Choose branch</option>{localBranches.map((branch) => <option key={branch.fullName} value={branch.name}>{branch.name}</option>)}</select>
+          <button type="submit" disabled={busy || !switchName}>Review branch switch</button>
+        </form>
+      </div></details>
     </div>
     {references.kind === "loading" && <p className="empty-state" role="status">Reading local branches from Core…</p>}
     {references.kind === "error" && <p className="mutation-error" role="alert">{references.error.message}. Branch choices are unavailable.</p>}

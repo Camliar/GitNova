@@ -45,20 +45,20 @@ export function HistoryPanel({ state, commitLoading, onRetry, onLoadMore, onSele
           {state.nodes.map((node, index) => (
             <li key={node.commit.oid}>
               <CommitGraph row={graphRows[index]} isHead={node.isHead} />
-              <div className="commit-main">
+              <button type="button" className="commit-main commit-row" aria-label={`View commit ${shortOid(node.commit.oid)}`} disabled={commitLoading} onClick={() => onSelectCommit(node.commit)}>
                 <div className="commit-summary">
                   <strong>{node.commit.summary || "(no commit message)"}</strong>
-                  <code>{shortOid(node.commit.oid)}</code>
+                  {(node.isHead || node.references.length > 0) && (
+                    <span className="commit-decorations">
+                      {node.isHead && <span className="decoration decoration--head">HEAD</span>}
+                      {node.references.map((reference) => <span className={`decoration decoration--${reference.kind}`} key={reference.fullName}>{reference.name}</span>)}
+                    </span>
+                  )}
                 </div>
-                <p>{node.commit.author.name} · {formatTimestamp(node.commit.author.timestamp)}{node.commit.parents.length > 1 ? ` · Merge (${node.commit.parents.length} parents)` : ""}</p>
-                {(node.isHead || node.references.length > 0) && (
-                  <span className="commit-decorations">
-                    {node.isHead && <span className="decoration decoration--head">HEAD</span>}
-                    {node.references.map((reference) => <span className={`decoration decoration--${reference.kind}`} key={reference.fullName}>{reference.name}</span>)}
-                  </span>
-                )}
-                <button type="button" className="commit-view" disabled={commitLoading} onClick={() => onSelectCommit(node.commit)}>View commit {shortOid(node.commit.oid)}</button>
-              </div>
+                <span className="commit-author">{node.commit.author.name}{node.commit.parents.length > 1 ? ` · Merge (${node.commit.parents.length} parents)` : ""}</span>
+                <code className="commit-oid">{shortOid(node.commit.oid)}</code>
+                <time dateTime={node.commit.author.timestamp}>{formatTimestamp(node.commit.author.timestamp)}</time>
+              </button>
             </li>
           ))}
         </ol>

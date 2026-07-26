@@ -42,9 +42,9 @@ Core 必须验证模型 JSON 和字段长度，拒绝未知 suggestion kind，�
 
 ## Desktop workflow
 
-Desktop 只在 Core 声明 `aiAssist` 且已打开非 bare worktree 时显示 AI panel。Provider、model、loopback URL 或排除路径任一变化都会立即丢弃旧 preview、外部确认和 draft。Host 先显示 Core 返回的 endpoint、字节数、index binding 与逐文件状态；OpenAI 只有在用户勾选当前 preview 的披露确认后才可生成，Ollama 也只能由按钮显式触发。
+Desktop 把 Provider、model、loopback URL 和排除路径集中在 Settings；Local Changes 的 commit composer 只提供默认折叠的“Generate message with AI”入口，history、PR 和其他工作区不展示 AI 功能。配置任一变化都会立即丢弃旧 preview、外部确认和 draft。Host 先显示 Core 返回的 endpoint、字节数、index binding 与逐文件状态；OpenAI 只有在用户勾选当前 preview 的披露确认后才可生成，Ollama 也只能由按钮显式触发。
 
-生成结果在 Host 中可编辑；“Use in commit”仅把文本送入现有 Commit & branches 表单并聚焦输入框。它不会调用 mutation。用户仍需点击“Review commit”，查看当前 staged index 的确认描述，再点击“Confirm action”才会调用 `repository/commit`。
+生成结果在 Host 中可编辑；“Use in commit”仅把文本送入现有 Commit 表单并聚焦输入框。它不会调用 mutation。用户仍需点击“Review commit”，查看当前 staged index 的确认描述，再点击“Confirm action”才会调用 `repository/commit`。
 
 ## Stable errors
 

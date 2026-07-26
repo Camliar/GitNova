@@ -1,15 +1,12 @@
-import { useRef, useState } from "react";
-import type { AiCommitDraft, AiInputPreview, AiProviderConfig, AiProviderKind } from "@gitnova/protocol";
+import { useEffect, useRef, useState } from "react";
+import type { AiCommitDraft, AiInputPreview, AiProviderConfig } from "@gitnova/protocol";
 import { generateAiCommitDraft, previewAiInput } from "./ai";
 import { asDesktopError, type DesktopError } from "./core";
+import type { AiAssistSettings } from "./AiSettingsPanel";
 
 type Operation = "idle" | "previewing" | "generating";
 
-export function AiAssistPanel({ onUseCommitMessage }: { onUseCommitMessage: (message: string) => void }) {
-  const [providerKind, setProviderKind] = useState<AiProviderKind>("ollama");
-  const [model, setModel] = useState("");
-  const [baseUrl, setBaseUrl] = useState("http://127.0.0.1:11434");
-  const [excludedText, setExcludedText] = useState("");
+export function AiAssistPanel({ settings, onUseCommitMessage }: { settings: AiAssistSettings; onUseCommitMessage: (message: string) => void }) {
   const [preview, setPreview] = useState<AiInputPreview | null>(null);
   const [draft, setDraft] = useState<AiCommitDraft | null>(null);
   const [draftMessage, setDraftMessage] = useState("");
@@ -18,6 +15,8 @@ export function AiAssistPanel({ onUseCommitMessage }: { onUseCommitMessage: (mes
   const [error, setError] = useState<DesktopError | null>(null);
   const [handoff, setHandoff] = useState(false);
   const serial = useRef(0);
+
+  useEffect(() => invalidate(), [settings.providerKind, settings.model, settings.baseUrl, settings.excludedText]);
 
   function invalidate() {
     serial.current += 1;
@@ -31,13 +30,13 @@ export function AiAssistPanel({ onUseCommitMessage }: { onUseCommitMessage: (mes
   }
 
   function exclusions() {
-    return [...new Set(excludedText.split(/\r?\n/).map((path) => path.trim()).filter(Boolean))];
+    return [...new Set(settings.excludedText.split(/\r?\n/).map((path) => path.trim()).filter(Boolean))];
   }
 
   function provider(): AiProviderConfig {
-    return providerKind === "ollama"
-      ? { kind: "ollama", model: model.trim(), ...(baseUrl.trim() ? { baseUrl: baseUrl.trim() } : {}) }
-      : { kind: "openAi", model: model.trim() };
+    return settings.providerKind === "ollama"
+      ? { kind: "ollama", model: settings.model.trim(), ...(settings.baseUrl.trim() ? { baseUrl: settings.baseUrl.trim() } : {}) }
+      : { kind: "openAi", model: settings.model.trim() };
   }
 
   async function runPreview() {
@@ -91,7 +90,7 @@ export function AiAssistPanel({ onUseCommitMessage }: { onUseCommitMessage: (mes
   }
 
   const busy = operation !== "idle";
-  const canPreview = !busy && model.trim().length > 0 && (providerKind === "openAi" || baseUrl.trim().length > 0);
+  const canPreview = !busy && settings.model.trim().length > 0 && (settings.providerKind === "openAi" || settings.baseUrl.trim().length > 0);
   const canGenerate =
     !busy &&
     preview !== null &&
@@ -101,29 +100,11 @@ export function AiAssistPanel({ onUseCommitMessage }: { onUseCommitMessage: (mes
     <section className="ai-panel" aria-labelledby="ai-title" aria-busy={busy}>
       <header>
         <div><p className="eyebrow">Explicit AI action</p><h2 id="ai-title">AI commit draft</h2></div>
-        <span className={`network-state ${providerKind === "ollama" ? "network-state--off" : ""}`}>
-          {providerKind === "ollama" ? "Local provider" : "External provider"}
+        <span className={`network-state ${settings.providerKind === "ollama" ? "network-state--off" : ""}`}>
+          {settings.providerKind === "ollama" ? "Local provider" : "External provider"}
         </span>
       </header>
-      <p className="ai-intro">Preview exactly what Core would disclose before generating. AI cannot commit, run commands, or read unstaged files.</p>
-      <div className="ai-config">
-        <label>Provider
-          <select value={providerKind} disabled={busy} onChange={(event) => { setProviderKind(event.target.value as AiProviderKind); invalidate(); }}>
-            <option value="ollama">Ollama (local)</option>
-            <option value="openAi">OpenAI (external)</option>
-          </select>
-        </label>
-        <label>Model
-          <input value={model} disabled={busy} onChange={(event) => { setModel(event.target.value); invalidate(); }} placeholder="Enter a model available to this provider" />
-        </label>
-        {providerKind === "ollama" && <label>Ollama loopback URL
-          <input value={baseUrl} disabled={busy} onChange={(event) => { setBaseUrl(event.target.value); invalidate(); }} />
-        </label>}
-        <label className="ai-exclusions">Excluded repository paths <span>one exact path per line</span>
-          <textarea value={excludedText} disabled={busy} onChange={(event) => { setExcludedText(event.target.value); invalidate(); }} placeholder={"config/private.json\nsecrets/test.key"} />
-        </label>
-      </div>
-      {providerKind === "openAi" && <p className="ai-provider-note"><code>OPENAI_API_KEY</code> is read only by Core in the repository environment. Desktop never receives it.</p>}
+      <p className="ai-intro"><strong>{settings.model || "No model configured"}</strong> · Configure providers and exclusions in Settings. Preview exactly what Core would disclose before generating.</p>
       <button className="ai-primary" type="button" disabled={!canPreview} onClick={() => void runPreview()}>
         {operation === "previewing" ? "Previewing…" : "Preview input"}
       </button>
@@ -164,4 +145,3 @@ export function AiAssistPanel({ onUseCommitMessage }: { onUseCommitMessage: (mes
 function formatBytes(value: number) {
   return value < 1024 ? `${value} B` : `${(value / 1024).toFixed(1)} KiB`;
 }
-

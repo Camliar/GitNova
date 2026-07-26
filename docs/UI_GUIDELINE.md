@@ -19,7 +19,13 @@
 - 错误说明发生了什么、哪些内容未改变以及用户可以做什么。
 - 空状态应解释原因并提供一个明确下一步。
 
+## Desktop 仓库工作台
+
+- 已打开仓库使用紧凑顶部栏、固定仓库侧栏和单一主视图，Local Changes、All Commits、Pull Requests、Settings 不得同时纵向堆叠。
+- commit timeline 优先单行密度：graph、refs、message、author、SHA、时间横向排列，点击整行打开下方详情。
+- Local Changes 使用文件与 diff 分栏，commit composer 位于同一工作流底部；AI 只作为 commit composer 内的显式渐进披露操作。
+- AI Provider、模型、端点及排除路径属于 Settings，不在 history、PR 或常驻导航中重复展示。
+
 ## 可访问性与跨 Host
 
 目标为 WCAG 2.2 AA。文本对比度、触控目标、缩放、屏幕阅读器名称和减少动态效果均需验证。共享设计令牌，不强制各 Host 像素一致；遵守其原生导航与命令习惯。质量要求见[非功能需求](NON_FUNCTIONAL.md)，统一术语见[词汇表](GLOSSARY.md)。
-

@@ -11,7 +11,7 @@ GitNova keeps one invariant across Desktop and future IDE Hosts: the repository 
 | Remote SSH | `ssh -T -o BatchMode=yes -o ConnectTimeout=10 -- <destination> gitnova-core` | existing SSH config/key and compatible remote Core on PATH |
 | Dev Container | `devcontainer exec --workspace-folder <absolute-local-folder> gitnova-core` | Dev Container CLI, running/resolvable container and Core inside it |
 
-The strings above describe argument arrays, not shell commands. Distribution and destination accept only conservative identifier characters; workspace folder must be absolute and contain no control characters. Remote Core executable name is fixed. A running Core locks its environment until shutdown.
+The strings above describe argument arrays, not shell commands. Distribution and destination accept only conservative identifier characters; workspace folder must use absolute POSIX or Windows drive syntax and contain no control characters. Validation is lexical and host-independent so a Windows runner can safely project both native and container-oriented paths. Remote Core executable name is fixed. A running Core locks its environment until shutdown.
 
 ## Repository paths
 

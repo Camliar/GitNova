@@ -31,6 +31,7 @@
 - [x] delivery regression check for the required Windows resource
 - [x] Java 25 toolchain alignment for IDEA 2026.2 in Gradle and CI
 - [x] synchronized Host documentation and passing local validation
+- [x] host-independent Dev Container absolute-path validation exposed by Windows CI
 
 ## Review Checklist
 

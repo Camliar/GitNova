@@ -489,11 +489,7 @@ fn command_for_target(target: CoreLaunchTarget) -> Result<CoreCommand, DesktopEr
             })
         }
         CoreLaunchTarget::DevContainer { workspace_folder } => {
-            let folder = PathBuf::from(&workspace_folder);
-            if workspace_folder.len() > 4096
-                || workspace_folder.chars().any(char::is_control)
-                || !folder.is_absolute()
-            {
+            if !valid_workspace_folder(&workspace_folder) {
                 return Err(invalid());
             }
             Ok(CoreCommand {
@@ -527,6 +523,18 @@ fn valid_ssh_destination(value: &str) -> bool {
             byte.is_ascii_alphanumeric()
                 || matches!(byte, b'.' | b'_' | b'-' | b'@' | b':' | b'[' | b']')
         })
+}
+
+fn valid_workspace_folder(value: &str) -> bool {
+    if value.is_empty() || value.len() > 4096 || value.chars().any(char::is_control) {
+        return false;
+    }
+    let bytes = value.as_bytes();
+    value.starts_with('/')
+        || (bytes.len() >= 3
+            && bytes[0].is_ascii_alphabetic()
+            && bytes[1] == b':'
+            && matches!(bytes[2], b'/' | b'\\'))
 }
 
 fn resolve_core_binary() -> Result<PathBuf, DesktopError> {
@@ -782,6 +790,13 @@ function drain() {
         .unwrap();
         assert_eq!(container.program, PathBuf::from("devcontainer"));
         assert_eq!(container.environment, CoreEnvironment::DevContainer);
+
+        assert!(
+            command_for_target(CoreLaunchTarget::DevContainer {
+                workspace_folder: r"D:\workspaces\gitnova".into(),
+            })
+            .is_ok()
+        );
     }
 
     #[test]
@@ -795,6 +810,9 @@ function drain() {
             },
             CoreLaunchTarget::DevContainer {
                 workspace_folder: "relative/workspace".into(),
+            },
+            CoreLaunchTarget::DevContainer {
+                workspace_folder: r"C:relative\workspace".into(),
             },
         ] {
             assert!(command_for_target(target).is_err());

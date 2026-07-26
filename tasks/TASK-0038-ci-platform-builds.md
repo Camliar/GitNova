@@ -1,6 +1,6 @@
 # TASK-0038: CI Platform Build Repair
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** P0
 - **Owner:** Codex
 - **Branch:** `codex/task-038-ci-platform-builds`
@@ -39,8 +39,13 @@
 - [x] ICO contains appropriate Windows application sizes and remains derived from the checked-in GitNova mark.
 - [x] CI configuration selects Java 25 for the Gradle daemon and Java compiler toolchain.
 - [x] Local checks introduce no unrelated product or architecture changes.
-- [ ] Remote CI confirms Windows Desktop and JetBrains jobs.
+- [x] Remote CI confirms Windows Desktop and JetBrains jobs in [run 30182176424](https://github.com/Camliar/GitNova/actions/runs/30182176424).
 
 ## Done Definition
 
-- [ ] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。
+- [x] 自主 Review 无阻塞项，状态 Done，提交推送并快进合并 main。
+
+## Verification
+
+- Local: Desktop 63 tests, production build, Rust workspace 87 tests, Desktop transport tests, delivery/IDE Host static checks, and Tauri build-script passed.
+- Remote: Ubuntu, macOS, Windows, JetBrains Java 25 and Visual Studio jobs all passed in CI run 30182176424.

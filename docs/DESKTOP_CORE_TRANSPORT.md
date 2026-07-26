@@ -16,7 +16,7 @@ Requests are serialized through one supervisor. IDs are monotonically increasing
 
 The Tauri boundary exposes only structured environment configuration, status, start, allowlisted request transport, and shutdown commands. Environment changes are rejected while Core runs. Lifecycle and arbitrary methods cannot be sent through the generic command; the closed Desktop allowlist contains only methods used by its current Repository/GitHub/mutation/AI views. Domain payloads remain opaque to the Host and are typed for UI consumers from the shared protocol package.
 
-Local read and mutation requests retain the 15-second transport timeout. Explicit `ai/generateCommitDraft` receives a separate 75-second ceiling so Core's bounded 60-second Provider request can finish; timeout still fails closed and terminates the child. `ai/inputPreview` remains a normal local request and never receives the extended network budget.
+Local read and mutation requests retain the 15-second transport timeout. Explicit GitHub/GitLab Provider requests receive a 45-second ceiling, so `gh`/`glab` can complete without being mistaken for a dead local Core; explicit `ai/generateCommitDraft` receives a separate 75-second ceiling for Core's bounded 60-second Provider request. Every timeout still fails closed and terminates the child. `ai/inputPreview` remains a normal local request and never receives the extended network budget.
 
 ## Shutdown and errors
 

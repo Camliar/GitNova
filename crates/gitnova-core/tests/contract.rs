@@ -216,7 +216,7 @@ fn completes_lifecycle_and_keeps_stdout_protocol_clean() {
     let responses = responses(&output.stdout);
     assert_eq!(responses.len(), 2);
     assert_eq!(responses[0]["id"], "init-1");
-    assert_eq!(responses[0]["result"]["protocolVersion"], "1.16");
+    assert_eq!(responses[0]["result"]["protocolVersion"], "1.17");
     assert_eq!(responses[0]["result"]["capabilities"]["cancellation"], true);
     assert_eq!(
         responses[0]["result"]["capabilities"]["workingTreeStatus"],
@@ -1181,6 +1181,36 @@ fn github_squash_trace_requires_repository_and_positive_number() {
     let values = responses(&output.stdout);
     assert_eq!(values[2]["error"]["code"], -32602);
     assert_eq!(values[3]["error"]["code"], -32602);
+}
+
+#[test]
+fn history_squash_trace_methods_require_repository_and_bounded_selectors() {
+    let oid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    let without_repository = run(&[
+        initialize(json!(1)),
+        json!({"jsonrpc":"2.0","id":2,"method":"github/commitSquashTrace","params":{"oid":oid,"nameWithOwner":"owner/repo"}}),
+        json!({"jsonrpc":"2.0","id":3,"method":"github/pullRequestCommitFiles","params":{"number":1,"oid":oid,"nameWithOwner":"owner/repo"}}),
+        json!({"jsonrpc":"2.0","id":4,"method":"github/pullRequestCommitFileDiff","params":{"number":1,"oid":oid,"path":"src/main.rs","nameWithOwner":"owner/repo"}}),
+    ]);
+    let values = responses(&without_repository.stdout);
+    for value in &values[1..] {
+        assert_eq!(value["error"]["data"]["stableCode"], "repository.not_open");
+    }
+
+    let directory = TestDirectory::new("github-history-squash-params");
+    git(&["init", "repo"], &directory.0);
+    let repository = directory.0.join("repo");
+    let output = run(&[
+        initialize(json!(1)),
+        repository_request(2, "repository/open", &repository),
+        json!({"jsonrpc":"2.0","id":3,"method":"github/commitSquashTrace","params":{"oid":"short"}}),
+        json!({"jsonrpc":"2.0","id":4,"method":"github/pullRequestCommitFiles","params":{"number":0,"oid":oid}}),
+        json!({"jsonrpc":"2.0","id":5,"method":"github/pullRequestCommitFileDiff","params":{"number":1,"oid":oid,"path":""}}),
+    ]);
+    let values = responses(&output.stdout);
+    assert_eq!(values[2]["error"]["code"], -32602);
+    assert_eq!(values[3]["error"]["code"], -32602);
+    assert_eq!(values[4]["error"]["code"], -32602);
 }
 
 #[test]

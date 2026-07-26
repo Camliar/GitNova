@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: &str = "1.16";
+pub const PROTOCOL_VERSION: &str = "1.17";
 
 pub const ERROR_PARSE: i64 = -32700;
 pub const ERROR_INVALID_REQUEST: i64 = -32600;
@@ -75,6 +75,7 @@ pub const ERROR_AI_RESPONSE_INVALID: i64 = -32155;
 pub const ERROR_AI_INPUT_LIMIT: i64 = -32156;
 pub const ERROR_COMMIT_FILE_LIMIT: i64 = -32157;
 pub const ERROR_COMMIT_FILE_DIFF_LIMIT: i64 = -32158;
+pub const ERROR_GITHUB_COMMIT_ASSOCIATION_AMBIGUOUS: i64 = -32159;
 pub const ERROR_REQUEST_CANCELLED: i64 = -32800;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -202,6 +203,8 @@ pub struct ServerCapabilities {
     pub structured_commit_diff: bool,
     #[serde(default)]
     pub lazy_commit_diff: bool,
+    #[serde(default)]
+    pub history_squash_trace: bool,
     pub repository_references: bool,
     pub commit_graph_projection: bool,
     pub github_repository: bool,
@@ -717,6 +720,68 @@ pub struct GitHubSquashTrace {
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubCommitSquashTraceParams {
+    pub oid: String,
+    #[serde(default)]
+    pub remote: Option<String>,
+    #[serde(default)]
+    pub name_with_owner: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubCommitSquashTrace {
+    pub commit_oid: String,
+    pub trace: Option<GitHubSquashTrace>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubPullRequestCommitFilesParams {
+    pub number: u64,
+    pub oid: String,
+    #[serde(default)]
+    pub remote: Option<String>,
+    #[serde(default)]
+    pub name_with_owner: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubCommitChangedFile {
+    pub old_path: String,
+    pub new_path: String,
+    pub status: GitHubFileStatus,
+    pub additions: u64,
+    pub deletions: u64,
+    pub changes: u64,
+    pub patch_state: GitHubPatchState,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubPullRequestCommitFiles {
+    pub host: String,
+    pub name_with_owner: String,
+    pub pull_request_number: u64,
+    pub commit: GitHubPullRequestCommit,
+    pub files: Vec<GitHubCommitChangedFile>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubPullRequestCommitFileDiffParams {
+    pub number: u64,
+    pub oid: String,
+    pub path: String,
+    #[serde(default)]
+    pub remote: Option<String>,
+    #[serde(default)]
+    pub name_with_owner: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitLabProjectParams {
     #[serde(default)]
     pub remote: Option<String>,
@@ -1130,6 +1195,12 @@ mod tests {
             "GitHubCommitIdentity",
             "GitHubPullRequestCommit",
             "GitHubPullRequest",
+            "GitHubCommitSquashTraceParams",
+            "GitHubCommitSquashTrace",
+            "GitHubPullRequestCommitFilesParams",
+            "GitHubCommitChangedFile",
+            "GitHubPullRequestCommitFiles",
+            "GitHubPullRequestCommitFileDiffParams",
             "GitLabProjectParams",
             "GitLabProject",
             "GitLabMergeRequestParams",

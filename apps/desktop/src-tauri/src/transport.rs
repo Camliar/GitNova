@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 
 const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(15);
+const PROVIDER_RESPONSE_TIMEOUT: Duration = Duration::from_secs(45);
 const AI_RESPONSE_TIMEOUT: Duration = Duration::from_secs(75);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 const HOST_CORE_METHODS: &[&str] = &[
@@ -34,6 +35,9 @@ const HOST_CORE_METHODS: &[&str] = &[
     "github/pullRequest",
     "github/pullRequestCommitDiff",
     "github/squashTrace",
+    "github/commitSquashTrace",
+    "github/pullRequestCommitFiles",
+    "github/pullRequestCommitFileDiff",
     "ai/inputPreview",
     "ai/generateCommitDraft",
 ];
@@ -355,6 +359,8 @@ impl CoreProcess {
         .map_err(|_| DesktopError::transport())?;
         let timeout = if method == "ai/generateCommitDraft" {
             AI_RESPONSE_TIMEOUT
+        } else if method.starts_with("github/") || method.starts_with("gitlab/") {
+            PROVIDER_RESPONSE_TIMEOUT
         } else {
             RESPONSE_TIMEOUT
         };
@@ -696,7 +702,7 @@ function drain() {
     if (request.method === 'exit') process.exit(0);
     if (request.method === 'gitnova/initialize') {
       send({jsonrpc:'2.0', id:request.id, result:{
-        coreInfo:{name:'fake-core',version:'0.1.0'}, protocolVersion:'1.16', capabilities:{
+        coreInfo:{name:'fake-core',version:'0.1.0'}, protocolVersion:'1.17', capabilities:{
           cancellation:true, repositoryDiscovery:true, workingTreeStatus:true,
           structuredFileDiff:true, paginatedCommitHistory:true, structuredCommitDiff:true,
           repositoryReferences:true, commitGraphProjection:true, githubRepository:true,
@@ -758,7 +764,7 @@ function drain() {
         });
         let status = supervisor.start().unwrap();
         assert!(status.connected);
-        assert_eq!(status.protocol_version.as_deref(), Some("1.16"));
+        assert_eq!(status.protocol_version.as_deref(), Some("1.17"));
         assert!(status.capabilities.unwrap().github_squash_trace);
 
         let response = supervisor

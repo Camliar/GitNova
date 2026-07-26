@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitnova.dev/schema/protocol/1.16/gitnova-protocol.schema.json",
-  "title": "GitNova Core Protocol 1.16",
+  "$id": "https://gitnova.dev/schema/protocol/1.17/gitnova-protocol.schema.json",
+  "title": "GitNova Core Protocol 1.17",
   "type": "object",
-  "properties": { "protocolVersion": { "const": "1.16" } },
+  "properties": { "protocolVersion": { "const": "1.17" } },
   "required": ["protocolVersion"],
   "$defs": {
     "RequestId": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
@@ -29,6 +29,7 @@
         "paginatedCommitHistory": { "type": "boolean" },
         "structuredCommitDiff": { "type": "boolean" },
         "lazyCommitDiff": { "type": "boolean" },
+        "historySquashTrace": { "type": "boolean" },
         "repositoryReferences": { "type": "boolean" },
         "commitGraphProjection": { "type": "boolean" },
         "githubRepository": { "type": "boolean" },
@@ -496,6 +497,57 @@
         "pullRequest": { "$ref": "#/$defs/GitHubPullRequest" },
         "relationship": { "$ref": "#/$defs/SquashTraceRelationship" }
       }, "required": ["pullRequest", "relationship"]
+    },
+    "GitHubCommitSquashTraceParams": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "oid": { "type": "string", "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$" },
+        "remote": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "nameWithOwner": { "type": "string", "minLength": 3, "maxLength": 140 }
+      }, "required": ["oid"]
+    },
+    "GitHubCommitSquashTrace": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "commitOid": { "type": "string" },
+        "trace": { "oneOf": [{ "$ref": "#/$defs/GitHubSquashTrace" }, { "type": "null" }] }
+      }, "required": ["commitOid", "trace"]
+    },
+    "GitHubPullRequestCommitFilesParams": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "number": { "type": "integer", "minimum": 1 },
+        "oid": { "type": "string", "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$" },
+        "remote": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "nameWithOwner": { "type": "string", "minLength": 3, "maxLength": 140 }
+      }, "required": ["number", "oid"]
+    },
+    "GitHubCommitChangedFile": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "oldPath": { "type": "string" }, "newPath": { "type": "string" },
+        "status": { "$ref": "#/$defs/GitHubFileStatus" },
+        "additions": { "type": "integer", "minimum": 0 }, "deletions": { "type": "integer", "minimum": 0 }, "changes": { "type": "integer", "minimum": 0 },
+        "patchState": { "$ref": "#/$defs/GitHubPatchState" }
+      }, "required": ["oldPath", "newPath", "status", "additions", "deletions", "changes", "patchState"]
+    },
+    "GitHubPullRequestCommitFiles": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "host": { "const": "github.com" }, "nameWithOwner": { "type": "string" }, "pullRequestNumber": { "type": "integer", "minimum": 1 },
+        "commit": { "$ref": "#/$defs/GitHubPullRequestCommit" },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/GitHubCommitChangedFile" } }
+      }, "required": ["host", "nameWithOwner", "pullRequestNumber", "commit", "files"]
+    },
+    "GitHubPullRequestCommitFileDiffParams": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "number": { "type": "integer", "minimum": 1 },
+        "oid": { "type": "string", "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$" },
+        "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "remote": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "nameWithOwner": { "type": "string", "minLength": 3, "maxLength": 140 }
+      }, "required": ["number", "oid", "path"]
     },
     "GitLabProjectParams": {
       "type": "object", "additionalProperties": false,

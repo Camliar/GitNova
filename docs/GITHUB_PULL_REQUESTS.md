@@ -24,6 +24,8 @@ For a member commit, Core requests `repos/{owner}/{repo}/commits/{oid}?per_page=
 
 GitHub does not include `patch` for every file. GitNova reports those records as `patchState: unavailable` with no hunks; it does not claim that every missing patch is binary. Duplicate paths, inconsistent page OIDs, invalid statistics or malformed patches produce `github.response_parse_failed`. A response reaching GitHub's documented 3000-file limit returns `github.commit_file_limit_exceeded`, because completeness can no longer be proven. Commit-file responses are limited to 32 MiB.
 
+For history integration, protocol 1.17 separates presentation from the bounded Provider fetch. `github/pullRequestCommitFiles` returns the same verified commit and ordered file metadata but omits every patch/hunk. Core retains one full commit response in memory, keyed by PR, commit and repository selector. `github/pullRequestCommitFileDiff` accepts an exact path from that list and returns only the selected file; unknown paths fail validation. This avoids sending a potentially 32 MiB multi-file patch across Desktop transport merely to populate the file list.
+
 The PR and original commit model feeds the conservative [Squash Trace relationship](SQUASH_TRACE.md). Relationship inference is not duplicated in this Provider response or in Hosts.
 
 Official references: [Get a pull request and list PR commits](https://docs.github.com/en/rest/pulls/pulls), [Get a commit](https://docs.github.com/en/rest/commits/commits#get-a-commit), and [GitHub CLI pagination/slurp](https://cli.github.com/manual/gh_api).
@@ -32,6 +34,6 @@ Official references: [Get a pull request and list PR commits](https://docs.githu
 
 Desktop 要求用户输入正整数 PR number，并在 submit 后调用 `github/pullRequest`。请求绑定已由 Core normalized 的 `nameWithOwner`，Host 不构造 endpoint。错误保留 repository identity 与 number，只在用户点击 Retry 时重复同一请求。
 
-UI 展示 state/draft、author、base/head、timestamps、merge commit、body 和 Core ordered original commits。commit identity、login、OID 与 parent count 均来自协议，Host 不重排、不补全也不声称 partial sequence。本阶段不调用 `github/pullRequestCommitDiff`，original commit 的文件与行级远程 diff 属于后续 Task。
+UI 展示 state/draft、author、base/head、timestamps、merge commit、body 和 Core ordered original commits。commit identity、login、OID 与 parent count 均来自协议，Host 不重排、不补全也不声称 partial sequence。
 
 Desktop 现在允许用户从该 ordered list 明确选择 original commit，并将 PR number、完整 member OID 与 normalized `nameWithOwner` 传给 `github/pullRequestCommitDiff`。Host 展示 ordered files、Provider status/statistics 与 structured hunks。`patchState: unavailable` 明确显示为 GitHub 未提供 patch，不推断 binary，也不读取远程内容补全。

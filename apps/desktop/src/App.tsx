@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { CommitSummary, DiffScope, RepositoryDescriptor, RepositoryMutationSnapshot } from "@gitnova/protocol";
+import type { CommitSummary, DiffScope, GitHubSquashTrace, RepositoryDescriptor, RepositoryMutationSnapshot } from "@gitnova/protocol";
 import markUrl from "../../../assets/icons/gitnova-mark.svg";
 import { asDesktopError, configureCore, getCoreStatus, shutdownCore, startCore, type CoreEnvironment, type CoreLaunchTarget, type CoreStatus, type DesktopError } from "./core";
 import { openRepository, selectRepositoryDirectory } from "./repository";
@@ -12,6 +12,8 @@ import { HistoryPanel, type HistoryState } from "./HistoryPanel";
 import { getCommitDiff, getCommitFileDiff, getCommitFiles } from "./commitDiff";
 import { CommitDetailPanel, type CommitDetailState, type CommitFileDiffState, type CommitSelection } from "./CommitDetailPanel";
 import { GitHubPanel } from "./GitHubPanel";
+import { HistorySquashTrace } from "./HistorySquashTrace";
+import { getGitHubCommitSquashTrace } from "./github";
 import { MutationPanel } from "./MutationPanel";
 import { AiAssistPanel } from "./AiAssistPanel";
 import { AiSettingsPanel, defaultAiAssistSettings } from "./AiSettingsPanel";
@@ -21,7 +23,7 @@ import { getRepositoryReferences, switchLocalBranch } from "./mutations";
 type Connection =
   | { kind: "checking" }
   | { kind: "stopped" }
-  | { kind: "connected"; version: string; mutations: boolean; references: boolean; aiAssist: boolean; lazyCommitDiff: boolean }
+  | { kind: "connected"; version: string; mutations: boolean; references: boolean; aiAssist: boolean; lazyCommitDiff: boolean; historySquashTrace: boolean }
   | { kind: "error"; error: DesktopError };
 
 type RepositoryState =
@@ -32,6 +34,7 @@ type RepositoryState =
 
 type WorkspaceView = "changes" | "history" | "pullRequests" | "settings";
 type BranchOperation = { kind: "idle" } | { kind: "confirm"; name: string } | { kind: "loading"; name: string } | { kind: "error"; name: string; error: DesktopError };
+type HistorySquashState = { kind: "idle" } | { kind: "loading"; oid: string } | { kind: "ready"; trace: GitHubSquashTrace } | { kind: "none"; oid: string } | { kind: "error"; oid: string; error: DesktopError };
 
 const repositoryKindLabel: Record<RepositoryDescriptor["kind"], string> = {
   worktree: "Worktree",
@@ -131,9 +134,11 @@ export function App() {
   const historyRequest = useRef(0);
   const [commitDetail, setCommitDetail] = useState<CommitDetailState>({ kind: "idle" });
   const [commitFileDiff, setCommitFileDiff] = useState<CommitFileDiffState>({ kind: "idle" });
-  const [historyDetailTab, setHistoryDetailTab] = useState<"commit" | "changes">("commit");
+  const [historySquash, setHistorySquash] = useState<HistorySquashState>({ kind: "idle" });
+  const [historyDetailTab, setHistoryDetailTab] = useState<"commit" | "changes" | "squash">("commit");
   const commitRequest = useRef(0);
   const commitFileRequest = useRef(0);
+  const historySquashRequest = useRef(0);
   const [aiCommitDraft, setAiCommitDraft] = useState<{ id: number; message: string } | null>(null);
   const aiDraftSequence = useRef(0);
 
@@ -191,7 +196,7 @@ export function App() {
       referencesRequest.current += 1;
       setReferences({ kind: "idle" });
     }
-    setConnection({ kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true, references: referencesCapability.current, aiAssist: status.capabilities?.aiAssist === true, lazyCommitDiff: status.capabilities?.lazyCommitDiff === true });
+    setConnection({ kind: "connected", version: status.protocolVersion ?? "unknown", mutations: status.capabilities?.repositoryMutations === true, references: referencesCapability.current, aiAssist: status.capabilities?.aiAssist === true, lazyCommitDiff: status.capabilities?.lazyCommitDiff === true, historySquashTrace: status.capabilities?.historySquashTrace === true });
   }
 
   function rememberRepository(bookmark: RepositoryBookmark) {
@@ -378,8 +383,10 @@ export function App() {
   async function refreshHistory() {
     commitRequest.current += 1;
     commitFileRequest.current += 1;
+    historySquashRequest.current += 1;
     setCommitDetail({ kind: "idle" });
     setCommitFileDiff({ kind: "idle" });
+    setHistorySquash({ kind: "idle" });
     const request = ++historyRequest.current;
     setHistory({ kind: "loading" });
     try {
@@ -395,7 +402,9 @@ export function App() {
   function selectCommit(commit: CommitSummary) {
     commitRequest.current += 1;
     commitFileRequest.current += 1;
+    historySquashRequest.current += 1;
     setCommitFileDiff({ kind: "idle" });
+    setHistorySquash({ kind: "idle" });
     setHistoryDetailTab("commit");
     if (commit.parents.length > 1) {
       setCommitDetail({ kind: "choosingParent", commit });
@@ -458,8 +467,29 @@ export function App() {
   function closeCommitDetail() {
     commitRequest.current += 1;
     commitFileRequest.current += 1;
+    historySquashRequest.current += 1;
     setCommitDetail({ kind: "idle" });
     setCommitFileDiff({ kind: "idle" });
+    setHistorySquash({ kind: "idle" });
+  }
+
+  async function checkHistorySquashTrace() {
+    if (commitDetail.kind !== "ready") return;
+    const oid = commitDetail.selection.commit.oid;
+    const request = ++historySquashRequest.current;
+    setHistorySquash({ kind: "loading", oid });
+    try {
+      const result = await getGitHubCommitSquashTrace(oid);
+      if (request !== historySquashRequest.current) return;
+      if (result.trace?.relationship.classification === "squashCandidate") {
+        setHistorySquash({ kind: "ready", trace: result.trace });
+        setHistoryDetailTab("squash");
+      } else {
+        setHistorySquash({ kind: "none", oid });
+      }
+    } catch (error) {
+      if (request === historySquashRequest.current) setHistorySquash({ kind: "error", oid, error: asDesktopError(error) });
+    }
   }
 
   async function loadMoreHistory() {
@@ -600,9 +630,13 @@ export function App() {
                   <div className="history-detail-tabs" role="tablist" aria-label="Commit detail views">
                     <button type="button" role="tab" aria-selected={historyDetailTab === "commit"} className={historyDetailTab === "commit" ? "is-active" : ""} onClick={() => setHistoryDetailTab("commit")}>Commit</button>
                     <button type="button" role="tab" aria-selected={historyDetailTab === "changes"} className={historyDetailTab === "changes" ? "is-active" : ""} onClick={() => setHistoryDetailTab("changes")}>Changes</button>
+                    {historySquash.kind === "ready" && <button type="button" role="tab" aria-selected={historyDetailTab === "squash"} className={historyDetailTab === "squash" ? "is-active" : ""} onClick={() => setHistoryDetailTab("squash")}>Squash Trace · {historySquash.trace.pullRequest.commits.length}</button>}
+                    {commitDetail.kind === "ready" && connection.kind === "connected" && connection.historySquashTrace && historySquash.kind !== "ready" && <button type="button" className="history-trace-action" disabled={historySquash.kind === "loading"} onClick={() => void checkHistorySquashTrace()}>{historySquash.kind === "loading" ? "Checking PR…" : historySquash.kind === "error" ? "Retry Squash Trace" : "Check Squash Trace"}</button>}
+                    {historySquash.kind === "none" && <span className="history-trace-status">No squash merge relationship</span>}
+                    {historySquash.kind === "error" && <span className="history-trace-status history-trace-status--error" role="alert">{historySquash.error.message}</span>}
                   </div>
                   <div className="history-detail-content">
-                    {commitDetail.kind === "idle" ? <div className="pane-placeholder"><strong>Select a commit</strong><span>Commit metadata and changed files will appear here.</span></div> : <CommitDetailPanel key={`${commitDetail.kind === "choosingParent" ? commitDetail.commit.oid : commitDetail.selection.commit.oid}:${commitDetail.kind === "choosingParent" ? "" : commitDetail.selection.parentOid ?? ""}`} state={commitDetail} fileDiff={commitFileDiff} mode={historyDetailTab} onChooseParent={chooseCommitParent} onSelectFile={(path) => void loadCommitFileDiff(path)} onRetry={() => commitDetail.kind === "error" && void loadCommitFiles(commitDetail.selection)} onRetryFile={() => commitFileDiff.kind === "error" && void loadCommitFileDiff(commitFileDiff.path)} onClose={closeCommitDetail} />}
+                    {historyDetailTab === "squash" && historySquash.kind === "ready" ? <HistorySquashTrace key={`${historySquash.trace.pullRequest.nameWithOwner}#${historySquash.trace.pullRequest.number}`} trace={historySquash.trace} /> : commitDetail.kind === "idle" ? <div className="pane-placeholder"><strong>Select a commit</strong><span>Commit metadata and changed files will appear here.</span></div> : <CommitDetailPanel key={`${commitDetail.kind === "choosingParent" ? commitDetail.commit.oid : commitDetail.selection.commit.oid}:${commitDetail.kind === "choosingParent" ? "" : commitDetail.selection.parentOid ?? ""}`} state={commitDetail} fileDiff={commitFileDiff} mode={historyDetailTab === "changes" ? "changes" : "commit"} onChooseParent={chooseCommitParent} onSelectFile={(path) => void loadCommitFileDiff(path)} onRetry={() => commitDetail.kind === "error" && void loadCommitFiles(commitDetail.selection)} onRetryFile={() => commitFileDiff.kind === "error" && void loadCommitFileDiff(commitFileDiff.path)} onClose={closeCommitDetail} />}
                   </div>
                 </div>
               </div>

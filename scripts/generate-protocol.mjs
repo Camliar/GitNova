@@ -13,7 +13,8 @@ const requiredDefinitions = [
   "GitHubRepositoryParams", "GitHubRepository", "GitHubPullRequestParams", "GitHubPullRequestState", "GitHubPullRequestRef", "GitHubCommitIdentity",
   "GitHubPullRequestCommit", "GitHubPullRequest", "GitHubPullRequestCommitDiffParams", "GitHubFileStatus", "GitHubPatchState", "GitHubCommitFileDiff",
   "GitHubPullRequestCommitDiff", "SquashTraceClassification", "SquashTraceConfidence", "SquashTraceLocalAvailability", "SquashTraceEvidence",
-  "SquashTraceRelationship", "GitHubSquashTrace", "GitLabProjectParams", "GitLabProject", "GitLabMergeRequestParams", "GitLabMergeRequestState",
+  "SquashTraceRelationship", "GitHubSquashTrace", "GitHubCommitSquashTraceParams", "GitHubCommitSquashTrace", "GitHubPullRequestCommitFilesParams",
+  "GitHubCommitChangedFile", "GitHubPullRequestCommitFiles", "GitHubPullRequestCommitFileDiffParams", "GitLabProjectParams", "GitLabProject", "GitLabMergeRequestParams", "GitLabMergeRequestState",
   "GitLabCommitIdentity", "GitLabMergeRequestCommit", "GitLabMergeRequestRef", "GitLabMergeRequest", "GitLabMergeRequestCommitDiffParams", "GitLabFileStatus",
   "GitLabCommitFileDiff", "GitLabMergeRequestCommitDiff", "GitLabSquashTrace", "AiProviderKind", "AiProviderConfig", "AiInputPreviewParams",
   "AiDisclosureDestination", "AiDisclosureFileState", "AiDisclosureFile", "AiInputPreview", "AiGenerateCommitDraftParams", "AiOperationSuggestionKind",
@@ -48,6 +49,7 @@ export interface ServerCapabilities {
   paginatedCommitHistory: boolean;
   structuredCommitDiff: boolean;
   lazyCommitDiff?: boolean;
+  historySquashTrace?: boolean;
   repositoryReferences: boolean;
   commitGraphProjection: boolean;
   githubRepository: boolean;
@@ -380,6 +382,50 @@ export interface SquashTraceRelationship {
 export interface GitHubSquashTrace {
   pullRequest: GitHubPullRequest;
   relationship: SquashTraceRelationship;
+}
+
+export interface GitHubCommitSquashTraceParams {
+  oid: string;
+  remote?: string;
+  nameWithOwner?: string;
+}
+
+export interface GitHubCommitSquashTrace {
+  commitOid: string;
+  trace: GitHubSquashTrace | null;
+}
+
+export interface GitHubPullRequestCommitFilesParams {
+  number: number;
+  oid: string;
+  remote?: string;
+  nameWithOwner?: string;
+}
+
+export interface GitHubCommitChangedFile {
+  oldPath: string;
+  newPath: string;
+  status: GitHubFileStatus;
+  additions: number;
+  deletions: number;
+  changes: number;
+  patchState: GitHubPatchState;
+}
+
+export interface GitHubPullRequestCommitFiles {
+  host: "github.com";
+  nameWithOwner: string;
+  pullRequestNumber: number;
+  commit: GitHubPullRequestCommit;
+  files: GitHubCommitChangedFile[];
+}
+
+export interface GitHubPullRequestCommitFileDiffParams {
+  number: number;
+  oid: string;
+  path: string;
+  remote?: string;
+  nameWithOwner?: string;
 }
 
 export interface GitLabProjectParams {

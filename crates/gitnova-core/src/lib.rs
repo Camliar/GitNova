@@ -15,25 +15,27 @@ use gitnova_protocol::{
     ERROR_COMMIT_FILE_LIMIT, ERROR_COMMIT_MESSAGE_REQUIRED, ERROR_COMMIT_NOT_FOUND,
     ERROR_COMMIT_PARENT_REQUIRED, ERROR_COMMIT_PARSE, ERROR_DIFF_PARSE,
     ERROR_DIFFERENT_REPOSITORY_OPEN, ERROR_GH_UNAVAILABLE, ERROR_GIT_COMMAND_FAILED,
-    ERROR_GIT_UNAVAILABLE, ERROR_GITHUB_AUTH_REQUIRED, ERROR_GITHUB_COMMIT_FILE_LIMIT,
-    ERROR_GITHUB_COMMIT_NOT_IN_PR, ERROR_GITHUB_INVALID_REMOTE, ERROR_GITHUB_PR_COMMIT_LIMIT,
-    ERROR_GITHUB_REMOTE_NOT_FOUND, ERROR_GITHUB_REQUEST_FAILED, ERROR_GITHUB_RESPONSE_PARSE,
-    ERROR_GITHUB_UNSUPPORTED_REMOTE, ERROR_GITLAB_AUTH_REQUIRED, ERROR_GITLAB_COMMIT_FILE_LIMIT,
-    ERROR_GITLAB_COMMIT_NOT_IN_MR, ERROR_GITLAB_INVALID_REMOTE, ERROR_GITLAB_MR_COMMIT_LIMIT,
-    ERROR_GITLAB_REMOTE_NOT_FOUND, ERROR_GITLAB_REQUEST_FAILED, ERROR_GITLAB_RESPONSE_PARSE,
-    ERROR_GITLAB_UNSUPPORTED_REMOTE, ERROR_GLAB_UNAVAILABLE, ERROR_HISTORY_ENCODING,
-    ERROR_INCOMPATIBLE_PROTOCOL, ERROR_INVALID_BRANCH_NAME, ERROR_INVALID_COMMIT_PARENT,
-    ERROR_INVALID_HISTORY_CURSOR, ERROR_INVALID_PARAMS, ERROR_INVALID_PATH,
-    ERROR_INVALID_REPOSITORY_PATH, ERROR_INVALID_REQUEST, ERROR_METHOD_NOT_FOUND,
-    ERROR_MUTATION_FAILED, ERROR_NOT_INITIALIZED, ERROR_NOTHING_STAGED, ERROR_PARSE,
-    ERROR_REFERENCE_ENCODING, ERROR_REFERENCE_PARSE, ERROR_REPOSITORY_NOT_FOUND,
+    ERROR_GIT_UNAVAILABLE, ERROR_GITHUB_AUTH_REQUIRED, ERROR_GITHUB_COMMIT_ASSOCIATION_AMBIGUOUS,
+    ERROR_GITHUB_COMMIT_FILE_LIMIT, ERROR_GITHUB_COMMIT_NOT_IN_PR, ERROR_GITHUB_INVALID_REMOTE,
+    ERROR_GITHUB_PR_COMMIT_LIMIT, ERROR_GITHUB_REMOTE_NOT_FOUND, ERROR_GITHUB_REQUEST_FAILED,
+    ERROR_GITHUB_RESPONSE_PARSE, ERROR_GITHUB_UNSUPPORTED_REMOTE, ERROR_GITLAB_AUTH_REQUIRED,
+    ERROR_GITLAB_COMMIT_FILE_LIMIT, ERROR_GITLAB_COMMIT_NOT_IN_MR, ERROR_GITLAB_INVALID_REMOTE,
+    ERROR_GITLAB_MR_COMMIT_LIMIT, ERROR_GITLAB_REMOTE_NOT_FOUND, ERROR_GITLAB_REQUEST_FAILED,
+    ERROR_GITLAB_RESPONSE_PARSE, ERROR_GITLAB_UNSUPPORTED_REMOTE, ERROR_GLAB_UNAVAILABLE,
+    ERROR_HISTORY_ENCODING, ERROR_INCOMPATIBLE_PROTOCOL, ERROR_INVALID_BRANCH_NAME,
+    ERROR_INVALID_COMMIT_PARENT, ERROR_INVALID_HISTORY_CURSOR, ERROR_INVALID_PARAMS,
+    ERROR_INVALID_PATH, ERROR_INVALID_REPOSITORY_PATH, ERROR_INVALID_REQUEST,
+    ERROR_METHOD_NOT_FOUND, ERROR_MUTATION_FAILED, ERROR_NOT_INITIALIZED, ERROR_NOTHING_STAGED,
+    ERROR_PARSE, ERROR_REFERENCE_ENCODING, ERROR_REFERENCE_PARSE, ERROR_REPOSITORY_NOT_FOUND,
     ERROR_REPOSITORY_NOT_OPEN, ERROR_REQUEST_CANCELLED, ERROR_STATUS_PARSE, ERROR_UNBORN_HEAD,
     ERROR_UNRESOLVED_CONFLICTS, ERROR_UNSAFE_REPOSITORY, ERROR_WORKTREE_REQUIRED,
-    GitHubPullRequestCommitDiffParams, GitHubPullRequestParams, GitHubRepositoryParams,
-    GitLabMergeRequestCommitDiffParams, GitLabMergeRequestParams, GitLabProjectParams,
-    HistoryParams, ImplementationInfo, InitializeParams, InitializeResult, JSON_RPC_VERSION,
-    Notification, PROTOCOL_VERSION, RepositoryDescriptor, RepositoryPathParams, Request, Response,
-    ResponseError, ServerCapabilities,
+    GitHubCommitSquashTraceParams, GitHubPullRequestCommitDiff, GitHubPullRequestCommitDiffParams,
+    GitHubPullRequestCommitFileDiffParams, GitHubPullRequestCommitFilesParams,
+    GitHubPullRequestParams, GitHubRepositoryParams, GitLabMergeRequestCommitDiffParams,
+    GitLabMergeRequestParams, GitLabProjectParams, HistoryParams, ImplementationInfo,
+    InitializeParams, InitializeResult, JSON_RPC_VERSION, Notification, PROTOCOL_VERSION,
+    RepositoryDescriptor, RepositoryPathParams, Request, Response, ResponseError,
+    ServerCapabilities,
 };
 use serde_json::Value;
 use std::io::{self, BufRead, Write};
@@ -48,6 +50,13 @@ enum Lifecycle {
 struct CoreState {
     lifecycle: Lifecycle,
     active_repository: Option<RepositoryDescriptor>,
+    github_commit_diff_cache: Option<CachedGitHubCommitDiff>,
+}
+
+struct CachedGitHubCommitDiff {
+    remote: Option<String>,
+    requested_name_with_owner: Option<String>,
+    value: GitHubPullRequestCommitDiff,
 }
 
 impl Default for CoreState {
@@ -55,6 +64,7 @@ impl Default for CoreState {
         Self {
             lifecycle: Lifecycle::Uninitialized,
             active_repository: None,
+            github_commit_diff_cache: None,
         }
     }
 }
@@ -177,6 +187,11 @@ fn dispatch_request(
         "github/pullRequest" => github_pull_request_request(request, state),
         "github/pullRequestCommitDiff" => github_pull_request_commit_diff_request(request, state),
         "github/squashTrace" => github_squash_trace_request(request, state),
+        "github/commitSquashTrace" => github_commit_squash_trace_request(request, state),
+        "github/pullRequestCommitFiles" => github_pull_request_commit_files_request(request, state),
+        "github/pullRequestCommitFileDiff" => {
+            github_pull_request_commit_file_diff_request(request, state)
+        }
         "gitlab/project" => gitlab_project_request(request, state),
         "gitlab/mergeRequest" => gitlab_merge_request_request(request, state),
         "gitlab/mergeRequestCommitDiff" => gitlab_merge_request_commit_diff_request(request, state),
@@ -250,6 +265,7 @@ fn initialize(request: Request, state: &mut CoreState) -> Response {
             paginated_commit_history: true,
             structured_commit_diff: true,
             lazy_commit_diff: true,
+            history_squash_trace: true,
             repository_references: true,
             commit_graph_projection: true,
             github_repository: true,
@@ -580,6 +596,12 @@ fn github_error(error: github::GitHubError) -> ResponseError {
             ERROR_GITHUB_COMMIT_FILE_LIMIT,
             "github.commit_file_limit_exceeded",
             "Commit reaches the supported GitHub file limit",
+            false,
+        ),
+        github::GitHubError::CommitAssociationAmbiguous => ResponseError::new(
+            ERROR_GITHUB_COMMIT_ASSOCIATION_AMBIGUOUS,
+            "github.commit_association_ambiguous",
+            "Multiple pull requests report the selected commit as their merge result",
             false,
         ),
     }
@@ -1239,6 +1261,140 @@ fn github_squash_trace_request(request: Request, state: &CoreState) -> Response 
     }
 }
 
+fn github_commit_squash_trace_request(request: Request, state: &CoreState) -> Response {
+    let params = match serde_json::from_value::<GitHubCommitSquashTraceParams>(request.params) {
+        Ok(params) if valid_full_oid(&params.oid) => params,
+        _ => return invalid_params(request.id, "Invalid GitHub commit Squash Trace parameters"),
+    };
+    let Some(descriptor) = &state.active_repository else {
+        return repository_not_open(request.id, "checking a GitHub commit association");
+    };
+    match github::commit_squash_trace(descriptor, &params) {
+        Ok(trace) => Response::success(
+            request.id,
+            serde_json::to_value(trace).expect("serializable GitHub commit Squash Trace"),
+        ),
+        Err(error) => Response::error(Some(request.id), squash_trace_error(error)),
+    }
+}
+
+fn github_pull_request_commit_files_request(request: Request, state: &mut CoreState) -> Response {
+    let params = match serde_json::from_value::<GitHubPullRequestCommitFilesParams>(request.params)
+    {
+        Ok(params) if params.number > 0 && valid_full_oid(&params.oid) => params,
+        _ => {
+            return invalid_params(
+                request.id,
+                "Invalid GitHub original commit files parameters",
+            );
+        }
+    };
+    if state.active_repository.is_none() {
+        return repository_not_open(request.id, "requesting GitHub original commit files");
+    }
+    if let Err(error) = ensure_github_commit_diff(state, &params) {
+        return Response::error(Some(request.id), github_error(error));
+    }
+    let cached = &state
+        .github_commit_diff_cache
+        .as_ref()
+        .expect("cache populated")
+        .value;
+    let result = github::pull_request_commit_files(cached);
+    Response::success(
+        request.id,
+        serde_json::to_value(result).expect("serializable GitHub original commit files"),
+    )
+}
+
+fn github_pull_request_commit_file_diff_request(
+    request: Request,
+    state: &mut CoreState,
+) -> Response {
+    let params =
+        match serde_json::from_value::<GitHubPullRequestCommitFileDiffParams>(request.params) {
+            Ok(params)
+                if params.number > 0
+                    && valid_full_oid(&params.oid)
+                    && !params.path.is_empty()
+                    && params.path.len() <= 4096 =>
+            {
+                params
+            }
+            _ => {
+                return invalid_params(
+                    request.id,
+                    "Invalid GitHub original commit file parameters",
+                );
+            }
+        };
+    let files_params = GitHubPullRequestCommitFilesParams {
+        number: params.number,
+        oid: params.oid,
+        remote: params.remote,
+        name_with_owner: params.name_with_owner,
+    };
+    if state.active_repository.is_none() {
+        return repository_not_open(request.id, "requesting a GitHub original commit file diff");
+    }
+    if let Err(error) = ensure_github_commit_diff(state, &files_params) {
+        return Response::error(Some(request.id), github_error(error));
+    }
+    let file = github::pull_request_commit_file_diff(
+        &state
+            .github_commit_diff_cache
+            .as_ref()
+            .expect("cache populated")
+            .value,
+        &params.path,
+    );
+    match file {
+        Some(file) => Response::success(
+            request.id,
+            serde_json::to_value(file).expect("serializable GitHub original commit file diff"),
+        ),
+        None => invalid_params(
+            request.id,
+            "Path is not changed by the selected original commit",
+        ),
+    }
+}
+
+fn ensure_github_commit_diff(
+    state: &mut CoreState,
+    params: &GitHubPullRequestCommitFilesParams,
+) -> Result<(), github::GitHubError> {
+    let matches = state
+        .github_commit_diff_cache
+        .as_ref()
+        .is_some_and(|cached| {
+            cached.value.pull_request_number == params.number
+                && cached.value.commit.oid.eq_ignore_ascii_case(&params.oid)
+                && cached.remote == params.remote
+                && cached.requested_name_with_owner == params.name_with_owner
+        });
+    if matches {
+        return Ok(());
+    }
+    let descriptor = state
+        .active_repository
+        .as_ref()
+        .ok_or(github::GitHubError::RequestFailed)?;
+    let diff_params = GitHubPullRequestCommitDiffParams {
+        number: params.number,
+        oid: params.oid.clone(),
+        remote: params.remote.clone(),
+        name_with_owner: params.name_with_owner.clone(),
+    };
+    let value = github::pull_request_commit_diff(descriptor, &diff_params)?;
+    state.github_commit_diff_cache = Some(CachedGitHubCommitDiff {
+        remote: params.remote.clone(),
+        requested_name_with_owner: params.name_with_owner.clone(),
+        value,
+    });
+    Ok(())
+}
+
 fn gitlab_project_request(request: Request, state: &CoreState) -> Response {
     let params = if request.params.is_null() {
         GitLabProjectParams::default()
@@ -1535,6 +1691,7 @@ mod tests {
         let mut state = CoreState {
             lifecycle: Lifecycle::Initialized,
             active_repository: None,
+            github_commit_diff_cache: None,
         };
         let response = dispatch_request(request("unknown", json!({})), &mut state, &registry);
         let error = response.error.expect("error response");

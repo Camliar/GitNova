@@ -10,6 +10,7 @@ const history = vi.hoisted(() => ({ getCommitGraph: vi.fn() }));
 const commitDiff = vi.hoisted(() => ({ getCommitDiff: vi.fn(), getCommitFiles: vi.fn(), getCommitFileDiff: vi.fn() }));
 const mutations = vi.hoisted(() => ({ getRepositoryReferences: vi.fn(), commitStaged: vi.fn(), createLocalBranch: vi.fn(), switchLocalBranch: vi.fn() }));
 const ai = vi.hoisted(() => ({ previewAiInput: vi.fn(), generateAiCommitDraft: vi.fn() }));
+const githubHistory = vi.hoisted(() => ({ getGitHubCommitSquashTrace: vi.fn() }));
 
 vi.mock("./core", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./core")>()),
@@ -25,6 +26,7 @@ vi.mock("./history", () => history);
 vi.mock("./commitDiff", () => commitDiff);
 vi.mock("./mutations", () => mutations);
 vi.mock("./ai", () => ai);
+vi.mock("./github", async (importOriginal) => ({ ...(await importOriginal<typeof import("./github")>()), getGitHubCommitSquashTrace: githubHistory.getGitHubCommitSquashTrace }));
 
 const descriptor = {
   worktreeRoot: "/work/project",
@@ -38,9 +40,9 @@ describe("Desktop repository open", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.16", capabilities: { repositoryMutations: true } });
+    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.17", capabilities: { repositoryMutations: true } });
     core.configureCore.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
-    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.16", capabilities: { repositoryMutations: true } });
+    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.17", capabilities: { repositoryMutations: true } });
     core.shutdownCore.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
     repository.selectRepositoryDirectory.mockResolvedValue("/work/project");
     repository.openRepository.mockResolvedValue(descriptor);
@@ -57,11 +59,12 @@ describe("Desktop repository open", () => {
       { name: "main", fullName: "refs/heads/main", kind: "localBranch", targetOid: "a".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: null },
       { name: "origin/main", fullName: "refs/remotes/origin/main", kind: "remoteBranch", targetOid: "a".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: null },
     ] });
+    githubHistory.getGitHubCommitSquashTrace.mockResolvedValue({ commitOid: "a".repeat(40), trace: null });
   });
 
   it("launches Core in an explicit SSH environment and opens only its remote path", async () => {
     core.getCoreStatus.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
-    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.16", capabilities: { repositoryMutations: true }, environment: "ssh" });
+    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.17", capabilities: { repositoryMutations: true }, environment: "ssh" });
     render(<App />);
 
     fireEvent.change(await screen.findByLabelText("Core environment"), { target: { value: "ssh" } });
@@ -91,7 +94,7 @@ describe("Desktop repository open", () => {
   it("starts Core and restores the last successfully opened repository", async () => {
     localStorage.setItem("gitnova.workspace.v1", JSON.stringify({ version: 1, target: { kind: "local" }, path: "/work/project" }));
     core.getCoreStatus.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
-    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.16", capabilities: { repositoryMutations: true }, environment: "local" });
+    core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.17", capabilities: { repositoryMutations: true }, environment: "local" });
     render(<App />);
 
     expect(await screen.findByRole("button", { name: "All Commits" })).toBeInTheDocument();
@@ -132,7 +135,7 @@ describe("Desktop repository open", () => {
   });
 
   it("hands an AI draft to the existing independent commit confirmation", async () => {
-    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.16", capabilities: { repositoryMutations: true, aiAssist: true } });
+    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.17", capabilities: { repositoryMutations: true, aiAssist: true } });
     status.getWorkingTreeStatus.mockResolvedValue({
       branch: { head: "main", oid: "a".repeat(40), upstream: null, ahead: 0, behind: 0 },
       entries: [{ path: "src/app.ts", originalPath: null, kind: "ordinary", indexStatus: "modified", worktreeStatus: "unmodified" }],
@@ -236,7 +239,7 @@ describe("Desktop repository open", () => {
   it("renders ordered commit files and reusable text and binary diff states", async () => {
     const commit = { oid: "d".repeat(40), parents: ["e".repeat(40)], summary: "Change files", message: "Change files\n", author: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" }, committer: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" } };
     history.getCommitGraph.mockResolvedValue({ nodes: [{ commit, isHead: true, references: [] }], nextCursor: null });
-    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.16", capabilities: { repositoryMutations: true, lazyCommitDiff: true } });
+    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.17", capabilities: { repositoryMutations: true, lazyCommitDiff: true } });
     commitDiff.getCommitFiles.mockResolvedValue({ commit, parentOid: commit.parents[0], files: [
       { oldPath: "old.ts", newPath: "new.ts", status: "renamed" },
       { oldPath: "image.png", newPath: "image.png", status: "modified" },
@@ -263,7 +266,7 @@ describe("Desktop repository open", () => {
   it("keeps the changed-file list when one lazy file diff fails and retries only that file", async () => {
     const commit = { oid: "f".repeat(40), parents: ["e".repeat(40)], summary: "Retry me", message: "Retry me\n", author: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" }, committer: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z" } };
     history.getCommitGraph.mockResolvedValue({ nodes: [{ commit, isHead: true, references: [] }], nextCursor: null });
-    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.16", capabilities: { repositoryMutations: true, lazyCommitDiff: true } });
+    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.17", capabilities: { repositoryMutations: true, lazyCommitDiff: true } });
     commitDiff.getCommitFiles.mockResolvedValue({ commit, parentOid: commit.parents[0], files: [{ oldPath: "large.ts", newPath: "large.ts", status: "modified" }] });
     commitDiff.getCommitFileDiff.mockRejectedValueOnce({ code: "git.command_failed", message: "File diff unavailable", retryable: true }).mockResolvedValueOnce({ oldPath: "large.ts", newPath: "large.ts", isBinary: false, hunks: [] });
     render(<App />);
@@ -295,6 +298,63 @@ describe("Desktop repository open", () => {
 
     expect(screen.queryByRole("heading", { name: "Slow commit" })).not.toBeInTheDocument();
     expect(screen.getByText("Slow commit", { selector: ".commit-summary strong" })).toBeInTheDocument();
+  });
+
+  it("opens Provider-confirmed original commits from a selected squash candidate", async () => {
+    const finalCommit = { oid: "c".repeat(40), parents: ["b".repeat(40)], summary: "Squashed PR", message: "Squashed PR\n", author: { name: "Ada", email: "a@b.c", timestamp: "2026-01-03T00:00:00Z" }, committer: { name: "Ada", email: "a@b.c", timestamp: "2026-01-03T00:00:00Z" } };
+    const original = { oid: "a".repeat(40), parents: ["9".repeat(40)], summary: "Original one", message: "Original one\n\nBody", author: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z", login: "ada" }, committer: { name: "Ada", email: "a@b.c", timestamp: "2026-01-01T00:00:00Z", login: null }, url: "https://github.com/owner/repo/commit/a" };
+    const pullRequest = { host: "github.com", nameWithOwner: "owner/repo", number: 49, title: "Ship feature", body: null, state: "merged", isDraft: false, authorLogin: "ada", url: "https://github.com/owner/repo/pull/49", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-03T00:00:00Z", closedAt: "2026-01-03T00:00:00Z", mergedAt: "2026-01-03T00:00:00Z", base: { name: "main", oid: "8".repeat(40), repository: "owner/repo" }, head: { name: "topic", oid: original.oid, repository: "owner/repo" }, mergeCommitOid: finalCommit.oid, commits: [original] };
+    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.17", capabilities: { repositoryMutations: true, lazyCommitDiff: true, historySquashTrace: true } });
+    history.getCommitGraph.mockResolvedValue({ nodes: [{ commit: finalCommit, isHead: true, references: [] }], nextCursor: null });
+    commitDiff.getCommitFiles.mockResolvedValue({ commit: finalCommit, parentOid: finalCommit.parents[0], files: [] });
+    githubHistory.getGitHubCommitSquashTrace.mockResolvedValue({ commitOid: finalCommit.oid, trace: { pullRequest, relationship: { classification: "squashCandidate", confidence: "medium", mergeCommitOid: finalCommit.oid, localAvailability: "available", localParentOids: finalCommit.parents, evidence: ["providerMergeStrategyUnavailable"] } } });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: "All Commits" }));
+    fireEvent.click(await screen.findByRole("button", { name: `View commit ${"c".repeat(8)}` }));
+    fireEvent.click(await screen.findByRole("button", { name: "Check Squash Trace" }));
+
+    expect(await screen.findByRole("region", { name: "Squash Trace original commits" })).toHaveTextContent("1 originals → cccccccc");
+    expect(githubHistory.getGitHubCommitSquashTrace).toHaveBeenCalledWith(finalCommit.oid);
+  });
+
+  it("keeps an ordinary merge in local Commit and Changes views", async () => {
+    const mergeCommit = { oid: "e".repeat(40), parents: ["a".repeat(40), "b".repeat(40)], summary: "Merge PR", message: "Merge PR\n", author: { name: "Ada", email: "a@b.c", timestamp: "2026-01-03T00:00:00Z" }, committer: { name: "Ada", email: "a@b.c", timestamp: "2026-01-03T00:00:00Z" } };
+    const pullRequest = { host: "github.com", nameWithOwner: "owner/repo", number: 50, title: "Merge feature", body: null, state: "merged", isDraft: false, authorLogin: "ada", url: "https://github.com/owner/repo/pull/50", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-03T00:00:00Z", closedAt: "2026-01-03T00:00:00Z", mergedAt: "2026-01-03T00:00:00Z", base: { name: "main", oid: "8".repeat(40), repository: "owner/repo" }, head: { name: "topic", oid: "9".repeat(40), repository: "owner/repo" }, mergeCommitOid: mergeCommit.oid, commits: [] };
+    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.17", capabilities: { repositoryMutations: true, lazyCommitDiff: true, historySquashTrace: true } });
+    history.getCommitGraph.mockResolvedValue({ nodes: [{ commit: mergeCommit, isHead: true, references: [] }], nextCursor: null });
+    commitDiff.getCommitFiles.mockResolvedValue({ commit: mergeCommit, parentOid: mergeCommit.parents[0], files: [] });
+    githubHistory.getGitHubCommitSquashTrace.mockResolvedValue({ commitOid: mergeCommit.oid, trace: { pullRequest, relationship: { classification: "mergeCommit", confidence: "high", mergeCommitOid: mergeCommit.oid, localAvailability: "available", localParentOids: mergeCommit.parents, evidence: ["localCommitHasMultipleParents"] } } });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: "All Commits" }));
+    fireEvent.click(await screen.findByRole("button", { name: `View commit ${"e".repeat(8)}` }));
+    fireEvent.click(await screen.findByRole("button", { name: `Compare parent ${"a".repeat(8)}` }));
+    fireEvent.click(await screen.findByRole("button", { name: "Check Squash Trace" }));
+
+    expect(await screen.findByText("No squash merge relationship")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Merge PR" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Squash Trace original commits" })).not.toBeInTheDocument();
+  });
+
+  it("does not restore a late Provider association after commit detail closes", async () => {
+    const commit = { oid: "d".repeat(40), parents: [], summary: "Local commit", message: "Local commit\n", author: { name: "Ada", email: "a@b.c", timestamp: "2026-01-03T00:00:00Z" }, committer: { name: "Ada", email: "a@b.c", timestamp: "2026-01-03T00:00:00Z" } };
+    core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.17", capabilities: { repositoryMutations: true, lazyCommitDiff: true, historySquashTrace: true } });
+    history.getCommitGraph.mockResolvedValue({ nodes: [{ commit, isHead: true, references: [] }], nextCursor: null });
+    commitDiff.getCommitFiles.mockResolvedValue({ commit, parentOid: null, files: [] });
+    let resolveAssociation!: (value: unknown) => void;
+    githubHistory.getGitHubCommitSquashTrace.mockReturnValue(new Promise((resolve) => { resolveAssociation = resolve; }));
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: "All Commits" }));
+    fireEvent.click(await screen.findByRole("button", { name: `View commit ${"d".repeat(8)}` }));
+    fireEvent.click(await screen.findByRole("button", { name: "Check Squash Trace" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Close commit" }));
+    resolveAssociation({ commitOid: commit.oid, trace: null });
+    await Promise.resolve();
+
+    expect(screen.queryByText("No squash merge relationship")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Squash Trace original commits" })).not.toBeInTheDocument();
   });
 
   it("appends an opaque cursor page without changing existing commits", async () => {

@@ -20,4 +20,12 @@ The result includes `classification`, `confidence`, `mergeCommitOid`, local avai
 
 Local topology inspection uses System Git `cat-file -e` and `rev-list --parents --max-count=1` against the already opened repository. A missing final commit is normal result data (`localCommitMissing`), not an automatic network fetch or request failure. Git unavailable, unsafe repository ownership, malformed commit output, and other execution failures retain the existing stable Git/repository errors. No commit content, patch, stderr, credentials, or raw Provider response is returned.
 
-Original commit file and line details remain available through [`github/pullRequestCommitDiff`](GITHUB_PULL_REQUESTS.md). This Task supplies the relationship read model; Host visualization is a separate Task.
+Original commit file and line details remain available through [`github/pullRequestCommitDiff`](GITHUB_PULL_REQUESTS.md).
+
+## History-integrated discovery
+
+Protocol 1.17 adds `github/commitSquashTrace` for the All Commits workflow. It accepts a full local commit OID and performs an explicit GitHub association request. Core keeps only merged PRs whose Provider `merge_commit_sha` exactly equals that OID. No exact match returns `trace: null` and leaves the ordinary local Commit/Changes detail unchanged; more than one exact match returns `github.commit_association_ambiguous` rather than choosing one.
+
+When Core classifies a trace as `squashCandidate`, Desktop first shows the ordered PR original commits and the `originals → final commit` relationship. `mergeCommit`, `originalCommit` and unresolved results remain in the ordinary local Commit/Changes presentation; Desktop uses Core's classification and performs no topology inference. Selecting a squash candidate's original commit calls `github/pullRequestCommitFiles`, which validates PR membership and returns file metadata without patch hunks. The bounded full Provider response stays only in the repository-local Core memory cache. Selecting one file then calls `github/pullRequestCommitFileDiff`, which returns only that cached file. A different PR/commit selector replaces the cache, and switching repository environments starts a distinct Core process.
+
+The association endpoint, PR detail, original commits, and commit files are all network access and run only after the user chooses **Check Squash Trace** or selects an original commit. There is no repository-open request, background retry, or Host-side Provider call.

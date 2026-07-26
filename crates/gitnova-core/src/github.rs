@@ -1,10 +1,11 @@
 use gitnova_protocol::{
-    DiffHunk, DiffLine, DiffLineKind, GitHubCommitFileDiff, GitHubCommitIdentity, GitHubFileStatus,
+    DiffHunk, DiffLine, DiffLineKind, GitHubCommitChangedFile, GitHubCommitFileDiff,
+    GitHubCommitIdentity, GitHubCommitSquashTrace, GitHubCommitSquashTraceParams, GitHubFileStatus,
     GitHubPatchState, GitHubPullRequest, GitHubPullRequestCommit, GitHubPullRequestCommitDiff,
-    GitHubPullRequestCommitDiffParams, GitHubPullRequestParams, GitHubPullRequestRef,
-    GitHubPullRequestState, GitHubRepository, GitHubRepositoryParams, GitHubSquashTrace,
-    RepositoryDescriptor, SquashTraceClassification, SquashTraceConfidence, SquashTraceEvidence,
-    SquashTraceLocalAvailability, SquashTraceRelationship,
+    GitHubPullRequestCommitDiffParams, GitHubPullRequestCommitFiles, GitHubPullRequestParams,
+    GitHubPullRequestRef, GitHubPullRequestState, GitHubRepository, GitHubRepositoryParams,
+    GitHubSquashTrace, RepositoryDescriptor, SquashTraceClassification, SquashTraceConfidence,
+    SquashTraceEvidence, SquashTraceLocalAvailability, SquashTraceRelationship,
 };
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -30,6 +31,7 @@ pub enum GitHubError {
     PullRequestCommitLimit,
     CommitNotInPullRequest,
     CommitFileLimit,
+    CommitAssociationAmbiguous,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -95,6 +97,40 @@ pub fn pull_request_commit_diff(
     pull_request_commit_diff_with(&SystemCommand, descriptor, params)
 }
 
+pub fn pull_request_commit_files(
+    diff: &GitHubPullRequestCommitDiff,
+) -> GitHubPullRequestCommitFiles {
+    GitHubPullRequestCommitFiles {
+        host: diff.host.clone(),
+        name_with_owner: diff.name_with_owner.clone(),
+        pull_request_number: diff.pull_request_number,
+        commit: diff.commit.clone(),
+        files: diff
+            .files
+            .iter()
+            .map(|file| GitHubCommitChangedFile {
+                old_path: file.old_path.clone(),
+                new_path: file.new_path.clone(),
+                status: file.status.clone(),
+                additions: file.additions,
+                deletions: file.deletions,
+                changes: file.changes,
+                patch_state: file.patch_state.clone(),
+            })
+            .collect(),
+    }
+}
+
+pub fn pull_request_commit_file_diff(
+    diff: &GitHubPullRequestCommitDiff,
+    path: &str,
+) -> Option<GitHubCommitFileDiff> {
+    diff.files
+        .iter()
+        .find(|file| file.new_path == path)
+        .cloned()
+}
+
 pub fn squash_trace(
     descriptor: &RepositoryDescriptor,
     params: &GitHubPullRequestParams,
@@ -102,6 +138,79 @@ pub fn squash_trace(
     squash_trace_with(&SystemCommand, descriptor, params, |oid| {
         crate::repository::commit_parents_if_available(descriptor, oid)
     })
+}
+
+pub fn commit_squash_trace(
+    descriptor: &RepositoryDescriptor,
+    params: &GitHubCommitSquashTraceParams,
+) -> Result<GitHubCommitSquashTrace, SquashTraceError> {
+    commit_squash_trace_with(&SystemCommand, descriptor, params, |oid| {
+        crate::repository::commit_parents_if_available(descriptor, oid)
+    })
+}
+
+fn commit_squash_trace_with(
+    runner: &impl CommandRunner,
+    descriptor: &RepositoryDescriptor,
+    params: &GitHubCommitSquashTraceParams,
+    inspect: impl FnOnce(&str) -> Result<Option<Vec<String>>, crate::repository::RepositoryError>,
+) -> Result<GitHubCommitSquashTrace, SquashTraceError> {
+    let (owner, name) = resolve_repository_identity(
+        runner,
+        descriptor,
+        params.remote.as_deref(),
+        params.name_with_owner.as_deref(),
+    )
+    .map_err(SquashTraceError::GitHub)?;
+    let commit_oid = params.oid.to_ascii_lowercase();
+    let endpoint = format!("repos/{owner}/{name}/commits/{commit_oid}/pulls?per_page=100");
+    let bytes = run_gh_api(
+        runner,
+        &[endpoint, "--paginate".into(), "--slurp".into()],
+        MAX_GITHUB_RESPONSE_BYTES,
+    )
+    .map_err(SquashTraceError::GitHub)?;
+    let pages: Vec<Vec<ApiAssociatedPullRequest>> = serde_json::from_slice(&bytes)
+        .map_err(|_| SquashTraceError::GitHub(GitHubError::ResponseParse))?;
+    let exact: Vec<_> = pages
+        .into_iter()
+        .flatten()
+        .filter(|pull_request| {
+            pull_request.merged_at.is_some()
+                && pull_request
+                    .merge_commit_sha
+                    .as_deref()
+                    .is_some_and(|oid| oid.eq_ignore_ascii_case(&commit_oid))
+        })
+        .collect();
+    if exact.len() > 1 {
+        return Err(SquashTraceError::GitHub(
+            GitHubError::CommitAssociationAmbiguous,
+        ));
+    }
+    let trace = if let Some(associated) = exact.into_iter().next() {
+        let pull_request = pull_request_with(
+            runner,
+            descriptor,
+            &GitHubPullRequestParams {
+                number: associated.number,
+                remote: params.remote.clone(),
+                name_with_owner: Some(format!("{owner}/{name}")),
+            },
+        )
+        .map_err(SquashTraceError::GitHub)?;
+        let relationship = classify_squash_relationship(
+            &pull_request,
+            inspect(&commit_oid).map_err(SquashTraceError::Repository)?,
+        );
+        Some(GitHubSquashTrace {
+            pull_request,
+            relationship,
+        })
+    } else {
+        None
+    };
+    Ok(GitHubCommitSquashTrace { commit_oid, trace })
 }
 
 fn squash_trace_with(
@@ -501,6 +610,13 @@ struct ApiPullRequest {
     head: ApiPullRequestRef,
     merge_commit_sha: Option<String>,
     commits: usize,
+}
+
+#[derive(Deserialize)]
+struct ApiAssociatedPullRequest {
+    number: u64,
+    merged_at: Option<String>,
+    merge_commit_sha: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -1142,6 +1258,13 @@ mod tests {
         assert_eq!(result.files[0].hunks[0].lines[2].new_line, Some(11));
         assert_eq!(result.files[1].patch_state, GitHubPatchState::Unavailable);
         assert!(result.files[1].hunks.is_empty());
+        let metadata = pull_request_commit_files(&result);
+        let metadata_json = serde_json::to_string(&metadata).unwrap();
+        assert_eq!(metadata.files.len(), 2);
+        assert!(!metadata_json.contains("hunks"));
+        let selected = pull_request_commit_file_diff(&result, "src/new.rs").unwrap();
+        assert_eq!(selected.hunks.len(), 1);
+        assert!(pull_request_commit_file_diff(&result, "missing.rs").is_none());
         let calls = runner.calls.lock().unwrap();
         assert_eq!(
             calls[2].1[1],
@@ -1255,6 +1378,80 @@ mod tests {
                 .relationship
                 .evidence
                 .contains(&SquashTraceEvidence::ProviderMergeStrategyUnavailable)
+        );
+    }
+
+    #[test]
+    fn associates_an_exact_provider_merge_oid_and_preserves_original_order() {
+        let runner = FakeRunner::new([
+            success_value(json!([[{
+                "number": 42,
+                "merged_at": "2026-01-02T00:00:00Z",
+                "merge_commit_sha": OID_C
+            }]])),
+            success_value(pull_request_detail(2)),
+            success_value(json!([[
+                api_commit(OID_A, OID_B, "first", None),
+                api_commit(OID_B, OID_A, "second", None)
+            ]])),
+        ]);
+        let result = commit_squash_trace_with(
+            &runner,
+            &descriptor(),
+            &GitHubCommitSquashTraceParams {
+                oid: OID_C.into(),
+                remote: None,
+                name_with_owner: Some("owner/repo".into()),
+            },
+            |_| Ok(Some(vec![OID_A.into()])),
+        )
+        .unwrap();
+        let trace = result.trace.unwrap();
+        assert_eq!(trace.pull_request.commits[0].summary, "first");
+        assert_eq!(trace.pull_request.commits[1].summary, "second");
+        assert_eq!(
+            trace.relationship.classification,
+            SquashTraceClassification::SquashCandidate
+        );
+        let calls = runner.calls.lock().unwrap();
+        assert_eq!(
+            calls[0].1[1].to_string_lossy(),
+            format!("repos/owner/repo/commits/{OID_C}/pulls?per_page=100")
+        );
+    }
+
+    #[test]
+    fn returns_no_trace_without_an_exact_merge_oid_and_rejects_ambiguity() {
+        let params = GitHubCommitSquashTraceParams {
+            oid: OID_C.into(),
+            remote: None,
+            name_with_owner: Some("owner/repo".into()),
+        };
+        let none = FakeRunner::new([success_value(json!([[{
+            "number": 42,
+            "merged_at": "2026-01-02T00:00:00Z",
+            "merge_commit_sha": OID_A
+        }]]))]);
+        assert!(
+            commit_squash_trace_with(&none, &descriptor(), &params, |_| panic!(
+                "must not inspect"
+            ))
+            .unwrap()
+            .trace
+            .is_none()
+        );
+
+        let ambiguous = FakeRunner::new([success_value(json!([[
+            {"number": 41, "merged_at": "2026-01-02T00:00:00Z", "merge_commit_sha": OID_C},
+            {"number": 42, "merged_at": "2026-01-03T00:00:00Z", "merge_commit_sha": OID_C}
+        ]]))]);
+        assert_eq!(
+            commit_squash_trace_with(&ambiguous, &descriptor(), &params, |_| panic!(
+                "must not inspect"
+            )),
+            Err(SquashTraceError::GitHub(
+                GitHubError::CommitAssociationAmbiguous
+            ))
         );
     }
 

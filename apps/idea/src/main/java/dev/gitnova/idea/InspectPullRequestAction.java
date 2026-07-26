@@ -70,7 +70,7 @@ public final class InspectPullRequestAction extends AnAction {
                 JsonObject commit = commits.get(index).getAsJsonObject();
                 labels[index] = commit.get("oid").getAsString().substring(0, 8) + "  " + commit.get("summary").getAsString();
             }
-            int selected = Messages.showChooseDialog(getProject(), "Select an original commit to request its remote patch. Cancel shows relationship only.", "GitNova PR #" + number, labels, labels.length == 0 ? null : labels[0], null);
+            int selected = Messages.showChooseDialog(getProject(), "Select an original commit to request its remote patch. Cancel shows relationship only.", "GitNova PR #" + number, null, labels, labels.length == 0 ? null : labels[0]);
             if (selected < 0) {
                 new ResultDialog(getProject(), trace, null).show();
                 return;

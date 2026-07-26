@@ -8,6 +8,8 @@ Run `npm run bundle:desktop`. The command builds Core in release mode, copies it
 
 Desktop bundle icons are generated from `assets/icons/gitnova-mark.svg`. The checked-in PNG, macOS ICNS and Windows ICO must be regenerated together so platform packaging cannot drift from the square brand source.
 
+The macOS install smoke test must launch the app through Finder/LaunchServices rather than a terminal, open a GitHub repository, and run an explicit Connect GitHub or Squash Trace action with `gh` installed in `/opt/homebrew/bin` or `/usr/local/bin`. This verifies the packaged local Core PATH projection. Remote Core targets remain separate and must be tested with Provider CLI installed in that remote environment.
+
 ## CI and release boundary
 
 - `.github/workflows/ci.yml` runs on `main`, pull requests and manual dispatch across macOS, Windows and Linux. Its token is read-only and it never references signing secrets.

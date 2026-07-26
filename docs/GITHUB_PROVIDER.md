@@ -14,6 +14,8 @@ gh api repos/<owner>/<repo> --hostname github.com
 
 Core starts `gh` directly without a shell and sets non-interactive, no-pager, no-color environment controls. GitHub CLI uses the credentials already configured in the repository environment. GitNova never calls `gh auth token`, asks the Host for a token, or returns command stderr/raw JSON.
 
+For an installed macOS Desktop app, the local Core child also receives conventional Homebrew/MacPorts binary directories that Finder commonly omits from PATH. Existing PATH entries keep precedence and no directory is scanned. WSL、SSH、Dev Container Core 不使用本机补充路径；这些环境必须各自安装并认证 `gh`。
+
 The normalized result contains `host`, `owner`, `name`, `nameWithOwner`, `url`, `defaultBranch`, and `isPrivate`.
 
 ## Network and error semantics

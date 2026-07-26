@@ -438,24 +438,66 @@ impl Drop for CoreProcess {
 }
 
 fn spawn_core(command: &CoreCommand) -> Result<Child, DesktopError> {
-    Command::new(&command.program)
+    let mut child = Command::new(&command.program);
+    child
         .args(&command.arguments)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| match error.kind() {
-            io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied => DesktopError::new(
-                "desktop.core_unavailable",
-                "GitNova Core executable is unavailable",
-                true,
-            ),
-            _ => DesktopError::new(
-                "desktop.core_spawn_failed",
-                "GitNova Core could not be started",
-                true,
-            ),
-        })
+        .stderr(Stdio::piped());
+    if let Some(path) =
+        projected_local_core_path(command.environment, env::var_os("PATH").as_deref())
+    {
+        child.env("PATH", path);
+    }
+    child.spawn().map_err(|error| match error.kind() {
+        io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied => DesktopError::new(
+            "desktop.core_unavailable",
+            "GitNova Core executable is unavailable",
+            true,
+        ),
+        _ => DesktopError::new(
+            "desktop.core_spawn_failed",
+            "GitNova Core could not be started",
+            true,
+        ),
+    })
+}
+
+fn projected_local_core_path(
+    environment: CoreEnvironment,
+    inherited: Option<&std::ffi::OsStr>,
+) -> Option<OsString> {
+    #[cfg(target_os = "macos")]
+    {
+        if environment != CoreEnvironment::Local {
+            return None;
+        }
+        let mut entries: Vec<PathBuf> = inherited
+            .map(env::split_paths)
+            .into_iter()
+            .flatten()
+            .collect();
+        for path in [
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "/opt/local/bin",
+            "/usr/bin",
+            "/bin",
+            "/usr/sbin",
+            "/sbin",
+        ] {
+            let path = PathBuf::from(path);
+            if !entries.contains(&path) {
+                entries.push(path);
+            }
+        }
+        env::join_paths(entries).ok()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (environment, inherited);
+        None
+    }
 }
 
 fn command_for_target(target: CoreLaunchTarget) -> Result<CoreCommand, DesktopError> {
@@ -818,6 +860,56 @@ function drain() {
                 workspace_folder: r"D:\workspaces\gitnova".into(),
             })
             .is_ok()
+        );
+    }
+
+    #[test]
+    fn augments_only_the_macos_local_core_path_without_reordering_or_duplicates() {
+        let inherited = env::join_paths([
+            PathBuf::from("/custom/bin"),
+            PathBuf::from("/usr/local/bin"),
+        ])
+        .unwrap();
+        for environment in [
+            CoreEnvironment::Wsl,
+            CoreEnvironment::Ssh,
+            CoreEnvironment::DevContainer,
+        ] {
+            assert_eq!(
+                projected_local_core_path(environment, Some(&inherited)),
+                None
+            );
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            let projected = projected_local_core_path(CoreEnvironment::Local, Some(&inherited))
+                .expect("macOS local Core must receive a projected PATH");
+            let entries: Vec<_> = env::split_paths(&projected).collect();
+            assert_eq!(entries[0], PathBuf::from("/custom/bin"));
+            assert_eq!(entries[1], PathBuf::from("/usr/local/bin"));
+            assert_eq!(
+                entries
+                    .iter()
+                    .filter(|path| path.as_path() == std::path::Path::new("/usr/local/bin"))
+                    .count(),
+                1
+            );
+            for expected in [
+                "/opt/homebrew/bin",
+                "/opt/local/bin",
+                "/usr/bin",
+                "/bin",
+                "/usr/sbin",
+                "/sbin",
+            ] {
+                assert!(entries.contains(&PathBuf::from(expected)));
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        assert_eq!(
+            projected_local_core_path(CoreEnvironment::Local, Some(&inherited)),
+            None
         );
     }
 

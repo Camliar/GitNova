@@ -4,7 +4,7 @@
 
 - `generate-protocol.mjs`：从协议 JSON Schema 生成或检查 TypeScript 类型。
 - `check-quality.mjs`：检查 Desktop 无直连网络/调试输出、Core stderr 固定化和 Tauri CSP 本地优先边界。
-- `check-delivery.mjs`：检查 bundle、Core sidecar、CI 和 release 权限边界。
+- `check-delivery.mjs`：检查 bundle、Windows 多尺寸图标、Core sidecar、CI 和 release 权限边界。
 - `prepare-sidecar.mjs`：把 release Core 复制到 Tauri target-qualified external binary 位置。
 - `check-release-tag.mjs`：阻止 tag 与 Desktop 版本不一致的发布。
 - `check-idea.mjs`：使用纯 JDK 编译/运行 JetBrains framing tests，并检查 launcher、协议版本与 plugin registration 边界。

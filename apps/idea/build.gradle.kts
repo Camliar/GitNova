@@ -16,7 +16,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
 }
 
-java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
 
 intellijPlatform {
     pluginConfiguration {

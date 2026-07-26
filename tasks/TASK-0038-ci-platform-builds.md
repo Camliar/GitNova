@@ -27,17 +27,17 @@
 
 ## Deliverables
 
-- [ ] valid multi-resolution Windows ICO and explicit Tauri bundle entry
-- [ ] delivery regression check for the required Windows resource
-- [ ] Java 25 toolchain alignment for IDEA 2026.2 in Gradle and CI
-- [ ] synchronized Host documentation and passing validation
+- [x] valid multi-resolution Windows ICO and explicit Tauri bundle entry
+- [x] delivery regression check for the required Windows resource
+- [x] Java 25 toolchain alignment for IDEA 2026.2 in Gradle and CI
+- [x] synchronized Host documentation and passing local validation
 
 ## Review Checklist
 
-- [ ] Windows `tauri-build` no longer depends on an absent conventional icon path.
-- [ ] ICO contains appropriate Windows application sizes and remains derived from the checked-in GitNova mark.
-- [ ] Gradle daemon and Java compiler both use Java 25 on CI.
-- [ ] Local checks introduce no unrelated product or architecture changes.
+- [x] Windows `tauri-build` no longer depends on an absent conventional icon path.
+- [x] ICO contains appropriate Windows application sizes and remains derived from the checked-in GitNova mark.
+- [x] CI configuration selects Java 25 for the Gradle daemon and Java compiler toolchain.
+- [x] Local checks introduce no unrelated product or architecture changes.
 - [ ] Remote CI confirms Windows Desktop and JetBrains jobs.
 
 ## Done Definition

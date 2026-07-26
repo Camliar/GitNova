@@ -1,8 +1,8 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
-const core = vi.hoisted(() => ({ getCoreStatus: vi.fn(), configureCore: vi.fn(), startCore: vi.fn() }));
+const core = vi.hoisted(() => ({ getCoreStatus: vi.fn(), configureCore: vi.fn(), startCore: vi.fn(), shutdownCore: vi.fn() }));
 const repository = vi.hoisted(() => ({ selectRepositoryDirectory: vi.fn(), openRepository: vi.fn() }));
 const status = vi.hoisted(() => ({ getWorkingTreeStatus: vi.fn() }));
 const diff = vi.hoisted(() => ({ getFileDiff: vi.fn() }));
@@ -16,6 +16,7 @@ vi.mock("./core", async (importOriginal) => ({
   getCoreStatus: core.getCoreStatus,
   configureCore: core.configureCore,
   startCore: core.startCore,
+  shutdownCore: core.shutdownCore,
 }));
 vi.mock("./repository", () => repository);
 vi.mock("./status", () => status);
@@ -40,6 +41,7 @@ describe("Desktop repository open", () => {
     core.getCoreStatus.mockResolvedValue({ connected: true, protocolVersion: "1.14", capabilities: { repositoryMutations: true } });
     core.configureCore.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
     core.startCore.mockResolvedValue({ connected: true, protocolVersion: "1.14", capabilities: { repositoryMutations: true } });
+    core.shutdownCore.mockResolvedValue({ connected: false, protocolVersion: null, capabilities: null, environment: "local" });
     repository.selectRepositoryDirectory.mockResolvedValue("/work/project");
     repository.openRepository.mockResolvedValue(descriptor);
     status.getWorkingTreeStatus.mockResolvedValue({
@@ -75,13 +77,13 @@ describe("Desktop repository open", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
 
-    expect(await screen.findByText("Worktree")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Current repository")).toHaveDisplayValue("project — /work/project");
     expect(repository.openRepository).toHaveBeenCalledWith("/work/project");
     expect(screen.getByText("/work/project")).toBeInTheDocument();
     expect(screen.getByText("git version 2.50.0")).toBeInTheDocument();
     expect(await screen.findByText("Working tree clean")).toBeInTheDocument();
     expect(status.getWorkingTreeStatus).toHaveBeenCalledOnce();
-    expect(JSON.parse(localStorage.getItem("gitnova.workspace.v1") ?? "null")).toEqual({ version: 1, target: { kind: "local" }, path: "/work/project" });
+    expect(JSON.parse(localStorage.getItem("gitnova.workspace.v2") ?? "null")).toEqual({ version: 2, active: { target: { kind: "local" }, path: "/work/project" }, repositories: [{ target: { kind: "local" }, path: "/work/project" }] });
   });
 
   it("starts Core and restores the last successfully opened repository", async () => {
@@ -95,6 +97,28 @@ describe("Desktop repository open", () => {
     expect(core.startCore).toHaveBeenCalledOnce();
     expect(repository.openRepository).toHaveBeenCalledWith("/work/project");
     expect(screen.queryByRole("button", { name: "Choose repository" })).not.toBeInTheDocument();
+    expect(localStorage.getItem("gitnova.workspace.v1")).toBeNull();
+    expect(JSON.parse(localStorage.getItem("gitnova.workspace.v2") ?? "null").repositories).toHaveLength(1);
+  });
+
+  it("adds, persists, and switches between multiple repositories", async () => {
+    repository.selectRepositoryDirectory.mockResolvedValueOnce("/work/project").mockResolvedValueOnce("/work/second");
+    repository.openRepository.mockImplementation(async (path: string) => ({ ...descriptor, worktreeRoot: path, gitDirectory: `${path}/.git`, commonGitDirectory: `${path}/.git` }));
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add repository" }));
+
+    const repositorySelect = await screen.findByLabelText("Current repository");
+    await waitFor(() => expect(repositorySelect).toHaveDisplayValue("second — /work/second"));
+    const first = within(repositorySelect).getByRole("option", { name: "project — /work/project" });
+    expect(within(repositorySelect).getAllByRole("option")).toHaveLength(2);
+    fireEvent.change(repositorySelect, { target: { value: first.getAttribute("value") } });
+    await waitFor(() => expect(repository.openRepository).toHaveBeenLastCalledWith("/work/project"));
+    expect(repositorySelect).toHaveDisplayValue("project — /work/project");
+
+    const saved = JSON.parse(localStorage.getItem("gitnova.workspace.v2") ?? "null");
+    expect(saved.active.path).toBe("/work/project");
+    expect(saved.repositories.map((entry: { path: string }) => entry.path)).toEqual(["/work/project", "/work/second"]);
   });
 
   it("does not expose mutations when Core does not advertise the capability", async () => {
@@ -317,7 +341,7 @@ describe("Desktop repository open", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
 
-    expect(await screen.findByRole("heading", { name: "feature/status" })).toBeInTheDocument();
+    expect(await screen.findByLabelText("Current branch")).toHaveDisplayValue("feature/status");
     expect(screen.getByText("from src/old.ts")).toBeInTheDocument();
     expect(screen.getByText("Staged · Renamed")).toBeInTheDocument();
     expect(screen.getByText("Working · Modified")).toBeInTheDocument();
@@ -341,24 +365,27 @@ describe("Desktop repository open", () => {
     expect(history.getCommitGraph).toHaveBeenCalledTimes(2);
   });
 
-  it("uses only Core local refs and confirms create and switch independently", async () => {
+  it("shows local and remote refs while only switching local branches with confirmation", async () => {
     const branchRefs = [
       { name: "main", fullName: "refs/heads/main", kind: "localBranch", targetOid: "a".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: null },
       { name: "topic", fullName: "refs/heads/topic", kind: "localBranch", targetOid: "a".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: null },
+      { name: "origin/main", fullName: "refs/remotes/origin/main", kind: "remoteBranch", targetOid: "a".repeat(40), peeledTargetOid: null, symbolicTarget: null, upstream: null },
     ];
     const createSnapshot = { status: { branch: { head: "main", oid: "a".repeat(40), upstream: null, ahead: 0, behind: 0 }, entries: [] }, references: { head: { oid: "a".repeat(40), symbolicRef: "refs/heads/main" }, references: branchRefs } };
     const switchSnapshot = { status: { branch: { head: "topic", oid: "a".repeat(40), upstream: null, ahead: 0, behind: 0 }, entries: [] }, references: { head: { oid: "a".repeat(40), symbolicRef: "refs/heads/topic" }, references: branchRefs } };
+    mutations.getRepositoryReferences.mockResolvedValue({ head: { oid: "a".repeat(40), symbolicRef: "refs/heads/main" }, references: branchRefs });
     mutations.createLocalBranch.mockResolvedValue(createSnapshot); mutations.switchLocalBranch.mockResolvedValue(switchSnapshot);
     render(<App />); fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
-    const select = await screen.findByLabelText("Local branch");
+    const select = await screen.findByLabelText("Current branch");
     expect(await within(select).findByRole("option", { name: "main" })).toBeInTheDocument();
-    expect(within(select).queryByRole("option", { name: "origin/main" })).not.toBeInTheDocument();
+    expect(within(select).getByRole("option", { name: "origin/main" })).toBeDisabled();
+    fireEvent.change(select, { target: { value: "topic" } });
+    expect(mutations.switchLocalBranch).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole("button", { name: "Switch branch" }));
+    expect(mutations.switchLocalBranch).toHaveBeenCalledWith("topic");
     fireEvent.change(screen.getByLabelText("Branch name"), { target: { value: "topic" } }); fireEvent.click(screen.getByRole("button", { name: "Review branch creation" })); fireEvent.click(screen.getByRole("button", { name: "Confirm action" }));
     expect(mutations.createLocalBranch).toHaveBeenCalledWith("topic");
     expect(await screen.findByText("Created branch topic")).toBeInTheDocument();
-    fireEvent.change(select, { target: { value: "main" } }); fireEvent.click(screen.getByRole("button", { name: "Review branch switch" }));
-    expect(mutations.switchLocalBranch).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole("button", { name: "Confirm action" }));
-    expect(mutations.switchLocalBranch).toHaveBeenCalledWith("main");
   });
 
   it("retains a failed action for explicit retry", async () => {
@@ -385,7 +412,7 @@ describe("Desktop repository open", () => {
     });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
-    fireEvent.click(await screen.findByRole("button", { name: "View working diff for src/app.ts" }));
+    fireEvent.click(await screen.findByRole("button", { name: "src/app.ts" }));
 
     expect(diff.getFileDiff).toHaveBeenCalledWith("src/app.ts", "workingTree");
     const hunk = await screen.findByRole("region", { name: "Diff hunk 1" });
@@ -447,7 +474,7 @@ describe("Desktop repository open", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
     fireEvent.click(await screen.findByRole("button", { name: "View staged diff for src/app.ts" }));
     expect(await screen.findByRole("heading", { name: "src/app.ts" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh repository" }));
 
     expect(screen.queryByRole("heading", { name: "src/app.ts" })).not.toBeInTheDocument();
   });
@@ -469,7 +496,7 @@ describe("Desktop repository open", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
 
-    expect(await screen.findByRole("heading", { name: "main · Unborn" })).toBeInTheDocument();
+    expect(await screen.findByLabelText("Current branch")).toHaveDisplayValue("main");
   });
 
   it("keeps the repository open when status fails and retries explicitly", async () => {
@@ -480,9 +507,9 @@ describe("Desktop repository open", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Choose repository" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Git could not read status. The repository remains open.");
-    expect(screen.getByText("Worktree")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
-    expect(await screen.findByRole("heading", { name: "Detached HEAD" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Current repository")).toHaveDisplayValue("project — /work/project");
+    fireEvent.click(screen.getByRole("button", { name: "Refresh repository" }));
+    expect(await screen.findByLabelText("Current branch")).toHaveDisplayValue("Detached HEAD");
   });
 
   it("reopens the same Core repository idempotently without another picker", async () => {

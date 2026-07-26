@@ -20,18 +20,21 @@ function shortOid(oid: string) {
 
 function formatTimestamp(value: string) {
   const timestamp = new Date(value);
-  return Number.isNaN(timestamp.valueOf()) ? value : timestamp.toLocaleString();
+  if (Number.isNaN(timestamp.valueOf())) return value;
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).valueOf();
+  const day = new Date(timestamp.getFullYear(), timestamp.getMonth(), timestamp.getDate()).valueOf();
+  const time = timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (day === start) return `Today ${time}`;
+  if (day === start - 86_400_000) return `Yesterday ${time}`;
+  return timestamp.toLocaleDateString([], { month: "short", day: "numeric", year: timestamp.getFullYear() === now.getFullYear() ? undefined : "numeric" });
 }
 
 export function HistoryPanel({ state, commitLoading, onRetry, onLoadMore, onSelectCommit }: { state: HistoryState; commitLoading: boolean; onRetry: () => void; onLoadMore: () => void; onSelectCommit: (commit: CommitGraphNode["commit"]) => void }) {
   const graphRows = state.kind === "ready" ? projectGraphRows(state.nodes) : [];
   const graphStyle = { "--graph-column": `${Math.max(1, ...graphRows.map((row) => row.laneCount)) * 18}px` } as CSSProperties;
   return (
-    <section className="history-panel" aria-labelledby="history-title" aria-busy={state.kind === "loading" || (state.kind === "ready" && state.more.kind === "loading")}>
-      <header>
-        <p className="eyebrow">Commit history</p>
-        <h2 id="history-title">Repository timeline</h2>
-      </header>
+    <section className="history-panel" aria-label="Repository timeline" aria-busy={state.kind === "loading" || (state.kind === "ready" && state.more.kind === "loading")}>
       {state.kind === "loading" && <p className="empty-state" role="status">Reading commit graph from GitNova Core…</p>}
       {state.kind === "error" && (
         <div className="history-error">

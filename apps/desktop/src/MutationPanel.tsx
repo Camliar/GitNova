@@ -1,21 +1,18 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { RepositoryMutationSnapshot, RepositoryReferences, WorkingTreeStatus } from "@gitnova/protocol";
+import type { RepositoryMutationSnapshot, WorkingTreeStatus } from "@gitnova/protocol";
 import { asDesktopError, type DesktopError } from "./core";
-import { commitStaged, createLocalBranch, getRepositoryReferences, switchLocalBranch } from "./mutations";
+import { commitStaged, createLocalBranch } from "./mutations";
 
-type Pending = { kind: "commit"; message: string } | { kind: "create"; name: string } | { kind: "switch"; name: string };
+type Pending = { kind: "commit"; message: string } | { kind: "create"; name: string };
 type Operation = { kind: "idle" } | { kind: "confirm"; pending: Pending } | { kind: "loading"; pending: Pending } | { kind: "error"; pending: Pending; error: DesktopError } | { kind: "success"; message: string };
 
 export function MutationPanel({ status, suggestedCommit, onApplied, aiAssist = null }: { status: WorkingTreeStatus; suggestedCommit: { id: number; message: string } | null; onApplied: (snapshot: RepositoryMutationSnapshot) => void; aiAssist?: ReactNode }) {
   const [message, setMessage] = useState("");
   const [branchName, setBranchName] = useState("");
-  const [switchName, setSwitchName] = useState("");
-  const [references, setReferences] = useState<{ kind: "loading" } | { kind: "ready"; value: RepositoryReferences } | { kind: "error"; error: DesktopError }>({ kind: "loading" });
   const [operation, setOperation] = useState<Operation>({ kind: "idle" });
-  const serial = useRef(0);
   const active = useRef(true);
   const messageInput = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { const current = ++serial.current; void getRepositoryReferences().then((value) => { if (active.current && current === serial.current) setReferences({ kind: "ready", value }); }).catch((error) => { if (active.current && current === serial.current) setReferences({ kind: "error", error: asDesktopError(error) }); }); return () => { active.current = false; serial.current += 1; }; }, []);
+  useEffect(() => () => { active.current = false; }, []);
   useEffect(() => {
     if (!suggestedCommit) return;
     setMessage(suggestedCommit.message);
@@ -24,7 +21,6 @@ export function MutationPanel({ status, suggestedCommit, onApplied, aiAssist = n
   }, [suggestedCommit]);
 
   const stagedCount = status.entries.filter((entry) => entry.indexStatus !== "unmodified").length;
-  const localBranches = references.kind === "ready" ? references.value.references.filter((reference) => reference.kind === "localBranch") : [];
   const busy = operation.kind === "loading";
 
   function review(pending: Pending) {
@@ -38,16 +34,14 @@ export function MutationPanel({ status, suggestedCommit, onApplied, aiAssist = n
         const result = await commitStaged(pending.message);
         if (!active.current) return;
         setMessage("");
-        setReferences({ kind: "ready", value: result.snapshot.references });
         onApplied(result.snapshot);
         setOperation({ kind: "success", message: `Created commit ${result.commit.oid.slice(0, 8)}` });
       } else {
-        const snapshot = pending.kind === "create" ? await createLocalBranch(pending.name) : await switchLocalBranch(pending.name);
+        const snapshot = await createLocalBranch(pending.name);
         if (!active.current) return;
-        if (pending.kind === "create") setBranchName("");
-        setReferences({ kind: "ready", value: snapshot.references });
+        setBranchName("");
         onApplied(snapshot);
-        setOperation({ kind: "success", message: pending.kind === "create" ? `Created branch ${pending.name}` : `Switched to ${pending.name}` });
+        setOperation({ kind: "success", message: `Created branch ${pending.name}` });
       }
     } catch (error) {
       if (active.current) setOperation({ kind: "error", pending, error: asDesktopError(error) });
@@ -69,15 +63,8 @@ export function MutationPanel({ status, suggestedCommit, onApplied, aiAssist = n
           <label htmlFor="new-branch">Branch name</label><input id="new-branch" value={branchName} onChange={(event) => setBranchName(event.target.value)} disabled={busy} />
           <button type="submit" disabled={busy || !branchName}>Review branch creation</button>
         </form>
-        <form onSubmit={(event) => { event.preventDefault(); if (switchName) review({ kind: "switch", name: switchName }); }}>
-          <h3>Switch local branch</h3><p>Core will not stash, force, or discard working changes.</p>
-          <label htmlFor="switch-branch">Local branch</label><select id="switch-branch" value={switchName} onChange={(event) => setSwitchName(event.target.value)} disabled={busy || references.kind !== "ready"}><option value="">Choose branch</option>{localBranches.map((branch) => <option key={branch.fullName} value={branch.name}>{branch.name}</option>)}</select>
-          <button type="submit" disabled={busy || !switchName}>Review branch switch</button>
-        </form>
       </div></details>
     </div>
-    {references.kind === "loading" && <p className="empty-state" role="status">Reading local branches from Core…</p>}
-    {references.kind === "error" && <p className="mutation-error" role="alert">{references.error.message}. Branch choices are unavailable.</p>}
     {(operation.kind === "confirm" || operation.kind === "loading") && <div className="mutation-confirm" role="group" aria-label="Confirm Git action"><p>{pendingDescription(operation.pending)}</p><span><button type="button" disabled={busy} onClick={() => setOperation({ kind: "idle" })}>Cancel</button><button type="button" disabled={busy} onClick={() => void execute(operation.pending)}>{busy ? "Applying…" : "Confirm action"}</button></span></div>}
     {operation.kind === "error" && <div className="mutation-confirm mutation-confirm--error"><p role="alert">{operation.error.message}. No success was recorded.</p><span><button type="button" onClick={() => setOperation({ kind: "idle" })}>Cancel</button><button type="button" onClick={() => void execute(operation.pending)}>Retry action</button></span></div>}
     {operation.kind === "success" && <p className="mutation-success" role="status">{operation.message}</p>}
@@ -86,6 +73,5 @@ export function MutationPanel({ status, suggestedCommit, onApplied, aiAssist = n
 
 function pendingDescription(pending: Pending) {
   if (pending.kind === "commit") return `Confirm committing the current staged index with message: “${pending.message}”`;
-  if (pending.kind === "create") return `Confirm creating local branch “${pending.name}” at current HEAD without switching.`;
-  return `Confirm switching to local branch “${pending.name}”. Working changes will not be stashed or discarded.`;
+  return `Confirm creating local branch “${pending.name}” at current HEAD without switching.`;
 }

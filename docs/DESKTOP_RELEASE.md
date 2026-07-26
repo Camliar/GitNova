@@ -6,6 +6,8 @@ GitNova Desktop bundles the independently compiled `gitnova-core` executable as 
 
 Run `npm run bundle:desktop`. The command builds Core in release mode, copies it to Tauri's target-qualified sidecar location, builds the frontend and creates the native bundles supported by the current OS. Generated sidecars and `target/` output are ignored.
 
+Desktop bundle icons are generated from `assets/icons/gitnova-mark.svg`. The checked-in PNG, macOS ICNS and Windows ICO must be regenerated together so platform packaging cannot drift from the square brand source.
+
 ## CI and release boundary
 
 - `.github/workflows/ci.yml` runs on `main`, pull requests and manual dispatch across macOS, Windows and Linux. Its token is read-only and it never references signing secrets.

@@ -34,6 +34,8 @@ When Core advertises `aiAssist`, Settings owns Provider/model/endpoint/exclusion
 
 Native `core_request` accepts an explicit Host method allowlist. AI and repository sync methods are included, while lifecycle calls and arbitrary method strings cannot cross the Tauri bridge. Remote Git/Provider actions and AI generation receive separate longer bounded transport timeouts than local read requests.
 
+Settings displays the platform-local diagnostic JSONL path for troubleshooting. Desktop records only typed lifecycle/RPC metadata, duration, versions and stable error codes; it cannot accept repository paths, params/results, commit content, diff, stderr, Provider responses or credentials. The active 1 MiB log keeps one previous generation, is never uploaded, and all log I/O fails open for product behavior. See [Desktop Diagnostics](../../docs/DIAGNOSTICS.md).
+
 Run `pnpm --filter @gitnova/desktop check`, `test`, or `build` from the repository root. Debug and test builds may select an absolute Core executable with `GITNOVA_CORE_BINARY`; release builds resolve the bundled Core sidecar beside the Desktop executable. `npm run bundle:desktop` prepares that target-qualified sidecar before invoking Tauri bundling.
 
 Native configuration lives in `src-tauri`. Its default capability grants only Tauri core window/event functionality; no shell, network, filesystem, or process plugin is enabled.

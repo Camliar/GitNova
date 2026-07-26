@@ -81,3 +81,4 @@ TASK-0035 已锁定协议 1.14 的预览/生成类型、index-bound 确认、本
 - TASK-0049 — 多仓库工作区改为顶部 Tab，并把 repository/sync 操作集中到左上工具栏。
 - TASK-0050 — commit timeline 按拓扑 lane 使用稳定区分色，并以曲线连接分支与合流边。
 - TASK-0051 — 修复 macOS GUI 应用不继承 Homebrew/MacPorts PATH 导致本地 Core 无法发现已安装 Provider CLI；远程 Core 环境保持隔离。
+- TASK-0052 — Desktop 增加本地、可轮转且隐私安全的 JSONL 诊断日志；Settings 可定位日志，Core/RPC 只记录白名单元数据与稳定错误码。

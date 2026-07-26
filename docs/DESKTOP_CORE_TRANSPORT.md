@@ -23,3 +23,5 @@ Local read and non-network mutation requests retain the 15-second transport time
 Normal shutdown sends `gitnova/shutdown`, then the `exit` notification, and waits briefly for Core to exit. Timeout, transport failure, application exit, and destructor paths kill and reap the process so no child is left behind.
 
 Desktop lifecycle errors contain only a stable code, a fixed user-safe message, and retryability. Raw operating-system errors and child stderr are intentionally excluded.
+
+The Host separately writes a bounded local diagnostic event stream for lifecycle and allowlisted request method/outcome/duration metadata. It records only stable error codes and never serializes params, results, repository paths, child stderr or error messages. The active file location and retention are shown in Settings; see [Desktop Diagnostics](DIAGNOSTICS.md).

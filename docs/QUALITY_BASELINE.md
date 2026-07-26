@@ -16,7 +16,7 @@ Core contract tests 启动 20 个真实 `gitnova-core` 进程。排序后的 p95
 
 ## Network and sensitive data
 
-Desktop CSP 使用 `default-src 'self'` 且没有 remote HTTP allowlist；React production source 禁止 `fetch`、XHR、WebSocket 和 EventSource。GitHub 网络访问只经过 Core-owned `gh api`，并在 Connect、Open PR、remote commit patch 和 Squash Trace 动作触发前说明范围。Core transport stderr 只输出固定错误分类，不输出底层 error detail、protocol body、path、token 或 diff。
+Desktop CSP 使用 `default-src 'self'` 且没有 remote HTTP allowlist；React production source 禁止 `fetch`、XHR、WebSocket 和 EventSource。GitHub 网络访问只经过 Core-owned `gh api`，并在 Connect、Open PR、remote commit patch 和 Squash Trace 动作触发前说明范围。Core child stderr 被 drain 且不捕获。Desktop 本地诊断日志只接受 lifecycle、allowlisted method、duration、版本和稳定错误码等类型化白名单字段，不接受 error detail、protocol body、repository path、commit content、token 或 diff；日志最多保留两个 1 MiB 文件且不上传。
 
 ## Platform matrix
 

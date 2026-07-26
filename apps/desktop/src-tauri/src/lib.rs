@@ -1,5 +1,7 @@
+mod diagnostics;
 mod transport;
 
+use diagnostics::{DiagnosticInfo, DiagnosticLog};
 use serde_json::Value;
 use std::sync::Arc;
 use tauri::{Manager, State};
@@ -8,6 +10,11 @@ use transport::{CoreLaunchTarget, CoreStatus, CoreSupervisor, DesktopError};
 #[tauri::command]
 fn core_status(supervisor: State<'_, Arc<CoreSupervisor>>) -> CoreStatus {
     supervisor.status()
+}
+
+#[tauri::command]
+fn diagnostics_info(diagnostics: State<'_, Arc<DiagnosticLog>>) -> DiagnosticInfo {
+    diagnostics.info()
 }
 
 #[tauri::command]
@@ -52,13 +59,21 @@ async fn core_shutdown(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let supervisor = Arc::new(
-        CoreSupervisor::discover().expect("failed to resolve GitNova Core executable location"),
-    );
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(supervisor)
+        .setup(|app| {
+            let diagnostics = Arc::new(DiagnosticLog::new(app.path().app_log_dir()?));
+            diagnostics.app_started(env!("CARGO_PKG_VERSION"));
+            let supervisor = Arc::new(
+                CoreSupervisor::discover(diagnostics.clone())
+                    .expect("failed to resolve GitNova Core executable location"),
+            );
+            app.manage(diagnostics);
+            app.manage(supervisor);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
+            diagnostics_info,
             core_status,
             core_configure,
             core_start,

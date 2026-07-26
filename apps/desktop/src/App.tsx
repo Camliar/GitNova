@@ -17,6 +17,7 @@ import { getGitHubCommitSquashTrace } from "./github";
 import { MutationPanel } from "./MutationPanel";
 import { AiAssistPanel } from "./AiAssistPanel";
 import { AiSettingsPanel, defaultAiAssistSettings } from "./AiSettingsPanel";
+import { DiagnosticSettingsPanel } from "./DiagnosticSettingsPanel";
 import { RepositoryRefTree, type ReferencesState } from "./RepositoryRefTree";
 import { checkoutRemoteBranch, getRepositoryReferences, switchLocalBranch } from "./mutations";
 import { RepositorySyncControls } from "./RepositorySyncControls";
@@ -686,7 +687,7 @@ export function App() {
             )}
 
             {workspaceView === "pullRequests" && <div className="provider-workspace"><GitHubPanel key={`github:${openedRepository.gitDirectory}`} /></div>}
-            {workspaceView === "settings" && <div className="settings-workspace"><AiSettingsPanel settings={aiSettings} onChange={setAiSettings} /></div>}
+            {workspaceView === "settings" && <div className="settings-workspace"><DiagnosticSettingsPanel /><AiSettingsPanel settings={aiSettings} onChange={setAiSettings} /></div>}
           </section>
         </main>
       ) : (

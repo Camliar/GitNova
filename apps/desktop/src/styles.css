@@ -463,8 +463,9 @@ button, input, select, textarea { color: inherit; }
 .squash-trace { border-color: #cad8dc; background: #f2f8fa; }
 .trace-flow div { background: #fff; }
 
-.settings-workspace { min-height: calc(100vh - 112px); padding: 22px; background: #f5f6f8; }
+.settings-workspace { min-height: calc(100vh - 112px); padding: 22px; overflow: auto; background: #f5f6f8; }
 .settings-panel { display: grid; max-width: 820px; gap: 18px; margin: 0 auto; padding: 22px; border: 1px solid #d8dade; border-radius: 10px; background: #fff; }
+.settings-panel + .settings-panel { margin-top: 16px; }
 .settings-panel h2, .settings-panel p { margin: 0; }
 .settings-panel h2 { font-size: 19px; }
 .settings-intro { color: #68707d; font-size: 12px; line-height: 1.6; }
@@ -478,6 +479,13 @@ button, input, select, textarea { color: inherit; }
 .settings-security { padding: 13px; border: 1px solid #d9d5e9; border-radius: 8px; background: #faf9ff; }
 .settings-security strong { color: #4f4969; font-size: 11px; }
 .settings-security p { margin-top: 5px; color: #68707d; font-size: 10px; line-height: 1.55; }
+.diagnostics-status { color: #68707d; font-size: 11px; }
+.diagnostics-location { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 14px; align-items: center; }
+.diagnostics-location div { display: grid; min-width: 0; gap: 6px; }
+.diagnostics-location strong { color: #4c535f; font-size: 11px; }
+.diagnostics-location code { min-width: 0; padding: 10px 12px; overflow: hidden; border: 1px solid #d8dade; border-radius: 7px; background: #f6f7f8; color: #3e4550; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; user-select: all; }
+.diagnostics-location button { min-height: 34px; padding: 0 12px; border: 1px solid #cfd2d8; border-radius: 7px; background: #fff; color: #303641; font-weight: 700; }
+.diagnostics-location p { grid-column: 1 / -1; color: #68707d; font-size: 10px; }
 
 .setup-workspace { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, 440px); gap: clamp(36px, 7vw, 90px); align-items: center; width: min(1040px, calc(100% - 40px)); min-height: calc(100vh - 54px); margin: auto; padding: 50px 0; }
 .setup-intro { max-width: 560px; }

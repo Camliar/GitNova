@@ -1,3 +1,4 @@
+use crate::diagnostics::DiagnosticLog;
 use gitnova_protocol::{
     ClientCapabilities, ImplementationInfo, InitializeParams, InitializeResult, Notification,
     PROTOCOL_VERSION, Request, RequestId, Response, ServerCapabilities,
@@ -9,8 +10,8 @@ use std::ffi::OsString;
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::Mutex;
 use std::sync::mpsc::{self, Receiver};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -124,6 +125,7 @@ pub struct CoreSupervisor {
     command: Mutex<CoreCommand>,
     process: Mutex<Option<CoreProcess>>,
     status: Mutex<CoreStatus>,
+    diagnostics: Option<Arc<DiagnosticLog>>,
 }
 
 #[derive(Clone)]
@@ -148,15 +150,24 @@ struct ReceivedResponse {
 }
 
 impl CoreSupervisor {
-    pub fn discover() -> Result<Self, DesktopError> {
-        Ok(Self::new(command_for_target(CoreLaunchTarget::Local)?))
+    pub fn discover(diagnostics: Arc<DiagnosticLog>) -> Result<Self, DesktopError> {
+        Ok(Self::with_diagnostics(
+            command_for_target(CoreLaunchTarget::Local)?,
+            Some(diagnostics),
+        ))
     }
 
+    #[cfg(test)]
     fn new(command: CoreCommand) -> Self {
+        Self::with_diagnostics(command, None)
+    }
+
+    fn with_diagnostics(command: CoreCommand, diagnostics: Option<Arc<DiagnosticLog>>) -> Self {
         Self {
             command: Mutex::new(command),
             process: Mutex::new(None),
             status: Mutex::new(CoreStatus::default()),
+            diagnostics,
         }
     }
 
@@ -168,6 +179,24 @@ impl CoreSupervisor {
     }
 
     pub fn configure(&self, target: CoreLaunchTarget) -> Result<CoreStatus, DesktopError> {
+        let environment = launch_target_environment(&target);
+        let result = self.configure_inner(target);
+        if let Some(diagnostics) = &self.diagnostics {
+            let error_code = result.as_ref().err().map(|error| error.code);
+            diagnostics.core_configured(
+                environment_label(environment),
+                if error_code.is_some() {
+                    "error"
+                } else {
+                    "success"
+                },
+                error_code,
+            );
+        }
+        result
+    }
+
+    fn configure_inner(&self, target: CoreLaunchTarget) -> Result<CoreStatus, DesktopError> {
         if self
             .process
             .lock()
@@ -192,6 +221,32 @@ impl CoreSupervisor {
     }
 
     pub fn start(&self) -> Result<CoreStatus, DesktopError> {
+        let started = Instant::now();
+        let environment = self.current_environment();
+        let result = self.start_inner();
+        if let Some(diagnostics) = &self.diagnostics {
+            let error_code = result.as_ref().err().map(|error| error.code);
+            let protocol_version = result
+                .as_ref()
+                .ok()
+                .and_then(|status| status.protocol_version.as_deref())
+                .and_then(safe_diagnostic_version);
+            diagnostics.core_started(
+                environment_label(environment),
+                elapsed_ms(started),
+                if error_code.is_some() {
+                    "error"
+                } else {
+                    "success"
+                },
+                error_code,
+                protocol_version,
+            );
+        }
+        result
+    }
+
+    fn start_inner(&self) -> Result<CoreStatus, DesktopError> {
         let mut process = self.process.lock().map_err(|_| DesktopError::transport())?;
         if process.is_some() {
             return Ok(self.status());
@@ -286,6 +341,42 @@ impl CoreSupervisor {
     }
 
     pub fn request(&self, method: &str, params: Value) -> Result<Value, DesktopError> {
+        let started = Instant::now();
+        let environment = self.current_environment();
+        let safe_method = allowed_host_method(method).then_some(method);
+        let result = self.request_inner(method, params);
+        if let Some(diagnostics) = &self.diagnostics {
+            let desktop_error = result.as_ref().err().map(|error| error.code);
+            let has_core_error = result
+                .as_ref()
+                .ok()
+                .is_some_and(|response| response.get("error").is_some());
+            let core_error = result.as_ref().ok().and_then(|response| {
+                response
+                    .pointer("/error/data/stableCode")
+                    .and_then(Value::as_str)
+                    .and_then(safe_diagnostic_error_code)
+            });
+            let error_code = desktop_error.or(core_error);
+            let outcome = if desktop_error.is_some() {
+                "transport_error"
+            } else if has_core_error {
+                "core_error"
+            } else {
+                "success"
+            };
+            diagnostics.core_request(
+                environment_label(environment),
+                safe_method,
+                elapsed_ms(started),
+                outcome,
+                error_code,
+            );
+        }
+        result
+    }
+
+    fn request_inner(&self, method: &str, params: Value) -> Result<Value, DesktopError> {
         if !allowed_host_method(method) {
             return Err(DesktopError::new(
                 "desktop.invalid_core_method",
@@ -317,6 +408,26 @@ impl CoreSupervisor {
     }
 
     pub fn shutdown(&self) -> Result<CoreStatus, DesktopError> {
+        let started = Instant::now();
+        let environment = self.current_environment();
+        let result = self.shutdown_inner();
+        if let Some(diagnostics) = &self.diagnostics {
+            let error_code = result.as_ref().err().map(|error| error.code);
+            diagnostics.core_shutdown(
+                environment_label(environment),
+                elapsed_ms(started),
+                if error_code.is_some() {
+                    "error"
+                } else {
+                    "success"
+                },
+                error_code,
+            );
+        }
+        result
+    }
+
+    fn shutdown_inner(&self) -> Result<CoreStatus, DesktopError> {
         let mut process = self.process.lock().map_err(|_| DesktopError::transport())?;
         let result = process.take().map_or(Ok(()), |mut child| child.shutdown());
         let environment = self
@@ -330,6 +441,12 @@ impl CoreSupervisor {
         };
         *self.status.lock().map_err(|_| DesktopError::transport())? = status.clone();
         result.map(|()| status)
+    }
+
+    fn current_environment(&self) -> CoreEnvironment {
+        self.command
+            .lock()
+            .map_or(CoreEnvironment::Local, |command| command.environment)
     }
 }
 
@@ -461,6 +578,46 @@ fn spawn_core(command: &CoreCommand) -> Result<Child, DesktopError> {
             true,
         ),
     })
+}
+
+const fn launch_target_environment(target: &CoreLaunchTarget) -> CoreEnvironment {
+    match target {
+        CoreLaunchTarget::Local => CoreEnvironment::Local,
+        CoreLaunchTarget::Wsl { .. } => CoreEnvironment::Wsl,
+        CoreLaunchTarget::Ssh { .. } => CoreEnvironment::Ssh,
+        CoreLaunchTarget::DevContainer { .. } => CoreEnvironment::DevContainer,
+    }
+}
+
+const fn environment_label(environment: CoreEnvironment) -> &'static str {
+    match environment {
+        CoreEnvironment::Local => "local",
+        CoreEnvironment::Wsl => "wsl",
+        CoreEnvironment::Ssh => "ssh",
+        CoreEnvironment::DevContainer => "devContainer",
+    }
+}
+
+fn elapsed_ms(started: Instant) -> u64 {
+    u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+fn safe_diagnostic_error_code(value: &str) -> Option<&str> {
+    (!value.is_empty()
+        && value.len() <= 128
+        && value.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'_')
+        }))
+    .then_some(value)
+}
+
+fn safe_diagnostic_version(value: &str) -> Option<&str> {
+    (!value.is_empty()
+        && value.len() <= 32
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'+')))
+    .then_some(value)
 }
 
 fn projected_local_core_path(
@@ -730,7 +887,9 @@ fn read_frame(reader: &mut impl BufRead) -> io::Result<Option<Vec<u8>>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use std::io::Cursor;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     const FAKE_CORE: &str = r#"
 let buffer = Buffer.alloc(0);
@@ -765,6 +924,8 @@ function drain() {
       }});
     } else if (request.method === 'gitnova/shutdown') {
       send({jsonrpc:'2.0', id:request.id, result:null});
+    } else if (request.method === 'github/repository') {
+      send({jsonrpc:'2.0', id:request.id, error:{code:-32021, message:'redacted by diagnostic boundary', data:{stableCode:'github.authentication_required', retryable:true}}});
     } else {
       send({jsonrpc:'2.0', id:request.id, result:{method:request.method, params:request.params}});
     }
@@ -809,6 +970,13 @@ function drain() {
         assert!(!allowed_host_method("test/echo"));
         assert_eq!(major_version("1.11"), Some("1"));
         assert_eq!(major_version("invalid"), None);
+        assert_eq!(
+            safe_diagnostic_error_code("github.authentication_required"),
+            Some("github.authentication_required")
+        );
+        assert_eq!(safe_diagnostic_error_code("secret\nvalue"), None);
+        assert_eq!(safe_diagnostic_version("1.19-beta+1"), Some("1.19-beta+1"));
+        assert_eq!(safe_diagnostic_version("1.19\nsecret"), None);
     }
 
     #[test]
@@ -828,6 +996,48 @@ function drain() {
             .unwrap();
         assert_eq!(response["result"]["method"], "repository/open");
         assert!(!supervisor.shutdown().unwrap().connected);
+    }
+
+    #[test]
+    fn records_allowlisted_request_outcomes_without_payloads_or_messages() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("test clock")
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "gitnova-transport-diagnostics-{}-{unique}",
+            std::process::id()
+        ));
+        let diagnostics = Arc::new(DiagnosticLog::new(directory.clone()));
+        let supervisor = CoreSupervisor::with_diagnostics(
+            CoreCommand {
+                program: PathBuf::from("node"),
+                arguments: vec![OsString::from("-e"), OsString::from(FAKE_CORE)],
+                environment: CoreEnvironment::Local,
+            },
+            Some(diagnostics.clone()),
+        );
+
+        supervisor.start().expect("start fake Core");
+        let response = supervisor
+            .request(
+                "github/repository",
+                serde_json::json!({"secret": "must-not-be-logged"}),
+            )
+            .expect("Core domain errors remain JSON-RPC responses");
+        assert_eq!(
+            response["error"]["data"]["stableCode"],
+            "github.authentication_required"
+        );
+        supervisor.shutdown().expect("shutdown fake Core");
+
+        let contents = fs::read_to_string(diagnostics.info().path).expect("diagnostic log");
+        assert!(contents.contains("\"method\":\"github/repository\""));
+        assert!(contents.contains("\"outcome\":\"core_error\""));
+        assert!(contents.contains("\"errorCode\":\"github.authentication_required\""));
+        assert!(!contents.contains("must-not-be-logged"));
+        assert!(!contents.contains("redacted by diagnostic boundary"));
+        fs::remove_dir_all(directory).expect("remove diagnostic test directory");
     }
 
     #[test]

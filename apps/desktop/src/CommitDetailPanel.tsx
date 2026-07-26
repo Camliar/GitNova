@@ -54,7 +54,7 @@ export function CommitDetailPanel({ state, fileDiff, mode, onChooseParent, onSel
       )}
       {state.kind === "loading" && <p className="empty-state" role="status">Reading changed files from GitNova Core…</p>}
       {state.kind === "error" && <div className="diff-error"><p role="alert">{state.error.message}. Commit history is still available.</p><button type="button" onClick={onRetry}>Retry changed files</button></div>}
-      {mode === "changes" && state.kind === "ready" && state.files.files.length === 0 && <p className="empty-state">No changed files in this comparison.</p>}
+      {mode === "changes" && state.kind === "ready" && state.files.files.length === 0 && <p className="empty-state">Empty commit: its tree is identical to the selected comparison baseline.</p>}
       {mode === "changes" && state.kind === "ready" && state.files.files.length > 0 && (
         <div className="commit-changes-layout">
           <aside className="commit-file-browser" aria-label="Changed files">

@@ -4,7 +4,7 @@ GitHub access is a Core capability. Hosts explicitly request normalized domain d
 
 ## Repository metadata
 
-`github/repository` accepts optional `remote` (default `origin`) and optional `nameWithOwner`. Without an override, Core reads the selected remote using System Git and accepts standard HTTPS, SSH URL, and SCP-like `git@github.com:owner/repo.git` forms. The first adapter supports only `github.com`; an SSH hostname alias can be handled by explicitly supplying `nameWithOwner`.
+`github/repository` accepts optional `remote` (default `origin`) and optional `nameWithOwner`. Without an override, Core reads the selected remote using System Git and accepts standard HTTPS, SSH URL, and SCP-like `git@github.com:owner/repo.git` forms. The adapter supports only `github.com`. For an SSH form using an alias such as `git@github-work:owner/repo.git`, Core runs bounded, non-interactive `ssh -G -- github-work` in the repository environment and accepts the identity only when its resolved `hostname` is exactly `github.com`. It never connects to SSH, returns configuration, or reads keys into the protocol.
 
 The explicit request runs:
 

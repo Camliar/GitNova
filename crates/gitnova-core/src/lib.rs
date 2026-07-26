@@ -2,6 +2,7 @@ mod ai;
 mod framing;
 mod github;
 mod gitlab;
+mod provider_remote;
 mod repository;
 
 use gitnova_protocol::{

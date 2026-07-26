@@ -119,7 +119,7 @@ JSON-RPC error 使用标准数值 `code`，同时在 `data.stableCode` 提供稳
 | `-32169` | `branch.stale_head` | remote checkout 确认后的 current HEAD 已变化 |
 | `-32800` | `request.cancelled` | 请求已取消 |
 
-GitLab Provider 方法为 `gitlab/project`、`gitlab/mergeRequest`、`gitlab/mergeRequestCommitDiff` 和 `gitlab/squashTrace`。`pathWithNamespace` 可覆盖 remote path，但 hostname 始终来自已验证 remote；任何网络动作仍必须由 Host 显式触发。
+GitLab Provider 方法为 `gitlab/project`、`gitlab/mergeRequest`、`gitlab/mergeRequestCommitDiff` 和 `gitlab/squashTrace`。`pathWithNamespace` 可覆盖 remote path，但 hostname 始终来自已验证 remote；SSH Host alias 由仓库环境中的 Core 通过有界、非交互 `ssh -G` 解析，Host 不读取 SSH config。任何网络动作仍必须由 Host 显式触发。
 
 AI Assist 提供 `ai/inputPreview` 与 `ai/generateCommitDraft`。1.14 定义其类型和 `aiAssist` capability，1.15 扩展 Claude、DeepSeek、Qwen 与 Kimi Provider；Host 仅在 capability 为 true 时调用。输入披露、预览绑定与 Provider 凭据规则见 [AI Assist Contract](AI_ASSIST.md)。
 

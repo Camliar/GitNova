@@ -399,7 +399,7 @@ fn resolve_project_identity(
         .find(|value| !value.is_empty())
         .ok_or(GitLabError::RemoteNotFound)?;
     let url = std::str::from_utf8(url).map_err(|_| GitLabError::UnsupportedRemote)?;
-    let mut identity = parse_gitlab_url(url)?;
+    let mut identity = parse_gitlab_url_with(runner, url)?;
     if let Some(path) = explicit_path {
         validate_project_path(path)?;
         identity.path = path.to_owned();
@@ -428,14 +428,41 @@ fn parse_gitlab_url(value: &str) -> Result<ProjectIdentity, GitLabError> {
     })
 }
 
+fn parse_gitlab_url_with(
+    runner: &impl CommandRunner,
+    value: &str,
+) -> Result<ProjectIdentity, GitLabError> {
+    let direct = parse_gitlab_url(value);
+    if let Ok(identity) = &direct {
+        let is_ssh = value.starts_with("git@") || value.starts_with("ssh://git@");
+        if !is_ssh || identity.host.contains('.') {
+            return Ok(identity.clone());
+        }
+    }
+    let (alias, path) =
+        crate::provider_remote::ssh_alias_and_path(value).ok_or(GitLabError::UnsupportedRemote)?;
+    let output = runner
+        .run(
+            "ssh",
+            &["-G".into(), "--".into(), alias.into()],
+            &[("SSH_ASKPASS_REQUIRE", "never")],
+        )
+        .map_err(|_| GitLabError::UnsupportedRemote)?;
+    if output.exit_code != Some(0) {
+        return Err(GitLabError::UnsupportedRemote);
+    }
+    let host = crate::provider_remote::configured_hostname(&output.stdout)
+        .ok_or(GitLabError::UnsupportedRemote)?;
+    let path = path.strip_suffix(".git").unwrap_or(path);
+    validate_project_path(path)?;
+    Ok(ProjectIdentity {
+        host: host.to_ascii_lowercase(),
+        path: path.to_owned(),
+    })
+}
+
 fn valid_host(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 253
-        && !value.starts_with(['-', '.'])
-        && !value.ends_with(['-', '.'])
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-'))
+    crate::provider_remote::valid_hostname(value)
 }
 
 fn validate_project_path(value: &str) -> Result<(), GitLabError> {
@@ -990,6 +1017,28 @@ mod tests {
         let calls = runner.calls.lock().unwrap();
         assert!(
             calls[1]
+                .1
+                .windows(2)
+                .any(|pair| pair == ["--hostname", "gitlab.example.com"])
+        );
+    }
+
+    #[test]
+    fn resolves_a_safe_ssh_alias_to_the_gitlab_api_hostname() {
+        let runner = FakeRunner::new(vec![
+            output("git@gitlab-work:team/project.git\0"),
+            output("host gitlab-work\nhostname gitlab.example.com\nuser git\n"),
+            output(
+                r#"{"name":"project","path_with_namespace":"team/project","web_url":"https://gitlab.example.com/team/project","default_branch":"main","visibility":"private"}"#,
+            ),
+        ]);
+        let result = project_with(&runner, &descriptor(), &GitLabProjectParams::default()).unwrap();
+        assert_eq!(result.host, "gitlab.example.com");
+        let calls = runner.calls.lock().unwrap();
+        assert_eq!(calls[1].0, "ssh");
+        assert_eq!(calls[1].1, ["-G", "--", "gitlab-work"]);
+        assert!(
+            calls[2]
                 .1
                 .windows(2)
                 .any(|pair| pair == ["--hostname", "gitlab.example.com"])

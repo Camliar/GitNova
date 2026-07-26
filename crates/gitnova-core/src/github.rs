@@ -419,7 +419,7 @@ fn resolve_repository_identity(
             .find(|value| !value.is_empty())
             .ok_or(GitHubError::RemoteNotFound)?;
         let url = std::str::from_utf8(url).map_err(|_| GitHubError::UnsupportedRemote)?;
-        parse_github_url(url)
+        parse_github_url_with(runner, url)
     }
 }
 
@@ -472,6 +472,34 @@ fn parse_github_url(value: &str) -> Result<(String, String), GitHubError> {
         .or_else(|| value.strip_prefix("git@github.com:"))
         .ok_or(GitHubError::UnsupportedRemote)?;
     if path.contains(['?', '#']) {
+        return Err(GitHubError::UnsupportedRemote);
+    }
+    let path = path.strip_suffix(".git").unwrap_or(path);
+    parse_name_with_owner(path).map_err(|_| GitHubError::UnsupportedRemote)
+}
+
+fn parse_github_url_with(
+    runner: &impl CommandRunner,
+    value: &str,
+) -> Result<(String, String), GitHubError> {
+    if let Ok(identity) = parse_github_url(value) {
+        return Ok(identity);
+    }
+    let (alias, path) =
+        crate::provider_remote::ssh_alias_and_path(value).ok_or(GitHubError::UnsupportedRemote)?;
+    let output = runner
+        .run(
+            "ssh",
+            &["-G".into(), "--".into(), alias.into()],
+            &[("SSH_ASKPASS_REQUIRE", "never")],
+        )
+        .map_err(|_| GitHubError::UnsupportedRemote)?;
+    if output.exit_code != Some(0) {
+        return Err(GitHubError::UnsupportedRemote);
+    }
+    let hostname = crate::provider_remote::configured_hostname(&output.stdout)
+        .ok_or(GitHubError::UnsupportedRemote)?;
+    if !hostname.eq_ignore_ascii_case("github.com") {
         return Err(GitHubError::UnsupportedRemote);
     }
     let path = path.strip_suffix(".git").unwrap_or(path);
@@ -1145,6 +1173,40 @@ mod tests {
                 .contains(&("GH_PROMPT_DISABLED".into(), "1".into()))
         );
         assert!(!serde_json::to_string(&result).unwrap().contains("secret"));
+    }
+
+    #[test]
+    fn resolves_a_safe_ssh_alias_before_accepting_github_identity() {
+        let response = br#"{"name":"repo","full_name":"owner/repo","owner":{"login":"owner"},"html_url":"https://github.com/owner/repo","default_branch":"main","private":true}"#;
+        let runner = FakeRunner::new([
+            success(b"git@github-work:owner/repo.git\0"),
+            success(b"host github-work\nhostname github.com\nuser git\n"),
+            success(response),
+        ]);
+        let result =
+            repository_with(&runner, &descriptor(), &GitHubRepositoryParams::default()).unwrap();
+        assert_eq!(result.name_with_owner, "owner/repo");
+        let calls = runner.calls.lock().unwrap();
+        assert_eq!(calls[1].0, "ssh");
+        assert_eq!(calls[1].1, ["-G", "--", "github-work"]);
+        assert!(
+            calls[1]
+                .2
+                .contains(&("SSH_ASKPASS_REQUIRE".into(), "never".into()))
+        );
+
+        let wrong_host = FakeRunner::new([
+            success(b"git@github-work:owner/repo.git\0"),
+            success(b"hostname gitlab.com\n"),
+        ]);
+        assert_eq!(
+            repository_with(
+                &wrong_host,
+                &descriptor(),
+                &GitHubRepositoryParams::default()
+            ),
+            Err(GitHubError::UnsupportedRemote)
+        );
     }
 
     #[test]

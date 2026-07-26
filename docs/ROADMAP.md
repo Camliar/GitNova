@@ -77,3 +77,6 @@ TASK-0035 已锁定协议 1.14 的预览/生成类型、index-bound 确认、本
 - TASK-0045 — 协议 1.17 将所选 history commit 与 GitHub merged PR 精确关联；Desktop 仅为 Core-classified squash candidate 展示 ordered original commits，并按 original commit/file 懒加载 Provider diff。普通 merge 继续使用本地 Commit/Changes。
 - TASK-0046 — 在 Core 中以非交互 System Git 增加安全 Fetch、fast-forward-only Pull 与 non-force Push，并在 Desktop 顶部提供显式操作和 Pull/Push 二次确认。
 - TASK-0047 — 左侧分支树增加可访问的右键操作菜单；本地 branch 复用安全 Checkout，远程 branch 通过 Core 验证后创建并切换到 direct tracking local branch。
+- TASK-0048 — Core 在仓库环境内以有界、非交互方式解析 SSH Host alias，使 GitHub/GitLab Provider 能识别企业常用的别名 remote，并明确展示 tree 未变化的空提交。
+- TASK-0049 — 多仓库工作区改为顶部 Tab，并把 repository/sync 操作集中到左上工具栏。
+- TASK-0050 — commit timeline 按拓扑 lane 使用稳定区分色，并以曲线连接分支与合流边。
